@@ -51,8 +51,8 @@ interface LocationState {
 
 export const useLocationStore = create<LocationState>((set, get) => ({
   activeCoordinates: DEFAULT_FALLBACK_LOCATION,
-  activeAddressText: 'Whitefield, Bengaluru',
-  activeAddressLabel: 'Home',
+  activeAddressText: 'Fetching delivery location...',
+  activeAddressLabel: 'DELIVERY POINT',
   isLocating: false,
   savedAddresses: [],
   isLoadingAddresses: false,

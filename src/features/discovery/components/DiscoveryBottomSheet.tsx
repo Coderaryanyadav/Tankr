@@ -290,8 +290,8 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                   <View style={{ marginTop: spacing.xs }}>
                     <WaterQualityBadge
                       sourceType={tanker.water_type}
-                      tdsPpm={185}
-                      phLevel={7.2}
+                      tdsPpm={tanker.water_type.includes('Potable') ? 165 : tanker.water_type.includes('Filtered') ? 280 : 450}
+                      phLevel={tanker.water_type.includes('Potable') ? 7.2 : tanker.water_type.includes('Filtered') ? 7.4 : 7.6}
                     />
                   </View>
                 )}

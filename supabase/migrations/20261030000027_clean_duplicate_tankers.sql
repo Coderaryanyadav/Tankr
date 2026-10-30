@@ -21,3 +21,4 @@ UPDATE public.tankers SET latitude = 12.8452, longitude = 77.6602 WHERE vehicle_
 UPDATE public.tankers SET latitude = 12.9250, longitude = 77.5938 WHERE vehicle_number = 'KA-53-TN-1002'; -- Jayanagar
 UPDATE public.tankers SET latitude = 12.9900, longitude = 77.5500 WHERE vehicle_number = 'KA-03-FA-2002'; -- Rajajinagar
 UPDATE public.tankers SET latitude = 12.9600, longitude = 77.6500 WHERE vehicle_number = 'KA-01-MJ-1001'; -- Domlur
+

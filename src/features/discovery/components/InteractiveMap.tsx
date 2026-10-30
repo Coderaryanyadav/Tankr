@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -12,8 +13,8 @@ import { NearbyTanker } from '../../../types/discovery';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const MAP_HEIGHT = 320;
-const USER_CENTER_Y = 150;
+const MAP_HEIGHT = 280;
+const TILE_SIZE = 256;
 
 interface InteractiveMapProps {
   userLocation: { latitude: number; longitude: number };
@@ -24,6 +25,16 @@ interface InteractiveMapProps {
   isLocating?: boolean;
 }
 
+// Convert WGS84 Lat/Lng to Slippy Map Tile Coordinates
+function projectToTileCoords(lat: number, lng: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const x = ((lng + 180) / 360) * n;
+  const latRad = (lat * Math.PI) / 180;
+  const clampedLatRad = Math.max(-1.4844, Math.min(1.4844, latRad)); // Clamp to ~85 deg
+  const y = ((1 - Math.log(Math.tan(clampedLatRad) + 1 / Math.cos(clampedLatRad)) / Math.PI) / 2) * n;
+  return { x, y };
+}
+
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   userLocation,
   tankers,
@@ -32,15 +43,16 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onRecenterGps,
   isLocating = false,
 }) => {
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  // Zoom level: 12 (city overview) to 15 (detailed neighborhood streets)
+  const [zoom, setZoom] = useState<number>(13);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Radar pulse animation for customer GPS dot
+  // Radar pulse animation for customer GPS pin
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.9,
+          toValue: 1.8,
           duration: 1500,
           useNativeDriver: true,
         }),
@@ -55,65 +67,88 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  // Compute non-overlapping collision-free positions for top 6 closest tankers
+  // Calculate Real-World Map Tiles to cover the viewport
+  const mapTiles = useMemo(() => {
+    const center = projectToTileCoords(userLocation.latitude, userLocation.longitude, zoom);
+    const centerTileX = Math.floor(center.x);
+    const centerTileY = Math.floor(center.y);
+
+    const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
+
+    // 3x3 grid around center tile
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const tileX = centerTileX + dx;
+        const tileY = centerTileY + dy;
+        const left = (tileX - center.x) * TILE_SIZE + SCREEN_WIDTH / 2;
+        const top = (tileY - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
+
+        tiles.push({
+          key: `${zoom}-${tileX}-${tileY}`,
+          url: `https://a.basemaps.cartocdn.com/light_all/${zoom}/${tileX}/${tileY}.png`,
+          left,
+          top,
+        });
+      }
+    }
+    return tiles;
+  }, [userLocation.latitude, userLocation.longitude, zoom]);
+
+  // Calculate real GPS positions for tankers with proximity collision resolution
   const placedTankers = useMemo(() => {
     const topTankers = tankers.slice(0, 6);
+    const center = projectToTileCoords(userLocation.latitude, userLocation.longitude, zoom);
+
     const placed: Array<{ tanker: NearbyTanker; left: number; top: number }> = [];
-
-    const centerLat = userLocation.latitude;
-    const centerLng = userLocation.longitude;
-    const scale = 7500 * zoomLevel;
-
-    // Reservation zone for customer "You" pin
-    const reservedCenter = { x: SCREEN_WIDTH / 2, y: USER_CENTER_Y };
-    const minDistance = 64; // minimum distance in pixels between marker centers
+    const reservedCenter = { x: SCREEN_WIDTH / 2, y: MAP_HEIGHT / 2 };
+    const minDistance = 58;
 
     topTankers.forEach((tanker, index) => {
-      let rawX = (tanker.longitude - centerLng) * scale + SCREEN_WIDTH / 2;
-      let rawY = (centerLat - tanker.latitude) * scale + USER_CENTER_Y;
+      const projected = projectToTileCoords(tanker.latitude, tanker.longitude, zoom);
+      let rawX = (projected.x - center.x) * TILE_SIZE + SCREEN_WIDTH / 2;
+      let rawY = (projected.y - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
 
-      // Check collision with center pin or previously placed markers
+      // Proximity check against center pin and previously placed tankers
       let attempts = 0;
       let collision = true;
       let angle = (index * 60 * Math.PI) / 180;
       let offsetRadius = 0;
 
-      while (collision && attempts < 10) {
+      while (collision && attempts < 8) {
         const testX = rawX + (offsetRadius > 0 ? Math.cos(angle) * offsetRadius : 0);
         const testY = rawY + (offsetRadius > 0 ? Math.sin(angle) * offsetRadius : 0);
 
-        // Distance from center
         const distCenter = Math.hypot(testX - reservedCenter.x, testY - reservedCenter.y);
         let distOthers = true;
 
         for (const p of placed) {
-          const d = Math.hypot(testX - (p.left + 42), testY - (p.top + 16));
+          const d = Math.hypot(testX - (p.left + 40), testY - (p.top + 14));
           if (d < minDistance) {
             distOthers = false;
             break;
           }
         }
 
-        if (distCenter >= minDistance && distOthers) {
+        if (distCenter >= 40 && distOthers) {
           rawX = testX;
           rawY = testY;
           collision = false;
         } else {
-          offsetRadius += 30;
-          angle += (Math.PI / 3);
+          offsetRadius += 26;
+          angle += Math.PI / 3;
           attempts++;
         }
       }
 
-      // Clamp within map bounds
-      const left = Math.max(16, Math.min(SCREEN_WIDTH - 105, rawX - 42));
-      const top = Math.max(28, Math.min(MAP_HEIGHT - 65, rawY - 16));
+      // Constrain inside visible map canvas
+      const left = Math.max(12, Math.min(SCREEN_WIDTH - 96, rawX - 40));
+      const top = Math.max(20, Math.min(MAP_HEIGHT - 48, rawY - 14));
 
       placed.push({ tanker, left, top });
     });
 
     return placed;
-  }, [tankers, userLocation.latitude, userLocation.longitude, zoomLevel]);
+  }, [tankers, userLocation.latitude, userLocation.longitude, zoom]);
 
   const getCapacityLabel = (capacity: number) => {
     return `${(capacity / 1000).toFixed(0)}kL`;
@@ -121,106 +156,120 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   return (
     <View style={styles.mapContainer}>
-      {/* City Street Grid Canvas */}
-      <View style={styles.canvasBackground}>
-        {/* Major Avenue 1 */}
-        <View style={styles.horizontalRoad1} />
-        {/* Major Avenue 2 */}
-        <View style={styles.horizontalRoad2} />
-        {/* Cross Boulevard 1 */}
-        <View style={styles.verticalRoad1} />
-        {/* Cross Boulevard 2 */}
-        <View style={styles.verticalRoad2} />
-        {/* Express Ring Road */}
-        <View style={styles.expressRing} />
-
-        {/* Elegant Park / Green Zone */}
-        <View style={styles.parkZone} />
-
-        {/* User Current Location ("You") */}
-        <View style={[styles.customerPinContainer, { left: SCREEN_WIDTH / 2 - 14, top: USER_CENTER_Y - 14 }]}>
-          <Animated.View
+      {/* Real-World Map Tiles Layer */}
+      <View style={styles.tilesContainer}>
+        {mapTiles.map((tile) => (
+          <Image
+            key={tile.key}
+            source={{ uri: tile.url }}
             style={[
-              styles.radarRing,
+              styles.tileImage,
               {
-                transform: [{ scale: pulseAnim }],
-                opacity: pulseAnim.interpolate({
-                  inputRange: [1, 1.9],
-                  outputRange: [0.55, 0],
-                }),
+                left: tile.left,
+                top: tile.top,
               },
             ]}
+            resizeMode="cover"
           />
-          <View style={styles.customerPinCore}>
-            <View style={styles.customerPinCenterDot} />
-          </View>
-          <View style={styles.youBadge}>
-            <Text style={styles.youBadgeText}>You</Text>
-          </View>
-        </View>
-
-        {/* Clean Sleek Vehicle Markers (Collision-Free) */}
-        {placedTankers.map(({ tanker, left, top }) => {
-          const isSelected = selectedTankerId === tanker.tanker_id;
-          const capText = getCapacityLabel(tanker.capacity_liters);
-
-          return (
-            <Pressable
-              key={tanker.tanker_id}
-              accessibilityRole="button"
-              accessibilityLabel={`${tanker.supplier_name}, ${capText}, ETA ${tanker.eta_minutes} mins`}
-              onPress={() => onSelectTanker(tanker.tanker_id)}
-              style={[
-                styles.markerPill,
-                isSelected ? styles.markerPillSelected : styles.markerPillDefault,
-                { left, top },
-              ]}
-            >
-              <View
-                style={[
-                  styles.markerIconCircle,
-                  isSelected ? styles.markerIconCircleSelected : styles.markerIconCircleDefault,
-                ]}
-              >
-                <Ionicons
-                  name="water"
-                  size={12}
-                  color={isSelected ? colors.white : colors.primary}
-                />
-              </View>
-
-              <Text
-                style={[
-                  styles.markerCapacityText,
-                  isSelected ? styles.textWhite : styles.textNavy,
-                ]}
-              >
-                {capText}
-              </Text>
-
-              <Text style={[styles.markerBullet, isSelected ? styles.textWhite : styles.textMuted]}>
-                •
-              </Text>
-
-              <Text
-                style={[
-                  styles.markerEtaText,
-                  isSelected ? styles.textWhite : styles.textPrimary,
-                ]}
-              >
-                {tanker.eta_minutes}m
-              </Text>
-            </Pressable>
-          );
-        })}
+        ))}
       </View>
 
-      {/* Floating Map Zoom Controls (Top Right) */}
+      {/* Customer Location Pin ("You") Centered on Map */}
+      <View
+        style={[
+          styles.customerPinContainer,
+          {
+            left: SCREEN_WIDTH / 2 - 14,
+            top: MAP_HEIGHT / 2 - 14,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.radarRing,
+            {
+              transform: [{ scale: pulseAnim }],
+              opacity: pulseAnim.interpolate({
+                inputRange: [1, 1.8],
+                outputRange: [0.55, 0],
+              }),
+            },
+          ]}
+        />
+        <View style={styles.customerPinCore}>
+          <View style={styles.customerPinCenterDot} />
+        </View>
+        <View style={styles.youBadge}>
+          <Text style={styles.youBadgeText}>You</Text>
+        </View>
+      </View>
+
+      {/* Real-Time Live Tanker Pins */}
+      {placedTankers.map(({ tanker, left, top }) => {
+        const isSelected = selectedTankerId === tanker.tanker_id;
+        const capText = getCapacityLabel(tanker.capacity_liters);
+
+        return (
+          <Pressable
+            key={tanker.tanker_id}
+            accessibilityRole="button"
+            accessibilityLabel={`${tanker.supplier_name}, ${capText}, ETA ${tanker.eta_minutes} mins`}
+            onPress={() => onSelectTanker(tanker.tanker_id)}
+            style={[
+              styles.markerPill,
+              isSelected ? styles.markerPillSelected : styles.markerPillDefault,
+              { left, top },
+            ]}
+          >
+            <View
+              style={[
+                styles.markerIconCircle,
+                isSelected ? styles.markerIconCircleSelected : styles.markerIconCircleDefault,
+              ]}
+            >
+              <Ionicons
+                name="water"
+                size={12}
+                color={isSelected ? colors.white : colors.primary}
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.markerCapacityText,
+                isSelected ? styles.textWhite : styles.textNavy,
+              ]}
+            >
+              {capText}
+            </Text>
+
+            <Text style={[styles.markerBullet, isSelected ? styles.textWhite : styles.textMuted]}>
+              •
+            </Text>
+
+            <Text
+              style={[
+                styles.markerEtaText,
+                isSelected ? styles.textWhite : styles.textPrimary,
+              ]}
+            >
+              {tanker.eta_minutes}m
+            </Text>
+          </Pressable>
+        );
+      })}
+
+      {/* Map Attribution */}
+      <View style={styles.attributionPill}>
+        <Text style={styles.attributionText}>© OpenStreetMap © CARTO</Text>
+      </View>
+
+      {/* Zoom Controls (Top Right) */}
       <View style={styles.zoomControls}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Zoom in"
-          onPress={() => setZoomLevel((z) => Math.min(2.0, z + 0.25))}
+          onPress={() => setZoom((z) => Math.min(15, z + 1))}
           style={styles.zoomButton}
         >
           <Ionicons name="add" size={18} color={colors.darkNavy} />
@@ -229,7 +278,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Zoom out"
-          onPress={() => setZoomLevel((z) => Math.max(0.6, z - 0.25))}
+          onPress={() => setZoom((z) => Math.max(12, z - 1))}
           style={styles.zoomButton}
         >
           <Ionicons name="remove" size={18} color={colors.darkNavy} />
@@ -260,79 +309,17 @@ const styles = StyleSheet.create({
   mapContainer: {
     width: '100%',
     height: MAP_HEIGHT,
-    backgroundColor: '#F1F5F9', // Crisp modern map canvas tone
+    backgroundColor: '#EBF2F7', // Neutral street map tone while tiles load
     position: 'relative',
     overflow: 'hidden',
   },
-  canvasBackground: {
+  tilesContainer: {
     ...StyleSheet.absoluteFill,
   },
-  horizontalRoad1: {
+  tileImage: {
     position: 'absolute',
-    top: 75,
-    left: 0,
-    right: 0,
-    height: 14,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  horizontalRoad2: {
-    position: 'absolute',
-    top: 220,
-    left: 0,
-    right: 0,
-    height: 18,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  verticalRoad1: {
-    position: 'absolute',
-    left: 80,
-    top: 0,
-    bottom: 0,
-    width: 14,
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  verticalRoad2: {
-    position: 'absolute',
-    right: 90,
-    top: 0,
-    bottom: 0,
-    width: 20,
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  expressRing: {
-    position: 'absolute',
-    top: -20,
-    left: -50,
-    width: 520,
-    height: 18,
-    backgroundColor: '#FEF3C7',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#FDE68A',
-    transform: [{ rotate: '22deg' }],
-  },
-  parkZone: {
-    position: 'absolute',
-    top: 30,
-    right: 25,
-    width: 100,
-    height: 60,
-    borderRadius: borderRadius.xl,
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
+    width: TILE_SIZE,
+    height: TILE_SIZE,
   },
   customerPinContainer: {
     position: 'absolute',
@@ -380,7 +367,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: fontWeights.bold,
   },
-  // Sleek Single-Pill Marker
   markerPill: {
     position: 'absolute',
     flexDirection: 'row',
@@ -440,6 +426,20 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   textMuted: {
+    color: colors.textMuted,
+  },
+  attributionPill: {
+    position: 'absolute',
+    bottom: 6,
+    left: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 5,
+  },
+  attributionText: {
+    fontSize: 8,
     color: colors.textMuted,
   },
   zoomControls: {

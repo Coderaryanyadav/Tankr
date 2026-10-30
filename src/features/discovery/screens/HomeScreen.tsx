@@ -185,11 +185,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   await addSavedAddress(user.id, {
                     label: 'home',
                     flat_or_building: text,
-                    street_address: 'Outer Ring Road, Bellandur',
-                    city: 'Bengaluru',
-                    pincode: '560103',
-                    latitude: 12.926,
-                    longitude: 77.6762,
+                    street_address: activeAddressText || 'Delivery Point',
+                    city: profile?.city || 'Bengaluru',
+                    pincode: '560001',
+                    latitude: activeCoordinates.latitude,
+                    longitude: activeCoordinates.longitude,
                     is_default: false,
                   });
                 }

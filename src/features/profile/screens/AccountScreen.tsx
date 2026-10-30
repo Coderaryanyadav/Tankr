@@ -27,8 +27,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
   const { savedAddresses } = useLocationStore();
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
 
-  const displayName = profile?.full_name || 'Aryan Yadav';
-  const displayPhone = user?.phone || profile?.phone_number || '+91 98450 12345';
+  const displayName = profile?.full_name || (user?.phone ? `Customer (${user.phone.slice(-4)})` : 'Valued Customer');
+  const displayPhone = user?.phone || profile?.phone_number || 'Phone verified';
   const displayCity = profile?.city || 'Bengaluru';
   const roleName = (profile?.role || 'Customer').toUpperCase();
 
@@ -99,8 +99,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
               <Text style={styles.menuTitle}>Saved Delivery Addresses</Text>
               <Text style={styles.menuSubtitle}>
                 {savedAddresses.length > 0
-                  ? `${savedAddresses.length} addresses configured`
-                  : 'Bellandur, Whitefield, HSR'}
+                  ? `${savedAddresses.length} saved address${savedAddresses.length > 1 ? 'es' : ''} configured`
+                  : 'No delivery addresses added yet'}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
