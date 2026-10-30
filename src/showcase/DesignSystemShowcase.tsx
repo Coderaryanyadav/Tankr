@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -33,6 +33,8 @@ import {
 } from '../components';
 import { borderRadius, colors, fontWeights, shadows, spacing, typography } from '../theme';
 import { useAuthStore } from '../stores/authStore';
+import { useLocationStore } from '../stores/locationStore';
+import { SavedAddressesSheet } from '../features/location/components/SavedAddressesSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -40,6 +42,14 @@ type ShowcaseCategory = 'booking' | 'buttons' | 'inputs' | 'feedback';
 
 export const DesignSystemShowcase: React.FC = () => {
   const { user, profile, signOut } = useAuthStore();
+  const {
+    activeAddressText,
+    setActiveLocation,
+    locateUserViaGps,
+    fetchSavedAddresses,
+    addSavedAddress,
+    savedAddresses,
+  } = useLocationStore();
 
   // Navigation & Category states
   const [activeCategory, setActiveCategory] = useState<ShowcaseCategory>('booking');
@@ -49,7 +59,13 @@ export const DesignSystemShowcase: React.FC = () => {
   const [selectedTankerId, setSelectedTankerId] = useState<string>('tanker-standard');
   const [bottomSheetVisible, setBottomSheetVisible] = useState<boolean>(false);
   const [confirmModalVisible, setConfirmModalVisible] = useState<boolean>(false);
-  const [deliveryAddress, setDeliveryAddress] = useState<string>('Villa 42, Palm Meadows, Whitefield');
+  const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchSavedAddresses(user.id);
+    }
+  }, [user, fetchSavedAddresses]);
 
   // Input states
   const [phone, setPhone] = useState<string>('9876543210');
@@ -105,14 +121,8 @@ export const DesignSystemShowcase: React.FC = () => {
         {/* Floating Delivery Address Pill */}
         <View style={styles.floatingPillWrapper}>
           <LocationPill
-            address={deliveryAddress}
-            onPress={() => {
-              Alert.prompt
-                ? Alert.prompt('Change Address', 'Enter delivery location', (text) => {
-                    if (text) setDeliveryAddress(text);
-                  })
-                : setDeliveryAddress('Tower B, Prestige Tech Cloud, Hebbal');
-            }}
+            address={activeAddressText}
+            onPress={() => setAddressSheetVisible(true)}
           />
         </View>
 
@@ -136,7 +146,14 @@ export const DesignSystemShowcase: React.FC = () => {
           <IconButton
             icon={<Ionicons name="locate" size={20} color={colors.primary} />}
             accessibilityLabel="Current GPS Location"
-            onPress={() => Alert.alert('GPS Location', 'Centered to current location')}
+            onPress={async () => {
+              const res = await locateUserViaGps();
+              if (res) {
+                Alert.alert('GPS Location Locked', res.formattedAddress);
+              } else {
+                Alert.alert('Location Notice', 'GPS could not pinpoint exact coordinates.');
+              }
+            }}
             size="sm"
           />
         </View>
@@ -492,12 +509,44 @@ export const DesignSystemShowcase: React.FC = () => {
         </ScrollView>
       </BottomSheet>
 
+      {/* Saved Addresses & Location Picker Sheet */}
+      <SavedAddressesSheet
+        visible={addressSheetVisible}
+        onClose={() => setAddressSheetVisible(false)}
+        onAddNewAddress={() => {
+          setAddressSheetVisible(false);
+          Alert.prompt
+            ? Alert.prompt('Add Address', 'Enter apartment / building name', async (text) => {
+                if (text && user?.id) {
+                  await addSavedAddress(user.id, {
+                    label: 'other',
+                    flat_or_building: text,
+                    street_address: 'Outer Ring Road, Bellandur',
+                    city: 'Bengaluru',
+                    pincode: '560103',
+                    latitude: 12.926,
+                    longitude: 77.6762,
+                    is_default: false,
+                  });
+                }
+              })
+            : Alert.alert('Add Address', 'Tap Onboarding flow or profile to add addresses with GPS integration.');
+        }}
+        onSelectAddress={(addr) => {
+          setActiveLocation(
+            `${addr.flat_or_building}, ${addr.street_address}`,
+            { latitude: addr.latitude, longitude: addr.longitude },
+            addr.label.toUpperCase()
+          );
+        }}
+      />
+
       {/* Booking Confirmation Dialog Modal */}
       <Modal
         visible={confirmModalVisible}
         onClose={() => setConfirmModalVisible(false)}
         title="Confirm Tanker Booking?"
-        message={`Dispatching a ${selectedTanker.name} (${selectedTanker.capacityLiters.toLocaleString()} Liters) to ${deliveryAddress}.\n\nTotal: ₹${selectedTanker.priceInRupees}`}
+        message={`Dispatching a ${selectedTanker.name} (${selectedTanker.capacityLiters.toLocaleString()} Liters) to ${activeAddressText}.\n\nTotal: ₹${selectedTanker.priceInRupees}`}
         iconName="water"
         iconColor={colors.primary}
         confirmTitle="Confirm & Dispatch"
