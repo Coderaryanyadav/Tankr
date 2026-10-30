@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { BottomNav, TabId } from '../components/common/Navigation/BottomNav';
+import { BookingsListScreen } from '../features/booking/screens/BookingsListScreen';
 import { HomeScreen } from '../features/discovery/screens/HomeScreen';
 import { DesignSystemShowcase } from '../showcase/DesignSystemShowcase';
 import { colors } from '../theme';
@@ -12,7 +13,9 @@ export const AppTabs: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.screenWrapper}>
         {activeTab === 'discovery' ? (
-          <HomeScreen />
+          <HomeScreen onNavigateToBookings={() => setActiveTab('bookings')} />
+        ) : activeTab === 'bookings' ? (
+          <BookingsListScreen onBack={() => setActiveTab('discovery')} />
         ) : (
           <DesignSystemShowcase />
         )}

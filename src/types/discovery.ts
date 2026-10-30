@@ -87,3 +87,4 @@ export const NearbyTankerSchema = z.object({
 export type NearbyTanker = z.infer<typeof NearbyTankerSchema>;
 
 export type TankerSortOption = 'distance' | 'price' | 'eta';
+

@@ -221,3 +221,4 @@ BEGIN
             (supp2, 'KA-51-HV-2002', 'Dhananjay Singh', '+919845120002', 20000, 'Commercial Tank', 1950.00, 40.00, 13.0020, 77.6050, 80);
     END IF;
 END $$;
+

@@ -11,7 +11,11 @@ import { SavedAddressesSheet } from '../../location/components/SavedAddressesShe
 import { DiscoveryHeader } from '../components/DiscoveryHeader';
 import { DiscoveryBottomSheet } from '../components/DiscoveryBottomSheet';
 import { InteractiveMap } from '../components/InteractiveMap';
+import { BookingReviewModal } from '../../booking/components/BookingReviewModal';
+import { BookingSearchingOverlay } from '../../booking/components/BookingSearchingOverlay';
+import { ActiveBookingCard } from '../../booking/components/ActiveBookingCard';
 import { useAuthStore } from '../../../stores/authStore';
+import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
 import { useLocationStore } from '../../../stores/locationStore';
 import { colors } from '../../../theme';
@@ -38,6 +42,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   } = useLocationStore();
 
   const {
+    activeBooking,
+    isSearchingDriver,
+    cancelBooking,
+  } = useBookingStore();
+
+  const {
     filteredTankers,
     selectedTankerId,
     selectedTanker,
@@ -53,7 +63,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   // Overlay states
   const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(false);
-  const [bookingModalVisible, setBookingModalVisible] = useState<boolean>(false);
+  const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(false);
   const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(null);
 
   // Initial fetch on mount & when coordinates change
@@ -82,7 +92,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const handleBookTanker = (tanker: NearbyTanker) => {
     setTankerToBook(tanker);
-    setBookingModalVisible(true);
+    setReviewModalVisible(true);
   };
 
   return (
@@ -126,6 +136,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           isLocating={isLocating}
         />
       </View>
+
+      {/* Active Live Booking Card (Uber/Ola in-trip card) */}
+      {activeBooking && activeBooking.status !== 'cancelled' && (
+        <View style={styles.activeBookingWrapper}>
+          <ActiveBookingCard
+            booking={activeBooking}
+            onViewDetails={onNavigateToBookings}
+          />
+        </View>
+      )}
 
       {/* 3. Bottom Section: Polished Draggable Bottom Sheet */}
       <View style={styles.bottomSheetSection}>
@@ -184,25 +204,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
       />
 
-      {/* Booking Confirmation Dialog */}
-      {tankerToBook && (
-        <Modal
-          visible={bookingModalVisible}
-          onClose={() => setBookingModalVisible(false)}
-          title={`Book ${tankerToBook.capacity_liters.toLocaleString('en-IN')}L Tanker?`}
-          message={`Supplier: ${tankerToBook.supplier_name}\nVehicle: ${tankerToBook.vehicle_number}\nETA: ~${tankerToBook.eta_minutes} mins\nDelivery: ${activeAddressText}\n\nTotal Payable: ₹${tankerToBook.estimated_total_price}`}
-          iconName="water"
-          iconColor={colors.primary}
-          confirmTitle="Proceed to Booking"
-          onConfirm={() => {
-            Alert.alert(
-              'Booking Requested!',
-              `Your order for ${tankerToBook.capacity_liters}L water tanker has been submitted. Moving to booking management.`
-            );
-          }}
-          cancelTitle="Cancel"
-        />
-      )}
+      {/* Booking Review & Authoritative Price Breakdown Sheet */}
+      <BookingReviewModal
+        visible={reviewModalVisible}
+        tanker={tankerToBook}
+        onClose={() => setReviewModalVisible(false)}
+        onBookingConfirmed={() => {
+          // Trigger searching overlay
+        }}
+      />
+
+      {/* Searching / Dispatching Supplier Radar Overlay */}
+      <BookingSearchingOverlay
+        visible={isSearchingDriver}
+        onCancel={() => {
+          if (activeBooking?.id) {
+            cancelBooking(activeBooking.id, 'User cancelled during driver dispatch');
+          }
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -215,6 +235,13 @@ const styles = StyleSheet.create({
   mapSection: {
     height: 340,
     width: '100%',
+  },
+  activeBookingWrapper: {
+    position: 'absolute',
+    top: 65,
+    left: 0,
+    right: 0,
+    zIndex: 30,
   },
   bottomSheetSection: {
     flex: 1,
