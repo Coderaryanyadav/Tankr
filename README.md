@@ -2,7 +2,7 @@
 
 > **Water delivery, just a tap away.**
 
-TANKR is an on-demand water tanker booking and real-time dispatch platform built with React Native and Expo, inspired by the familiar interaction patterns of ride-hailing applications such as Uber and Ola.
+TANKR is a comprehensive on-demand water tanker booking, fleet dispatch, and real-time tracking platform inspired by the interaction patterns of ride-hailing applications like Uber and Ola. Built with **React Native**, **Expo SDK 58**, **TypeScript**, and **Supabase (PostgreSQL + PostGIS + Realtime)**.
 
 ---
 
@@ -18,90 +18,134 @@ TANKR is an on-demand water tanker booking and real-time dispatch platform built
 
 ---
 
-## 🚀 Key Features
+## 🌟 Key Capabilities by Phase
 
-* **Passwordless Mobile OTP Login:** Real SMS OTP verification powered by Supabase Auth with rate limiting and secure session persistence via `expo-secure-store`.
-* **Map-First Delivery Experience:** Large interactive map interface with floating delivery address pills, animated markers, and vehicle ETAs.
-* **Streamlined Onboarding & Location:** Automated GPS reverse-geocoding via `expo-location`, manual address entry, apartment/landmark details, and saved addresses (`Home`, `Work`, `Other`).
-* **Configurable Tanker Tiers:** Dedicated cards for Mini (5,000L), Standard (10,000L), and Jumbo (20,000L) tankers with transparent pricing and water cleanliness guarantees.
-* **Production-Grade Architecture:** PostGIS geospatial indexing (`geography(POINT)`), atomic booking transactions, and Supabase Realtime broadcast channels for live driver tracking.
+### 🔐 1. Mobile OTP Authentication & Profiles (Phases 1–3)
+* Passwordless Indian 10-digit mobile login with automated 30s resend cooldown.
+* Hardware-encrypted session persistence via `expo-secure-store`.
+* Onboarding workflow with photo avatar selection (`expo-image-picker`), automatic GPS geocoding (`expo-location`), and saved address slots (`Home`, `Work`, `Other`).
+
+### 🗺️ 2. Map-First Discovery & PostGIS Spatial Engine (Phase 4)
+* Full-screen interactive map with animated radar scanning, tanker capacity markers, and live distance calculations.
+* Capacity filtering chips for **1kL, 2kL, 5kL, 10kL, 12kL, and 20kL** tankers with potable/domestic water classification.
+* PostGIS spatial radial search (`ST_DWithin` & `ST_Distance`) with urban traffic route ETA estimations.
+
+### 💰 3. Server-Authoritative Pricing & Atomic Booking (Phase 5)
+* PostgreSQL RPC `calculate_booking_quote` computes itemized quotes (base fare, distance fare, peak surcharge, 5% GST).
+* Concurrency row-locking (`SELECT ... FOR UPDATE`) prevents double-booking collisions.
+* Cryptographic 4-digit Delivery Handover PIN generated for secure water transfer.
+
+### 🚛 4. Multi-Role Dispatch Dashboards (Phase 6)
+* **Supplier Portal:** Incoming dispatch request review, vehicle availability management, and depot metrics.
+* **Driver Console:** On-duty/off-duty switch, native Google Maps turn-by-turn navigation intent, protected customer calling, and PIN verification.
+
+### 📍 5. Real-Time Telemetry & Anti-Spoofing (Phase 7)
+* Sub-200ms location streaming over Supabase Realtime broadcast channels (`booking:tracking:<id>`).
+* Smooth heading rotation, live route polyline, and arrival countdown.
+* Database velocity filter (`ST_Distance / delta_t`) rejecting unrealistic telemetry (>100 km/h).
+
+### 🧾 6. Idempotent Payments, Invoices & Notifications (Phase 8)
+* UPI & card payment processing with RFC-4122 idempotency protection preventing duplicate debits.
+* Automated GST Tax Invoice generation (`generate_invoice_for_booking`) with digital share intent.
+* Real-time notifications for all 8 dispatch lifecycle events.
+
+### 🛡️ 7. Executive Operations & Command Center (Phase 9)
+* Live KPI aggregation: Gross Merchandise Value (GMV), platform commission take rate, fleet utilization.
+* Supplier compliance verification queue with document approval/rejection workflows.
+* Real-time network surge pricing controls (1.0x to 2.0x) and Crisis Drought Emergency toggle.
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology |
+| Component | Technology |
 | :--- | :--- |
-| **Framework** | [React Native](https://reactnative.dev/) / [Expo SDK 58](https://expo.dev/) |
-| **Language** | [TypeScript](https://www.typescriptlang.org/) |
-| **Backend & Database** | [Supabase](https://supabase.com/) / [PostgreSQL](https://www.postgresql.org/) with [PostGIS](https://postgis.net/) |
-| **State Management** | [Zustand](https://github.com/pmndrs/zustand) |
-| **Form Validation** | [Zod](https://zod.dev/) |
-| **Maps & Location** | Google Maps SDK / `expo-location` |
-| **Secure Storage** | `expo-secure-store` (iOS Keychain / Android Keystore) |
-| **Icons & Typography** | `@expo/vector-icons` / `expo-font` |
+| **Mobile Client** | React Native 0.88 + Expo SDK 58 |
+| **Language** | TypeScript (Strict Mode) |
+| **Backend & Auth** | Supabase (Phone OTP, Storage, Realtime) |
+| **Database** | PostgreSQL 15+ with PostGIS 3.3+ spatial extension |
+| **State Management**| Zustand |
+| **Validation** | Zod Schema Validation |
+| **Maps & Location** | `react-native-maps`, `expo-location` |
+| **Device Security** | `expo-secure-store` (Hardware Keychain / Keystore) |
 
 ---
 
-## 📂 Project Structure
+## 📂 Project Architecture
 
 ```text
 TANKR/
 ├── src/
-│   ├── components/            # Reusable UI component library
+│   ├── components/            # Reusable atomic & composite components
 │   │   ├── common/
-│   │   │   ├── Button/        # Primary, Secondary, Outline, Danger, IconButtons
-│   │   │   ├── Card/          # TankerCard, StatusBadge, base Card
+│   │   │   ├── Button/        # Primary, Secondary, Outline, Danger buttons
+│   │   │   ├── Card/          # TankerCard, StatusBadge, Base Card
 │   │   │   ├── Feedback/      # Skeletons, EmptyState, ErrorBanner
 │   │   │   ├── Input/         # PhoneInput, OtpInput, SearchBar, TextInput
 │   │   │   ├── Navigation/    # BottomNav, HeaderBar, LocationPill
 │   │   │   └── Overlay/       # BottomSheet, Modal dialogs
 │   ├── features/
-│   │   ├── auth/              # Mobile OTP login & verification screens
-│   │   ├── location/          # Saved addresses & location management
-│   │   └── onboarding/        # Customer profile & delivery setup
-│   ├── navigation/            # Root flow controller & route guards
+│   │   ├── admin/             # Operations command center & KYC approval
+│   │   ├── auth/              # Mobile OTP login & verification
+│   │   ├── booking/           # Price quote reviews, active trip overlays
+│   │   ├── discovery/         # Full-screen interactive map & tanker filters
+│   │   ├── location/          # Saved addresses & reverse geocoding
+│   │   ├── notifications/     # Real-time lifecycle alerts modal
+│   │   ├── onboarding/        # Customer profile setup & PIN code
+│   │   ├── orders/            # Official GST Tax Invoice viewer & sharing
+│   │   ├── supply/            # Supplier & Driver operations portals
+│   │   └── tracking/          # Real-time WebSocket tanker tracking screen
+│   ├── navigation/            # RootNavigator & role-based routing
 │   ├── services/
-│   │   ├── location/          # Expo Location & reverse geocoding
-│   │   └── supabase/          # Supabase client & SecureStore adapter
-│   ├── showcase/              # Interactive Design System showcase
-│   ├── stores/                # Zustand global state (auth, location)
-│   ├── theme/                 # Design tokens (colors, typography, spacing, shadows)
+│   │   ├── invoice/           # PostgreSQL invoice RPC client
+│   │   ├── location/          # Expo Location & reverse geocoder
+│   │   ├── notification/      # Realtime alert dispatch service
+│   │   ├── payment/           # Idempotent payment gateway service
+│   │   ├── supabase/          # Supabase client with SecureStore adapter
+│   │   └── tracking/          # High-frequency GPS tracking publisher/subscriber
+│   ├── stores/                # Zustand global stores (auth, booking, admin, supply)
+│   ├── theme/                 # Design tokens (colors, typography, shadows, spacing)
 │   └── utils/                 # Zod validation schemas
-└── supabase/
-    └── migrations/            # Versioned SQL migrations (PostGIS, RLS, profiles)
+├── supabase/
+│   └── migrations/            # 8 sequential PostGIS & RLS migrations
+└── docs/                      # Production QA & Security audit reports
+    ├── QA_AUDIT_REPORT.md
+    ├── SECURITY_AUDIT_REPORT.md
+    └── PRODUCTION_DEPLOYMENT_CHECKLIST.md
 ```
 
 ---
 
-## 🏃 Getting Started
+## ⚡ Getting Started
 
-### Prerequisites
-* Node.js LTS (v20 or v22 recommended)
-* npm or bun
-* Expo Go or a development build
+### 1. Prerequisites
+* Node.js LTS (v20+)
+* Expo CLI & Bun / npm
+* Active Supabase project with PostGIS enabled
 
-### Installation
+### 2. Environment Setup
+Create a `.env` file in the project root:
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://qicoczialqxulcbipuix.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+```
+
+### 3. Installation & Verification
 ```bash
-# Clone the repository
-git clone https://github.com/Coderaryanyadav/Tankr.git
-cd Tankr
-
 # Install SDK-compatible dependencies
 npx expo install
 
-# Run TypeScript check
+# Run TypeScript compilation check
 npx tsc --noEmit
 
-# Run diagnostics
+# Run Expo Doctor health check (20/20 checks)
 npx expo-doctor
 
-# Start the Expo development server
+# Start development server
 npx expo start
 ```
 
 ---
 
 ## 📄 License
-MIT License.
-
+MIT License. Built for TANKR Technologies.
