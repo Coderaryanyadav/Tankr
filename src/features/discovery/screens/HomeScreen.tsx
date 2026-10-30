@@ -14,11 +14,13 @@ import { InteractiveMap } from '../components/InteractiveMap';
 import { BookingReviewModal } from '../../booking/components/BookingReviewModal';
 import { BookingSearchingOverlay } from '../../booking/components/BookingSearchingOverlay';
 import { ActiveBookingCard } from '../../booking/components/ActiveBookingCard';
+import { NotificationsModal } from '../../notifications/screens/NotificationsModal';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
 import { useLocationStore } from '../../../stores/locationStore';
 import { useSupplyStore } from '../../../stores/supplyStore';
+import { useNotificationStore } from '../../../stores/notificationStore';
 import { colors } from '../../../theme';
 import { NearbyTanker } from '../../../types/discovery';
 
@@ -66,7 +68,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Overlay states
   const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(false);
   const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(false);
+  const [notificationsModalVisible, setNotificationsModalVisible] = useState<boolean>(false);
   const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(null);
+
+  const { notifications, unreadCount, fetchNotifications } = useNotificationStore();
 
   // Initial fetch on mount & when coordinates change
   useEffect(() => {
@@ -76,8 +81,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   useEffect(() => {
     if (user?.id) {
       fetchSavedAddresses(user.id);
+      fetchNotifications(user.id);
     }
-  }, [user, fetchSavedAddresses]);
+  }, [user, fetchSavedAddresses, fetchNotifications]);
 
   // Recenter GPS
   const handleRecenterGps = async () => {
@@ -104,12 +110,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* 1. Top Section: Discovery Header */}
       <DiscoveryHeader
         onAddressPress={() => setAddressSheetVisible(true)}
-        onNotificationsPress={() => {
-          Alert.alert(
-            'TANKR Notifications',
-            '• Water quality certified for Sri Cauvery Supplies.\n• No surge pricing active in your zone.'
-          );
-        }}
+        onNotificationsPress={() => setNotificationsModalVisible(true)}
         onProfilePress={() => {
           Alert.alert(
             'Account & Mode Switcher',
@@ -117,6 +118,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             [
               { text: 'Supplier Portal', onPress: () => setActiveRole('supplier') },
               { text: 'Driver Console', onPress: () => setActiveRole('driver') },
+              { text: 'Admin Operations', onPress: () => setActiveRole('admin') },
               {
                 text: 'Sign Out',
                 style: 'destructive',
@@ -126,7 +128,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             ]
           );
         }}
-        unreadNotificationsCount={1}
+        unreadNotificationsCount={unreadCount}
       />
 
       {/* 2. Main Section: Interactive Google Map */}
@@ -226,6 +228,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             cancelBooking(activeBooking.id, 'User cancelled during driver dispatch');
           }
         }}
+      />
+
+      {/* Notifications Modal */}
+      <NotificationsModal
+        visible={notificationsModalVisible}
+        onClose={() => setNotificationsModalVisible(false)}
       />
     </SafeAreaView>
   );

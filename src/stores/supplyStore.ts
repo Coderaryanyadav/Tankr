@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase/client';
+import { invoiceService } from '../services/invoice/invoiceService';
+import { notificationService } from '../services/notification/notificationService';
+import { useNotificationStore } from './notificationStore';
 import { BookingRecord, BookingStatus } from '../types/booking';
 
 export type AppUserRole = 'customer' | 'supplier' | 'driver' | 'admin';
@@ -205,11 +208,39 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
         assignedDelivery: { ...delivery, status: newStatus },
       });
 
+      // If delivered, automatically generate Tax Invoice and trigger completed alert
+      if (newStatus === 'delivered') {
+        invoiceService.generateInvoice(bookingId).catch(() => {});
+        notificationService.triggerNotification(
+          delivery.customer_id,
+          'delivery_completed',
+          'Water Delivery Completed! 💧',
+          `Your tanker delivery for ${delivery.delivery_address} is complete. Your tax invoice is now available.`,
+          bookingId
+        ).catch(() => {});
+
+        useNotificationStore.getState().addNotification({
+          id: `notif-delivered-${Date.now()}`,
+          user_id: delivery.customer_id,
+          title: 'Water Delivery Completed! 💧',
+          body: `Your tanker delivery for ${delivery.delivery_address} is complete. Your tax invoice is now available.`,
+          booking_id: bookingId,
+          type: 'delivery_completed',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+      }
+
       return { success: true };
     } catch (err: any) {
       set({
         assignedDelivery: { ...delivery, status: newStatus },
       });
+
+      if (newStatus === 'delivered') {
+        invoiceService.generateInvoice(bookingId).catch(() => {});
+      }
+
       return { success: true };
     }
   },

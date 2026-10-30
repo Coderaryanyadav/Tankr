@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '../services/supabase/client';
+import { paymentService } from '../services/payment/paymentService';
+import { notificationService } from '../services/notification/notificationService';
+import { useNotificationStore } from './notificationStore';
 import {
   BookingQuote,
   BookingRecord,
@@ -172,6 +175,30 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         isSearchingDriver: true,
       });
 
+      // Phase 8: Record idempotent payment transaction
+      const payMethod = paymentPreference === 'cash_on_delivery' ? 'cod' : (paymentPreference as 'upi' | 'card');
+      paymentService.processBookingPayment(bookingId, finalAmount, payMethod).catch(() => {});
+
+      // Phase 8: Dispatch booking confirmed notification
+      notificationService.triggerNotification(
+        customerId,
+        'booking_confirmed',
+        'Tanker Booking Confirmed! 🚛',
+        `Your request for ${tanker.capacity_liters.toLocaleString('en-IN')}L water is being dispatched. Reference: ${bookingRef}`,
+        bookingId
+      ).catch(() => {});
+
+      useNotificationStore.getState().addNotification({
+        id: `notif-${Date.now()}`,
+        user_id: customerId,
+        title: 'Tanker Booking Confirmed! 🚛',
+        body: `Your request for ${tanker.capacity_liters.toLocaleString('en-IN')}L water is being dispatched. Reference: ${bookingRef}`,
+        booking_id: bookingId,
+        type: 'booking_confirmed',
+        is_read: false,
+        created_at: new Date().toISOString(),
+      });
+
       return { success: true, booking: newRecord };
     } catch (err: any) {
       const msg = err?.message || 'Failed to complete booking request';
@@ -199,6 +226,30 @@ export const useBookingStore = create<BookingState>((set, get) => ({
             : get().activeBooking,
         isSearchingDriver: false,
       });
+
+      // Phase 8: Trigger refund & cancellation notification
+      paymentService.processRefund(bookingId, reason).catch(() => {});
+      const cancelledBooking = get().userBookings.find((b) => b.id === bookingId);
+      if (cancelledBooking) {
+        notificationService.triggerNotification(
+          cancelledBooking.customer_id,
+          'booking_cancelled',
+          'Booking Cancelled',
+          `Order ${cancelledBooking.booking_reference} has been cancelled. Any pre-authorized charges will be refunded.`,
+          bookingId
+        ).catch(() => {});
+
+        useNotificationStore.getState().addNotification({
+          id: `notif-cancel-${Date.now()}`,
+          user_id: cancelledBooking.customer_id,
+          title: 'Booking Cancelled',
+          body: `Order ${cancelledBooking.booking_reference} has been cancelled. Any pre-authorized charges will be refunded.`,
+          booking_id: bookingId,
+          type: 'booking_cancelled',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+      }
 
       return { success: true };
     } catch (err: any) {

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -17,6 +17,8 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG, BookingRecord } from '../../../types/booking';
+import { InvoiceViewModal } from '../../orders/components/InvoiceViewModal';
+import { invoiceService, InvoiceRecord } from '../../../services/invoice/invoiceService';
 
 interface BookingsListScreenProps {
   onBack?: () => void;
@@ -29,12 +31,20 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
 }) => {
   const { user } = useAuthStore();
   const { userBookings, isLoadingBookings, fetchUserBookings } = useBookingStore();
+  const [selectedInvoiceBooking, setSelectedInvoiceBooking] = useState<BookingRecord | null>(null);
+  const [invoiceData, setInvoiceData] = useState<InvoiceRecord | null>(null);
 
   useEffect(() => {
     if (user?.id) {
       fetchUserBookings(user.id);
     }
   }, [user, fetchUserBookings]);
+
+  const handleOpenInvoice = async (booking: BookingRecord) => {
+    setSelectedInvoiceBooking(booking);
+    const inv = await invoiceService.getInvoiceByBookingId(booking.id);
+    setInvoiceData(inv);
+  };
 
   const formatDate = (isoStr: string) => {
     try {
@@ -135,11 +145,42 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
                     </Text>
                   </View>
                 </View>
+
+                {/* Footer Actions: Tax Invoice for completed/delivered orders */}
+                <View style={styles.cardFooterRow}>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleOpenInvoice(b);
+                    }}
+                    style={styles.invoiceBtn}
+                  >
+                    <Ionicons name="document-text-outline" size={15} color={colors.primary} />
+                    <Text style={styles.invoiceBtnText}>View Tax Invoice</Text>
+                  </Pressable>
+
+                  {b.status !== 'delivered' && b.status !== 'cancelled' && (
+                    <Text style={styles.pinHintText}>
+                      PIN: <Text style={{ fontWeight: fontWeights.bold, color: colors.darkNavy }}>{b.delivery_pin}</Text>
+                    </Text>
+                  )}
+                </View>
               </Pressable>
             );
           })
         )}
       </ScrollView>
+
+      {/* Official Tax Invoice Modal */}
+      <InvoiceViewModal
+        visible={!!selectedInvoiceBooking}
+        booking={selectedInvoiceBooking}
+        invoice={invoiceData}
+        onClose={() => {
+          setSelectedInvoiceBooking(null);
+          setInvoiceData(null);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -258,5 +299,32 @@ const styles = StyleSheet.create({
     fontWeight: fontWeights.bold,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  cardFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.cardBorder,
+  },
+  invoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.backgroundMuted,
+  },
+  invoiceBtnText: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
+    marginLeft: 4,
+  },
+  pinHintText: {
+    fontSize: 11,
+    color: colors.textSecondary,
   },
 });
