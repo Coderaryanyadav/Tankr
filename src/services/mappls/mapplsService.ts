@@ -77,20 +77,23 @@ class MapplsServiceClass {
    */
   async reverseGeocode(latitude: number, longitude: number): Promise<MapplsAddress | null> {
     try {
-      // 1. Try REST Key if configured
+      // 1. Try search.mappls.com with Static Key (access_token)
       if (MAPPLS_REST_KEY) {
-        const url = `https://apis.mappls.com/advancedmaps/v1/${MAPPLS_REST_KEY}/rev_geocode?lat=${latitude}&lng=${longitude}`;
+        const url = `https://search.mappls.com/search/address/rev-geocode?access_token=${MAPPLS_REST_KEY}&lat=${latitude}&lng=${longitude}`;
         const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
           if (json?.results && json.results.length > 0) {
             const item = json.results[0];
             return {
-              formattedAddress: item.formatted_address || `${item.locality || ''}, ${item.city || 'Bengaluru'}`,
-              houseNumber: item.house_number,
-              houseName: item.house_name,
+              formattedAddress:
+                item.formatted_address ||
+                [item.street, item.subLocality, item.locality, item.city].filter(Boolean).join(', ') ||
+                'Bengaluru, Karnataka',
+              houseNumber: item.houseNumber,
+              houseName: item.houseName,
               locality: item.locality,
-              subLocality: item.sublocality,
+              subLocality: item.subLocality || item.subSubLocality,
               city: item.city || 'Bengaluru',
               state: item.state || 'Karnataka',
               pincode: item.pincode || '',
