@@ -21,6 +21,7 @@ import { Modal } from '../../../components/common/Overlay/Modal';
 import { useSupplyStore } from '../../../stores/supplyStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../services/supabase/client';
+import { MapplsService } from '../../../services/mappls/mapplsService';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
@@ -46,13 +47,8 @@ export const DriverDashboardScreen: React.FC = () => {
 
   const handleOpenMapsNavigation = () => {
     if (!assignedDelivery) return;
-    const { delivery_latitude, delivery_longitude } = assignedDelivery;
-    const url = Platform.select({
-      ios: `maps:0,0?q=${delivery_latitude},${delivery_longitude}`,
-      android: `geo:0,0?q=${delivery_latitude},${delivery_longitude}`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${delivery_latitude},${delivery_longitude}`,
-    });
-    Linking.openURL(url as string);
+    const { delivery_latitude, delivery_longitude, delivery_address } = assignedDelivery;
+    MapplsService.openNavigation(delivery_latitude, delivery_longitude, delivery_address || 'Delivery Location');
   };
 
   const handleReportCustomerNoShow = () => {

@@ -178,3 +178,4 @@ describe('Booking Concurrency, State Machine & E2E Dispatch Loop', () => {
     expect(() => evaluateCancellationFee('delivered')).toThrow('Cannot cancel a completed delivery');
   });
 });
+

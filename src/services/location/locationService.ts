@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { Alert } from 'react-native';
+import { MapplsService } from '../mappls/mapplsService';
 
 export interface GeoLocation {
   latitude: number;
@@ -72,6 +73,21 @@ export const LocationService = {
    */
   reverseGeocode: async (coords: GeoLocation): Promise<GeocodedAddress | null> => {
     try {
+      // 1. Prioritize Mappls (MapmyIndia) Reverse Geocoding for India
+      const mapplsResult = await MapplsService.reverseGeocode(coords.latitude, coords.longitude);
+      if (mapplsResult) {
+        return {
+          formattedAddress: mapplsResult.formattedAddress,
+          flatOrBuilding: mapplsResult.houseNumber || mapplsResult.houseName || '',
+          streetAddress: [mapplsResult.subLocality, mapplsResult.locality].filter(Boolean).join(', ') || 'Main Road',
+          city: mapplsResult.city,
+          pincode: mapplsResult.pincode,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        };
+      }
+
+      // 2. Fallback to device location geocoding
       const results = await Location.reverseGeocodeAsync(coords);
       if (!results || results.length === 0) {
         return null;

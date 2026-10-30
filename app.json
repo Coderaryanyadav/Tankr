@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "com.tankr.app",
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
@@ -19,6 +20,7 @@
       }
     },
     "android": {
+      "package": "com.tankr.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
