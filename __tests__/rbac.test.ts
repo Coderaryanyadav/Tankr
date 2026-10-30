@@ -60,3 +60,4 @@ describe('Role-Based Access Control (RBAC) & Privilege Integrity', () => {
     expect(() => attemptRoleEscalation(customerSession, 'admin')).toThrow('Privilege escalation denied');
   });
 });
+

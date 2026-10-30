@@ -49,3 +49,4 @@ describe('Offline GPS Queue & Reconnection Telemetry', () => {
     expect(tracker.deliveredPings[2].timestamp).toBe(3000);
   });
 });
+

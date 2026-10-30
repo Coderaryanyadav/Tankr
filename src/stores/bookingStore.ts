@@ -222,10 +222,17 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
   cancelBooking: async (bookingId, reason = 'Customer requested cancellation') => {
     try {
-      await supabase.rpc('cancel_booking_atomic', {
+      const { data, error } = await supabase.rpc('customer_cancel_booking_with_policy', {
         p_booking_id: bookingId,
         p_reason: reason,
       });
+
+      if (error) {
+        await supabase.rpc('cancel_booking_atomic', {
+          p_booking_id: bookingId,
+          p_reason: reason,
+        });
+      }
 
       const updated = get().userBookings.map((b) =>
         b.id === bookingId ? { ...b, status: 'cancelled' as BookingStatus } : b

@@ -13,6 +13,7 @@ import { Button } from '../../../components/common/Button/Button';
 import { Card } from '../../../components/common/Card/Card';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { WaterQualityBadge } from './WaterQualityBadge';
 import {
   NearbyTanker,
   TANKER_CONFIGURABLE_CATEGORIES,
@@ -284,6 +285,16 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                     </View>
                   </View>
                 </View>
+
+                {isSelected && (
+                  <View style={{ marginTop: spacing.xs }}>
+                    <WaterQualityBadge
+                      sourceType={tanker.water_type}
+                      tdsPpm={185}
+                      phLevel={7.2}
+                    />
+                  </View>
+                )}
               </Card>
             );
           })

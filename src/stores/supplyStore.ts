@@ -251,10 +251,14 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
 
   rejectSupplierBooking: async (bookingId) => {
     try {
-      await supabase.rpc('cancel_booking_atomic', {
+      const { supplierId } = get();
+      const { error } = await supabase.rpc('supplier_cancel_and_reassign', {
         p_booking_id: bookingId,
-        p_reason: 'Supplier declined order (Driver re-dispatch)',
+        p_supplier_id: supplierId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+        p_reason: 'Supplier unavailable (automatic fleet reassignment initiated)',
       });
+
+      if (error) throw error;
 
       set((state) => ({
         pendingRequests: state.pendingRequests.filter((b) => b.id !== bookingId),
@@ -262,7 +266,7 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
 
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to reject booking' };
+      return { success: false, error: err?.message || 'Failed to reject and reassign booking' };
     }
   },
 

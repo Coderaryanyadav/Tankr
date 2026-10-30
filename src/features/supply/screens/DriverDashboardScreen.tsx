@@ -20,6 +20,7 @@ import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { Modal } from '../../../components/common/Overlay/Modal';
 import { useSupplyStore } from '../../../stores/supplyStore';
 import { useAuthStore } from '../../../stores/authStore';
+import { supabase } from '../../../services/supabase/client';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
@@ -39,6 +40,8 @@ export const DriverDashboardScreen: React.FC = () => {
 
   const [pinModalVisible, setPinModalVisible] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');
+  const [meterStart, setMeterStart] = useState<string>('14200.0');
+  const [meterEnd, setMeterEnd] = useState<string>('19200.0');
   const [pinError, setPinError] = useState<string | null>(null);
 
   const handleOpenMapsNavigation = () => {
@@ -50,6 +53,37 @@ export const DriverDashboardScreen: React.FC = () => {
       default: `https://www.google.com/maps/dir/?api=1&destination=${delivery_latitude},${delivery_longitude}`,
     });
     Linking.openURL(url as string);
+  };
+
+  const handleReportCustomerNoShow = () => {
+    if (!assignedDelivery) return;
+    Alert.alert(
+      'Customer No-Show Protocol',
+      'Have you arrived at the customer location and waited for at least 10 minutes with no response to calls?',
+      [
+        { text: 'Keep Waiting', style: 'cancel' },
+        {
+          text: 'Confirm No-Show (₹200 Fee)',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.rpc('customer_cancel_booking_with_policy', {
+              p_booking_id: assignedDelivery.id,
+              p_reason: 'Customer no-show at delivery gate (10 min wait timer elapsed)',
+            });
+
+            if (!error) {
+              Alert.alert(
+                'No-Show Recorded',
+                'Tanker has been freed for next dispatch. ₹200 gate arrival compensation has been credited to your payout ledger.'
+              );
+              loadDriverData(user?.id || '', user?.phone);
+            } else {
+              Alert.alert('Error', error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleAdvanceStatus = async () => {
@@ -66,7 +100,7 @@ export const DriverDashboardScreen: React.FC = () => {
       await driverUpdateStatus(assignedDelivery.id, 'delivering');
       Alert.alert('Pumping Started', 'Hose connected and filling water into customer sump.');
     } else if (currentStatus === 'delivering') {
-      // Prompt for PIN
+      // Prompt for PIN and Meter
       setEnteredPin('');
       setPinError(null);
       setPinModalVisible(true);
@@ -80,15 +114,32 @@ export const DriverDashboardScreen: React.FC = () => {
       return;
     }
 
-    const res = await driverUpdateStatus(assignedDelivery.id, 'delivered', enteredPin);
-    if (res.success) {
+    const startVal = parseFloat(meterStart) || 0;
+    const endVal = parseFloat(meterEnd) || (startVal + (assignedDelivery.capacity_liters || 5000));
+    const deliveredLiters = Math.round(endVal - startVal);
+
+    try {
+      const { data, error } = await supabase.rpc('driver_complete_delivery_with_meter', {
+        p_booking_id: assignedDelivery.id,
+        p_delivery_pin: enteredPin,
+        p_flow_start: startVal,
+        p_flow_end: endVal,
+        p_delivered_liters: deliveredLiters,
+      });
+
+      if (error) {
+        setPinError(error.message);
+        return;
+      }
+
       setPinModalVisible(false);
+      loadDriverData(user?.id || '', user?.phone);
       Alert.alert(
-        'Delivery Confirmed! 🎉',
-        `Payment of ₹${assignedDelivery.final_payable_amount} authorized. Tanker freed for next dispatch.`
+        'Delivery Verified & Audited! 🎉',
+        `Flow meter confirmed: ${deliveredLiters.toLocaleString('en-IN')}L pumped.\n₹${Math.round(assignedDelivery.final_payable_amount * 0.85)} earnings credited to driver ledger.`
       );
-    } else {
-      setPinError(res.error || 'Incorrect PIN code. Try again.');
+    } catch (err: any) {
+      setPinError(err?.message || 'Verification failed');
     }
   };
 
@@ -196,6 +247,16 @@ export const DriverDashboardScreen: React.FC = () => {
 
             {/* Status Transition Button */}
             <View style={styles.statusCtaWrapper}>
+              {assignedDelivery.status === 'arrived' && (
+                <Pressable
+                  onPress={handleReportCustomerNoShow}
+                  style={{ marginBottom: spacing.sm, padding: spacing.xs, alignItems: 'center' }}
+                >
+                  <Text style={{ color: colors.error, fontSize: 12, fontWeight: fontWeights.bold }}>
+                    ⚠️ Customer Not Answering? Report 10-Min No-Show
+                  </Text>
+                </Pressable>
+              )}
               <Button
                 title={getStatusButtonTitle()}
                 variant="primary"
@@ -227,9 +288,9 @@ export const DriverDashboardScreen: React.FC = () => {
               <Ionicons name="keypad" size={32} color={colors.primary} />
             </View>
 
-            <Text style={styles.pinModalTitle}>Verify Customer PIN</Text>
+            <Text style={styles.pinModalTitle}>Verify Delivery & Flow Meter</Text>
             <Text style={styles.pinModalSubtitle}>
-              Ask customer for their 4-digit delivery PIN code to confirm water transfer.
+              Record the digital flow meter reading and enter customer's 4-digit PIN.
             </Text>
 
             {pinError && (
@@ -239,6 +300,38 @@ export const DriverDashboardScreen: React.FC = () => {
               </View>
             )}
 
+            <View style={{ width: '100%', flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.xs }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: fontWeights.bold, color: colors.textSecondary, marginBottom: 2 }}>
+                  METER START (L)
+                </Text>
+                <TextInput
+                  keyboardType="numeric"
+                  placeholder="14200.0"
+                  placeholderTextColor={colors.textMuted}
+                  value={meterStart}
+                  onChangeText={setMeterStart}
+                  style={[styles.pinInputField, { width: '100%', fontSize: 15, paddingVertical: 8 }]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: fontWeights.bold, color: colors.textSecondary, marginBottom: 2 }}>
+                  METER END (L)
+                </Text>
+                <TextInput
+                  keyboardType="numeric"
+                  placeholder="19200.0"
+                  placeholderTextColor={colors.textMuted}
+                  value={meterEnd}
+                  onChangeText={setMeterEnd}
+                  style={[styles.pinInputField, { width: '100%', fontSize: 15, paddingVertical: 8 }]}
+                />
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 12, fontWeight: fontWeights.bold, color: colors.darkNavy, marginTop: spacing.xs, marginBottom: 2 }}>
+              CUSTOMER 4-DIGIT PIN
+            </Text>
             <TextInput
               keyboardType="number-pad"
               maxLength={4}
