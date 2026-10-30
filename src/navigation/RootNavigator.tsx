@@ -5,6 +5,7 @@ import { VerifyOtpScreen } from '../features/auth/screens/VerifyOtpScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
 import { SupplierDashboardScreen } from '../features/supply/screens/SupplierDashboardScreen';
 import { DriverDashboardScreen } from '../features/supply/screens/DriverDashboardScreen';
+import { AdminDashboardScreen } from '../features/admin/screens/AdminDashboardScreen';
 import { AppTabs } from './AppTabs';
 import { useAuthStore } from '../stores/authStore';
 import { useSupplyStore } from '../stores/supplyStore';
@@ -72,6 +73,10 @@ export const RootNavigator: React.FC = () => {
 
   if (activeRole === 'driver') {
     return <DriverDashboardScreen />;
+  }
+
+  if (activeRole === 'admin') {
+    return <AdminDashboardScreen />;
   }
 
   // Authenticated Home & Discovery Experience
