@@ -78,14 +78,14 @@ interface AdminState {
 
 export const useAdminStore = create<AdminState>((set, get) => ({
   metrics: {
-    total_gmv: 489200,
-    platform_revenue: 48920,
-    total_bookings: 384,
-    completed_bookings: 362,
-    active_tankers_online: 28,
-    total_suppliers: 14,
-    pending_kyc_suppliers: 2,
-    total_liters_delivered: 2150000,
+    total_gmv: 0,
+    platform_revenue: 0,
+    total_bookings: 0,
+    completed_bookings: 0,
+    active_tankers_online: 0,
+    total_suppliers: 0,
+    pending_kyc_suppliers: 0,
+    total_liters_delivered: 0,
     surge_multiplier: 1.0,
   },
 
@@ -130,12 +130,12 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           pendingSuppliers: sups.map((s: any) => ({
             id: s.id,
             business_name: s.business_name,
-            contact_person: 'Fleet Operations',
+            contact_person: s.contact_person || 'Fleet Operations',
             phone_number: s.contact_phone,
-            gstin: s.gstin || '29AABCS1429B1Z8',
-            fleet_size: 2,
+            gstin: s.gstin || 'NOT_REGISTERED',
+            fleet_size: s.fleet_size || 1,
             verification_status: s.verification_status,
-            water_source: s.water_source || 'Tested Borewell',
+            water_source: s.water_source || 'Verified Sump/Borewell',
             submitted_at: s.created_at,
           })),
         });
@@ -152,9 +152,9 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           disputes: dispData.map((d: any) => ({
             id: d.id,
             booking_reference: d.booking_id ? `TKR-${d.booking_id.substring(0, 8)}` : 'TKR-INCIDENT',
-            customer_name: 'Customer Account',
-            supplier_name: 'Water Fleet Partner',
-            amount: 875,
+            customer_name: d.customer_name || 'Customer Account',
+            supplier_name: d.supplier_name || 'Water Fleet Partner',
+            amount: Number(d.amount || 0),
             reason: d.reason,
             category: d.category,
             status: d.status,

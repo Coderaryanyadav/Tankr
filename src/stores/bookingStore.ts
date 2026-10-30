@@ -125,17 +125,22 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         p_payment_preference: paymentPreference,
       });
 
-      let bookingRef = `TKR-2026-${Math.floor(10000 + Math.random() * 90000)}`;
-      let bookingId = 'mock-' + Date.now();
-      let deliveryPin = `${Math.floor(1000 + Math.random() * 9000)}`;
-      let finalAmount = tanker.estimated_total_price;
-
-      if (!error && data && data.length > 0) {
-        bookingId = data[0].booking_id;
-        bookingRef = data[0].booking_reference;
-        deliveryPin = data[0].delivery_pin;
-        finalAmount = data[0].final_payable_amount;
+      if (error) {
+        set({ isCreatingBooking: false, bookingError: error.message });
+        return { success: false, error: error.message };
       }
+
+      if (!data || data.length === 0) {
+        const errMsg = 'Failed to create booking: No response from dispatch server.';
+        set({ isCreatingBooking: false, bookingError: errMsg });
+        return { success: false, error: errMsg };
+      }
+
+      const bookingRow = data[0];
+      const bookingId = bookingRow.booking_id;
+      const bookingRef = bookingRow.booking_reference;
+      const deliveryPin = bookingRow.delivery_pin;
+      const finalAmount = Number(bookingRow.final_payable_amount);
 
       const quote = get().activeQuote;
 

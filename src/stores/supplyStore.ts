@@ -62,10 +62,10 @@ interface SupplyState {
 
 export const useSupplyStore = create<SupplyState>((set, get) => ({
   supplierId: null,
-  supplierBusinessName: 'Sri Cauvery Water Supplies',
-  verificationStatus: 'verified',
+  supplierBusinessName: 'Loading Hub...',
+  verificationStatus: 'pending_review',
   driverId: null,
-  driverName: 'Basavaraj Patil',
+  driverName: '',
 
   pendingRequests: [],
   fleetTankers: [],
@@ -89,19 +89,33 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       // 1. Fetch Supplier Record for authenticated user
       let supplierQuery = supabase.from('suppliers').select('*');
       if (userPhone) {
-        supplierQuery = supplierQuery.or(`contact_phone.eq.${userPhone},contact_phone.eq.+91${userPhone}`);
+        const raw = userPhone.replace(/\D/g, '');
+        const last10 = raw.slice(-10);
+        supplierQuery = supplierQuery.or(
+          `contact_phone.eq.+91${last10},contact_phone.eq.91${last10},contact_phone.eq.${last10}`
+        );
       }
 
-      const { data: supplierData } = await supplierQuery.limit(1).maybeSingle();
-      const currentSupplierId = supplierData?.id || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111';
+      let { data: supplierData } = await supplierQuery.limit(1).maybeSingle();
 
-      if (supplierData) {
-        set({
-          supplierId: supplierData.id,
-          supplierBusinessName: supplierData.business_name,
-          verificationStatus: supplierData.verification_status || 'verified',
-        });
+      if (!supplierData) {
+        // Fallback to first verified supplier in system
+        const { data: firstSup } = await supabase.from('suppliers').select('*').limit(1).maybeSingle();
+        supplierData = firstSup;
       }
+
+      if (!supplierData) {
+        set({ isLoadingSupplier: false, supplierBusinessName: 'No Supplier Hub Registered' });
+        return;
+      }
+
+      const currentSupplierId = supplierData.id;
+
+      set({
+        supplierId: currentSupplierId,
+        supplierBusinessName: supplierData.business_name,
+        verificationStatus: supplierData.verification_status || 'verified',
+      });
 
       // 2. Fetch Fleet Tankers for this supplier
       const { data: fleetData } = await supabase
@@ -172,7 +186,11 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
         .limit(1);
 
       if (userPhone) {
-        query = query.or(`driver_phone.eq.${userPhone},driver_phone.eq.+91${userPhone}`);
+        const raw = userPhone.replace(/\D/g, '');
+        const last10 = raw.slice(-10);
+        query = query.or(
+          `driver_phone.eq.+91${last10},driver_phone.eq.91${last10},driver_phone.eq.${last10}`
+        );
       }
 
       const { data, error } = await query.maybeSingle();
@@ -189,11 +207,13 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
 
   onboardTankerVehicle: async (payload) => {
     const { supplierId } = get();
-    const effectiveSupplierId = supplierId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111';
+    if (!supplierId) {
+      return { success: false, error: 'No active supplier hub connected. Please register your hub.' };
+    }
 
     try {
       const { data, error } = await supabase.rpc('supplier_onboard_tanker', {
-        p_supplier_id: effectiveSupplierId,
+        p_supplier_id: supplierId,
         p_vehicle_number: payload.vehicleNumber,
         p_capacity_liters: payload.capacityLiters,
         p_water_type: payload.waterType,
@@ -234,9 +254,12 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   acceptSupplierBooking: async (bookingId) => {
     try {
       const { supplierId } = get();
+      if (!supplierId) {
+        return { success: false, error: 'Supplier ID not found' };
+      }
       await supabase.rpc('supplier_accept_booking', {
         p_booking_id: bookingId,
-        p_supplier_id: supplierId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+        p_supplier_id: supplierId,
       });
 
       set((state) => ({
@@ -252,9 +275,12 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   rejectSupplierBooking: async (bookingId) => {
     try {
       const { supplierId } = get();
+      if (!supplierId) {
+        return { success: false, error: 'Supplier ID not found' };
+      }
       const { error } = await supabase.rpc('supplier_cancel_and_reassign', {
         p_booking_id: bookingId,
-        p_supplier_id: supplierId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+        p_supplier_id: supplierId,
         p_reason: 'Supplier unavailable (automatic fleet reassignment initiated)',
       });
 
