@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Linking,
@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { CustomerDisputeModal } from '../../disputes/components/CustomerDisputeModal';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG, BookingRecord } from '../../../types/booking';
@@ -23,6 +24,7 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
   booking,
   onViewDetails,
 }) => {
+  const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const { cancelBooking, clearActiveBooking } = useBookingStore();
   const config = BOOKING_STATUS_CONFIG[booking.status];
 
@@ -122,12 +124,25 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
       {/* Action Buttons Row */}
       <View style={styles.actionRow}>
         {booking.status === 'delivered' ? (
-          <Button
-            title="Complete & Close"
-            variant="primary"
-            size="md"
-            onPress={clearActiveBooking}
-          />
+          <View style={{ flex: 1, flexDirection: 'row' }}>
+            <View style={{ flex: 1, marginRight: spacing.sm }}>
+              <Button
+                title="Complete & Close"
+                variant="primary"
+                size="md"
+                onPress={clearActiveBooking}
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: spacing.sm }}>
+              <Button
+                title="Report Issue"
+                variant="outline"
+                size="md"
+                onPress={() => setDisputeModalVisible(true)}
+                rightIcon={<Ionicons name="alert-circle-outline" size={16} color={colors.error} />}
+              />
+            </View>
+          </View>
         ) : (
           <View style={{ flex: 1, flexDirection: 'row' }}>
             <View style={{ flex: 1, marginRight: spacing.sm }}>
@@ -140,7 +155,7 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
               />
             </View>
 
-            {(booking.status === 'pending' || booking.status === 'accepted') && (
+            {(booking.status === 'pending' || booking.status === 'accepted') ? (
               <View style={{ flex: 1, marginLeft: spacing.sm }}>
                 <Button
                   title="Cancel Order"
@@ -149,10 +164,27 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
                   onPress={handleCancel}
                 />
               </View>
+            ) : (
+              <View style={{ width: 120, marginLeft: spacing.sm }}>
+                <Button
+                  title="Report Issue"
+                  variant="outline"
+                  size="md"
+                  onPress={() => setDisputeModalVisible(true)}
+                />
+              </View>
             )}
           </View>
         )}
       </View>
+
+      <CustomerDisputeModal
+        visible={disputeModalVisible}
+        bookingId={booking.id}
+        bookingReference={booking.booking_reference}
+        capacityLiters={booking.capacity_liters}
+        onClose={() => setDisputeModalVisible(false)}
+      />
     </View>
   );
 };

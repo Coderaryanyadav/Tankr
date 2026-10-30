@@ -5,34 +5,51 @@ import { notificationService } from '../services/notification/notificationServic
 import { useNotificationStore } from './notificationStore';
 import { BookingRecord, BookingStatus } from '../types/booking';
 
-export type AppUserRole = 'customer' | 'supplier' | 'driver' | 'admin';
+export interface FleetVehicle {
+  id: string;
+  vehicle_number: string;
+  capacity_liters: number;
+  water_type: string;
+  driver_name: string;
+  driver_phone: string;
+  is_online: boolean;
+  is_available: boolean;
+}
 
 interface SupplyState {
-  supplierId: string;
-  driverId: string;
+  // Multi-user dynamic identity
+  supplierId: string | null;
+  supplierBusinessName: string;
+  verificationStatus: string;
+  driverId: string | null;
+  driverName: string;
 
-  // Supplier Dashboard
+  // Supplier Dashboard State
   pendingRequests: BookingRecord[];
-  fleetTankers: Array<{
-    id: string;
-    vehicle_number: string;
-    capacity_liters: number;
-    driver_name: string;
-    is_online: boolean;
-    is_available: boolean;
-  }>;
+  fleetTankers: FleetVehicle[];
   supplierMetrics: {
     todayRevenue: number;
     todayLiters: number;
     activeDeliveriesCount: number;
     completedCount: number;
   };
+  isLoadingSupplier: boolean;
 
-  // Driver Dashboard
+  // Driver Dashboard State
   assignedDelivery: BookingRecord | null;
   driverDutyStatus: boolean;
+  isLoadingDriver: boolean;
 
   // Actions
+  loadSupplierData: (userId: string, userPhone?: string) => Promise<void>;
+  loadDriverData: (userId: string, userPhone?: string) => Promise<void>;
+  onboardTankerVehicle: (payload: {
+    vehicleNumber: string;
+    capacityLiters: number;
+    waterType: string;
+    driverName: string;
+    driverPhone: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   acceptSupplierBooking: (bookingId: string) => Promise<{ success: boolean; error?: string }>;
   rejectSupplierBooking: (bookingId: string) => Promise<{ success: boolean; error?: string }>;
   driverUpdateStatus: (
@@ -44,199 +61,259 @@ interface SupplyState {
 }
 
 export const useSupplyStore = create<SupplyState>((set, get) => ({
-  supplierId: 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
-  driverId: 'drv-001',
+  supplierId: null,
+  supplierBusinessName: 'Sri Cauvery Water Supplies',
+  verificationStatus: 'verified',
+  driverId: null,
+  driverName: 'Basavaraj Patil',
 
-  pendingRequests: [
-    {
-      id: 'req-101',
-      booking_reference: 'TKR-2026-9482',
-      customer_id: 'cust-1',
-      tanker_id: 'tank-1',
-      supplier_id: 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
-      supplier_name: 'Sri Cauvery Water Supplies',
-      vehicle_number: 'KA-04-TC-5001',
-      driver_name: 'Basavaraj Patil',
-      driver_phone: '+919845150001',
-      status: 'pending',
-      capacity_liters: 5000,
-      water_type: 'Potable (Drinking)',
-      delivery_address: 'Villa 14, Sobha Palm Meadows, Whitefield',
-      delivery_latitude: 12.9698,
-      delivery_longitude: 77.7499,
-      delivery_pin: '4829',
-      delivery_distance_km: 3.4,
-      estimated_arrival_minutes: 18,
-      base_price: 750,
-      delivery_charge: 85,
-      surcharge: 0,
-      tax_amount: 42,
-      final_payable_amount: 877,
-      payment_preference: 'upi',
-      payment_status: 'authorized',
-      created_at: new Date().toISOString(),
-    },
-  ],
-
-  fleetTankers: [
-    {
-      id: 'tank-1',
-      vehicle_number: 'KA-04-TC-5001',
-      capacity_liters: 5000,
-      driver_name: 'Basavaraj Patil',
-      is_online: true,
-      is_available: true,
-    },
-    {
-      id: 'tank-2',
-      vehicle_number: 'KA-01-MJ-1001',
-      capacity_liters: 1000,
-      driver_name: 'Manjunath Gowda',
-      is_online: true,
-      is_available: true,
-    },
-    {
-      id: 'tank-3',
-      vehicle_number: 'KA-51-TN-1001',
-      capacity_liters: 10000,
-      driver_name: 'Kiran Reddy',
-      is_online: true,
-      is_available: false,
-    },
-  ],
-
+  pendingRequests: [],
+  fleetTankers: [],
   supplierMetrics: {
-    todayRevenue: 14850,
-    todayLiters: 45000,
-    activeDeliveriesCount: 2,
-    completedCount: 6,
+    todayRevenue: 0,
+    todayLiters: 0,
+    activeDeliveriesCount: 0,
+    completedCount: 0,
   },
+  isLoadingSupplier: false,
 
-  assignedDelivery: {
-    id: 'req-101',
-    booking_reference: 'TKR-2026-9482',
-    customer_id: 'cust-1',
-    tanker_id: 'tank-1',
-    supplier_id: 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
-    supplier_name: 'Sri Cauvery Water Supplies',
-    vehicle_number: 'KA-04-TC-5001',
-    driver_name: 'Basavaraj Patil',
-    driver_phone: '+919845150001',
-    status: 'en_route',
-    capacity_liters: 5000,
-    water_type: 'Potable (Drinking)',
-    delivery_address: 'Villa 14, Sobha Palm Meadows, Whitefield',
-    delivery_latitude: 12.9698,
-    delivery_longitude: 77.7499,
-    delivery_pin: '4829',
-    delivery_distance_km: 3.4,
-    estimated_arrival_minutes: 18,
-    base_price: 750,
-    delivery_charge: 85,
-    surcharge: 0,
-    tax_amount: 42,
-    final_payable_amount: 877,
-    payment_preference: 'upi',
-    payment_status: 'authorized',
-    created_at: new Date().toISOString(),
-  },
-
+  assignedDelivery: null,
   driverDutyStatus: true,
+  isLoadingDriver: false,
 
   toggleDriverDuty: () => set((s) => ({ driverDutyStatus: !s.driverDutyStatus })),
 
-  acceptSupplierBooking: async (bookingId) => {
+  loadSupplierData: async (userId: string, userPhone?: string) => {
+    set({ isLoadingSupplier: true });
     try {
-      await supabase.rpc('supplier_accept_booking', {
-        p_booking_id: bookingId,
-        p_supplier_id: get().supplierId,
-      });
+      // 1. Fetch Supplier Record for authenticated user
+      let supplierQuery = supabase.from('suppliers').select('*');
+      if (userPhone) {
+        supplierQuery = supplierQuery.or(`contact_phone.eq.${userPhone},contact_phone.eq.+91${userPhone}`);
+      }
 
-      const req = get().pendingRequests.find((r) => r.id === bookingId);
-      if (req) {
+      const { data: supplierData } = await supplierQuery.limit(1).maybeSingle();
+      const currentSupplierId = supplierData?.id || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111';
+
+      if (supplierData) {
         set({
-          pendingRequests: get().pendingRequests.filter((r) => r.id !== bookingId),
-          assignedDelivery: { ...req, status: 'accepted' },
+          supplierId: supplierData.id,
+          supplierBusinessName: supplierData.business_name,
+          verificationStatus: supplierData.verification_status || 'verified',
         });
       }
+
+      // 2. Fetch Fleet Tankers for this supplier
+      const { data: fleetData } = await supabase
+        .from('tankers')
+        .select('*')
+        .eq('supplier_id', currentSupplierId);
+
+      const fleet: FleetVehicle[] = (fleetData || []).map((t: any) => ({
+        id: t.id,
+        vehicle_number: t.vehicle_number,
+        capacity_liters: t.capacity_liters,
+        water_type: t.water_type || 'Potable (Drinking)',
+        driver_name: t.driver_name,
+        driver_phone: t.driver_phone,
+        is_online: t.is_online,
+        is_available: t.is_available,
+      }));
+
+      // 3. Fetch Pending Bookings for this supplier
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('supplier_id', currentSupplierId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      // 4. Fetch Completed deliveries today for live metrics
+      const { data: metricsData } = await supabase
+        .from('bookings')
+        .select('final_payable_amount, capacity_liters, status')
+        .eq('supplier_id', currentSupplierId);
+
+      const completed = (metricsData || []).filter((b: any) => b.status === 'delivered');
+      const active = (metricsData || []).filter((b: any) =>
+        ['accepted', 'driver_assigned', 'en_route', 'arrived', 'delivering'].includes(b.status)
+      );
+
+      const todayRevenue = completed.reduce((sum: number, b: any) => sum + Number(b.final_payable_amount || 0), 0);
+      const todayLiters = completed.reduce((sum: number, b: any) => sum + Number(b.capacity_liters || 0), 0);
+
+      set({
+        supplierId: currentSupplierId,
+        fleetTankers: fleet,
+        pendingRequests: (bookingsData || []) as BookingRecord[],
+        supplierMetrics: {
+          todayRevenue,
+          todayLiters,
+          activeDeliveriesCount: active.length,
+          completedCount: completed.length,
+        },
+        isLoadingSupplier: false,
+      });
+    } catch (err) {
+      console.warn('[SupplyStore] Error loading supplier data:', err);
+      set({ isLoadingSupplier: false });
+    }
+  },
+
+  loadDriverData: async (userId: string, userPhone?: string) => {
+    set({ isLoadingDriver: true });
+    try {
+      // Fetch Active Delivery assigned to driver's phone or profile
+      let query = supabase
+        .from('bookings')
+        .select('*')
+        .in('status', ['accepted', 'driver_assigned', 'en_route', 'arrived', 'delivering'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (userPhone) {
+        query = query.or(`driver_phone.eq.${userPhone},driver_phone.eq.+91${userPhone}`);
+      }
+
+      const { data, error } = await query.maybeSingle();
+
+      if (!error && data) {
+        set({ assignedDelivery: data as BookingRecord, isLoadingDriver: false });
+      } else {
+        set({ assignedDelivery: null, isLoadingDriver: false });
+      }
+    } catch {
+      set({ isLoadingDriver: false });
+    }
+  },
+
+  onboardTankerVehicle: async (payload) => {
+    const { supplierId } = get();
+    const effectiveSupplierId = supplierId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111';
+
+    try {
+      const { data, error } = await supabase.rpc('supplier_onboard_tanker', {
+        p_supplier_id: effectiveSupplierId,
+        p_vehicle_number: payload.vehicleNumber,
+        p_capacity_liters: payload.capacityLiters,
+        p_water_type: payload.waterType,
+        p_driver_name: payload.driverName,
+        p_driver_phone: payload.driverPhone,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data?.success) {
+        // Append to fleet
+        const newVehicle: FleetVehicle = {
+          id: data.tanker_id,
+          vehicle_number: payload.vehicleNumber,
+          capacity_liters: payload.capacityLiters,
+          water_type: payload.waterType,
+          driver_name: payload.driverName,
+          driver_phone: payload.driverPhone,
+          is_online: true,
+          is_available: true,
+        };
+
+        set((state) => ({
+          fleetTankers: [newVehicle, ...state.fleetTankers],
+        }));
+
+        return { success: true };
+      }
+
+      return { success: false, error: 'Failed to onboard vehicle' };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Network error registering vehicle' };
+    }
+  },
+
+  acceptSupplierBooking: async (bookingId) => {
+    try {
+      const { supplierId } = get();
+      await supabase.rpc('supplier_accept_booking', {
+        p_booking_id: bookingId,
+        p_supplier_id: supplierId || 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
+      });
+
+      set((state) => ({
+        pendingRequests: state.pendingRequests.filter((b) => b.id !== bookingId),
+      }));
 
       return { success: true };
     } catch (err: any) {
-      // Optimistic transition
-      const req = get().pendingRequests.find((r) => r.id === bookingId);
-      if (req) {
-        set({
-          pendingRequests: get().pendingRequests.filter((r) => r.id !== bookingId),
-          assignedDelivery: { ...req, status: 'accepted' },
-        });
-      }
-      return { success: true };
+      return { success: false, error: err?.message || 'Failed to accept booking' };
     }
   },
 
   rejectSupplierBooking: async (bookingId) => {
-    set({
-      pendingRequests: get().pendingRequests.filter((r) => r.id !== bookingId),
-    });
-    return { success: true };
+    try {
+      await supabase.rpc('cancel_booking_atomic', {
+        p_booking_id: bookingId,
+        p_reason: 'Supplier declined order (Driver re-dispatch)',
+      });
+
+      set((state) => ({
+        pendingRequests: state.pendingRequests.filter((b) => b.id !== bookingId),
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to reject booking' };
+    }
   },
 
   driverUpdateStatus: async (bookingId, newStatus, pin) => {
-    const delivery = get().assignedDelivery;
-    if (!delivery) return { success: false, error: 'No active delivery' };
-
-    // If completing, verify PIN
-    if (newStatus === 'delivered') {
-      if (!pin || pin !== delivery.delivery_pin) {
-        return { success: false, error: 'Incorrect 4-digit Delivery PIN. Ask customer for the PIN code.' };
-      }
-    }
-
     try {
-      await supabase.rpc('driver_update_delivery_status', {
+      const { error } = await supabase.rpc('driver_update_delivery_status', {
         p_booking_id: bookingId,
         p_new_status: newStatus,
         p_delivery_pin: pin || null,
       });
 
-      set({
-        assignedDelivery: { ...delivery, status: newStatus },
-      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
 
-      // If delivered, automatically generate Tax Invoice and trigger completed alert
-      if (newStatus === 'delivered') {
-        invoiceService.generateInvoice(bookingId).catch(() => {});
-        notificationService.triggerNotification(
-          delivery.customer_id,
-          'delivery_completed',
-          'Water Delivery Completed! 💧',
-          `Your tanker delivery for ${delivery.delivery_address} is complete. Your tax invoice is now available.`,
-          bookingId
-        ).catch(() => {});
+      // Update local assigned order
+      const current = get().assignedDelivery;
+      if (current && current.id === bookingId) {
+        if (newStatus === 'delivered') {
+          set({ assignedDelivery: null });
 
-        useNotificationStore.getState().addNotification({
-          id: `notif-delivered-${Date.now()}`,
-          user_id: delivery.customer_id,
-          title: 'Water Delivery Completed! 💧',
-          body: `Your tanker delivery for ${delivery.delivery_address} is complete. Your tax invoice is now available.`,
-          booking_id: bookingId,
-          type: 'delivery_completed',
-          is_read: false,
-          created_at: new Date().toISOString(),
-        });
+          // Generate official tax invoice
+          invoiceService.generateInvoice(bookingId).catch(() => {});
+
+          // Trigger customer push notification
+          notificationService.triggerNotification(
+            current.customer_id,
+            'delivery_completed',
+            'Water Delivery Completed! 💧',
+            `Tanker ${current.vehicle_number} has completed pumping ${current.capacity_liters.toLocaleString('en-IN')}L into your sump.`,
+            bookingId
+          ).catch(() => {});
+
+          useNotificationStore.getState().addNotification({
+            id: `notif-delivered-${Date.now()}`,
+            user_id: current.customer_id,
+            title: 'Water Delivery Completed! 💧',
+            body: `Tanker ${current.vehicle_number} has completed pumping ${current.capacity_liters.toLocaleString('en-IN')}L into your sump.`,
+            booking_id: bookingId,
+            type: 'delivery_completed',
+            is_read: false,
+            created_at: new Date().toISOString(),
+          });
+        } else {
+          set({ assignedDelivery: { ...current, status: newStatus } });
+        }
       }
 
       return { success: true };
     } catch (err: any) {
-      set({
-        assignedDelivery: { ...delivery, status: newStatus },
-      });
-
-      if (newStatus === 'delivered') {
-        invoiceService.generateInvoice(bookingId).catch(() => {});
-      }
-
-      return { success: true };
+      return { success: false, error: err?.message || 'Failed to update delivery status' };
     }
   },
 }));

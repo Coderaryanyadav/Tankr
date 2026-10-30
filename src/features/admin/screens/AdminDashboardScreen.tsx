@@ -17,7 +17,7 @@ import { useAdminStore } from '../../../stores/adminStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
-type AdminTab = 'overview' | 'verifications' | 'disputes';
+type AdminTab = 'overview' | 'verifications' | 'disputes' | 'audit_log';
 
 export const AdminDashboardScreen: React.FC = () => {
   const { signOut } = useAuthStore();
@@ -25,6 +25,7 @@ export const AdminDashboardScreen: React.FC = () => {
     metrics,
     pendingSuppliers,
     disputes,
+    auditLogs,
     isLoading,
     emergencyMode,
     fetchDashboardMetrics,
@@ -208,6 +209,25 @@ export const AdminDashboardScreen: React.FC = () => {
             ]}
           >
             Disputes ({disputes.filter((d) => d.status === 'open').length})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setActiveTab('audit_log')}
+          style={[styles.tabItem, activeTab === 'audit_log' && styles.tabItemActive]}
+        >
+          <Ionicons
+            name="shield-checkmark"
+            size={16}
+            color={activeTab === 'audit_log' ? colors.primary : colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'audit_log' && styles.tabTextActive,
+            ]}
+          >
+            Audit Logs ({auditLogs.length})
           </Text>
         </Pressable>
       </View>
@@ -464,6 +484,39 @@ export const AdminDashboardScreen: React.FC = () => {
                 </View>
               </View>
             ))}
+          </View>
+        )}
+
+        {activeTab === 'audit_log' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Administrative Audit Trail</Text>
+              <Text style={styles.sectionSub}>
+                Cryptographic audit log of KYC approvals, surge pricing overrides and dispute resolutions.
+              </Text>
+            </View>
+
+            {auditLogs.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="document-text-outline" size={32} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>No administrative events recorded yet.</Text>
+              </View>
+            ) : (
+              auditLogs.map((log) => (
+                <View key={log.id} style={styles.auditCard}>
+                  <View style={styles.auditHeader}>
+                    <View style={styles.auditActionTag}>
+                      <Text style={styles.auditActionText}>{log.action.toUpperCase()}</Text>
+                    </View>
+                    <Text style={styles.auditTime}>
+                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(log.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <Text style={styles.auditTarget}>Target: {log.target_type} ({log.target_id})</Text>
+                  {log.notes && <Text style={styles.auditNotes}>Notes: {log.notes}</Text>}
+                </View>
+              ))
+            )}
           </View>
         )}
       </ScrollView>
@@ -827,6 +880,64 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: fontWeights.bold,
     color: colors.error,
+  },
+  auditCard: {
+    backgroundColor: colors.cardSurface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  auditHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  auditActionTag: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  auditActionText: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
+  },
+  auditTime: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  auditTarget: {
+    fontSize: 13,
+    fontWeight: fontWeights.semibold,
+    color: colors.darkNavy,
+    marginBottom: 2,
+  },
+  auditNotes: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  section: {
+    marginBottom: spacing.lg,
+  },
+  sectionHeader: {
+    marginBottom: spacing.md,
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
   },
 });
 

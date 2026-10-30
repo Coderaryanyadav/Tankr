@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -13,19 +13,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { AddVehicleModal } from '../components/AddVehicleModal';
 import { useSupplyStore } from '../../../stores/supplyStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
 export const SupplierDashboardScreen: React.FC = () => {
-  const { signOut } = useAuthStore();
+  const { user, signOut } = useAuthStore();
+  const [addVehicleVisible, setAddVehicleVisible] = useState(false);
   const {
+    supplierBusinessName,
+    verificationStatus,
     pendingRequests,
     fleetTankers,
     supplierMetrics,
+    loadSupplierData,
+    onboardTankerVehicle,
     acceptSupplierBooking,
     rejectSupplierBooking,
   } = useSupplyStore();
+
+  useEffect(() => {
+    loadSupplierData(user?.id || '', user?.phone);
+  }, [user, loadSupplierData]);
 
   const handleAccept = async (id: string, ref: string) => {
     const res = await acceptSupplierBooking(id);
@@ -48,10 +58,14 @@ export const SupplierDashboardScreen: React.FC = () => {
         <View>
           <View style={styles.badgeRow}>
             <StatusBadge label="Supplier Portal" variant="primary" size="sm" />
-            <StatusBadge label="Verified Partner" variant="success" size="sm" />
+            <StatusBadge
+              label={verificationStatus === 'verified' ? 'Verified Partner' : 'KYC Pending'}
+              variant={verificationStatus === 'verified' ? 'success' : 'warning'}
+              size="sm"
+            />
           </View>
-          <Text style={styles.supplierTitle}>Sri Cauvery Water Supplies</Text>
-          <Text style={styles.supplierSubtitle}>Depot #4, Whitefield Main Road</Text>
+          <Text style={styles.supplierTitle}>{supplierBusinessName}</Text>
+          <Text style={styles.supplierSubtitle}>Registered Hub • Bengaluru Metro</Text>
         </View>
 
         <Pressable
@@ -154,7 +168,16 @@ export const SupplierDashboardScreen: React.FC = () => {
 
         {/* Fleet Vehicles Status */}
         <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>Available Fleet Vehicles</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Fleet Vehicles ({fleetTankers.length})</Text>
+            <Pressable
+              onPress={() => setAddVehicleVisible(true)}
+              style={styles.addVehicleBtn}
+            >
+              <Ionicons name="add-circle" size={16} color={colors.primary} />
+              <Text style={styles.addVehicleText}>+ Onboard Tanker</Text>
+            </Pressable>
+          </View>
           {fleetTankers.map((tanker) => (
             <View key={tanker.id} style={styles.fleetCard}>
               <View style={styles.fleetAvatar}>
@@ -177,6 +200,12 @@ export const SupplierDashboardScreen: React.FC = () => {
           ))}
         </View>
       </ScrollView>
+
+      <AddVehicleModal
+        visible={addVehicleVisible}
+        onClose={() => setAddVehicleVisible(false)}
+        onVehicleAdded={onboardTankerVehicle}
+      />
     </SafeAreaView>
   );
 };
@@ -271,6 +300,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
+  },
+  addVehicleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primaryLight,
+  },
+  addVehicleText: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: colors.primary,
   },
   sectionTitle: {
     fontSize: 16,

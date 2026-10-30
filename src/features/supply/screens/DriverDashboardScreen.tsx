@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -24,13 +24,18 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
 export const DriverDashboardScreen: React.FC = () => {
-  const { signOut } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const {
     assignedDelivery,
     driverDutyStatus,
     toggleDriverDuty,
     driverUpdateStatus,
+    loadDriverData,
   } = useSupplyStore();
+
+  useEffect(() => {
+    loadDriverData(user?.id || '', user?.phone);
+  }, [user, loadDriverData]);
 
   const [pinModalVisible, setPinModalVisible] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');

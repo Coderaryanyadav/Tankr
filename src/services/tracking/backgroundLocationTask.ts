@@ -1,8 +1,10 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../supabase/client';
 
 export const DRIVER_BACKGROUND_LOCATION_TASK = 'TANKR_DRIVER_BACKGROUND_LOCATION_TASK';
+const PERSISTENT_QUEUE_KEY = 'TANKR_OFFLINE_GPS_QUEUE_V1';
 
 interface QueuedLocationPing {
   bookingId: string;
@@ -13,10 +15,10 @@ interface QueuedLocationPing {
   timestamp: number;
 }
 
-// Global active tracking metadata
 let activeBookingId: string | null = null;
-const pingQueue: QueuedLocationPing[] = [];
+let pingQueue: QueuedLocationPing[] = [];
 let isFlushingQueue = false;
+let isQueueLoadedFromDisk = false;
 
 export const setActiveTrackingBookingId = (bookingId: string | null) => {
   activeBookingId = bookingId;
@@ -27,9 +29,40 @@ export const getActiveTrackingBookingId = (): string | null => {
 };
 
 /**
+ * Loads persisted offline pings from SecureStore on startup
+ */
+const loadQueueFromDisk = async () => {
+  if (isQueueLoadedFromDisk) return;
+  try {
+    const raw = await SecureStore.getItemAsync(PERSISTENT_QUEUE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        pingQueue = parsed;
+      }
+    }
+    isQueueLoadedFromDisk = true;
+  } catch (err) {
+    isQueueLoadedFromDisk = true;
+  }
+};
+
+/**
+ * Persists current queue to disk so app kills do not discard telemetry
+ */
+const persistQueueToDisk = async () => {
+  try {
+    await SecureStore.setItemAsync(PERSISTENT_QUEUE_KEY, JSON.stringify(pingQueue.slice(-200)));
+  } catch {
+    // Non-blocking
+  }
+};
+
+/**
  * Flush offline buffered pings to database upon network reconnection
  */
-const flushPingQueue = async () => {
+export const flushPingQueue = async () => {
+  await loadQueueFromDisk();
   if (isFlushingQueue || pingQueue.length === 0) return;
   isFlushingQueue = true;
 
@@ -46,6 +79,7 @@ const flushPingQueue = async () => {
 
       if (!error) {
         pingQueue.shift();
+        await persistQueueToDisk();
       } else {
         // Network still unavailable or temporary disruption
         break;
@@ -75,9 +109,10 @@ TaskManager.defineTask(DRIVER_BACKGROUND_LOCATION_TASK, async ({ data, error }) 
 
   const currentBooking = activeBookingId;
   if (!currentBooking) {
-    // No active trip requiring location broadcast
     return;
   }
+
+  await loadQueueFromDisk();
 
   // Pick the freshest location fix
   const latest = locations[locations.length - 1];
@@ -111,8 +146,9 @@ TaskManager.defineTask(DRIVER_BACKGROUND_LOCATION_TASK, async ({ data, error }) 
     });
 
     if (rpcError) {
-      // Buffer in offline queue for retry
+      // Buffer in offline queue for retry and persist to disk
       pingQueue.push(pingData);
+      await persistQueueToDisk();
     } else {
       // Success - check if pending buffered pings need flushing
       if (pingQueue.length > 0) {
@@ -120,7 +156,8 @@ TaskManager.defineTask(DRIVER_BACKGROUND_LOCATION_TASK, async ({ data, error }) 
       }
     }
   } catch (netErr) {
-    // Buffer offline
+    // Buffer offline and persist to disk
     pingQueue.push(pingData);
+    await persistQueueToDisk();
   }
 });
