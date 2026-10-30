@@ -18,6 +18,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
 import { useLocationStore } from '../../../stores/locationStore';
+import { useSupplyStore } from '../../../stores/supplyStore';
 import { colors } from '../../../theme';
 import { NearbyTanker } from '../../../types/discovery';
 
@@ -31,6 +32,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToProfile,
 }) => {
   const { user, signOut } = useAuthStore();
+  const { setActiveRole } = useSupplyStore();
   const {
     activeCoordinates,
     activeAddressText,
@@ -110,15 +112,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
         onProfilePress={() => {
           Alert.alert(
-            'Account Profile',
-            `Logged in as ${user?.phone || 'Customer'}\nRole: Customer`,
+            'Account & Mode Switcher',
+            `Logged in as: ${user?.phone || 'Customer'}\nCurrent Mode: Customer`,
             [
-              { text: 'Close', style: 'cancel' },
+              { text: 'Supplier Portal', onPress: () => setActiveRole('supplier') },
+              { text: 'Driver Console', onPress: () => setActiveRole('driver') },
               {
                 text: 'Sign Out',
                 style: 'destructive',
                 onPress: () => signOut(),
               },
+              { text: 'Cancel', style: 'cancel' },
             ]
           );
         }}
