@@ -47,7 +47,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "TANKR Driver mode requires continuous background GPS tracking to transmit navigation progress and arrival notifications to customers."
         }
-      ]
+      ],
+      "./plugins/withMappls"
     ]
   }
 }
