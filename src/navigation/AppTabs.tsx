@@ -4,7 +4,7 @@ import { BottomNav, TabId } from '../components/common/Navigation/BottomNav';
 import { BookingsListScreen } from '../features/booking/screens/BookingsListScreen';
 import { HomeScreen } from '../features/discovery/screens/HomeScreen';
 import { LiveTrackingScreen } from '../features/tracking/screens/LiveTrackingScreen';
-import { DesignSystemShowcase } from '../showcase/DesignSystemShowcase';
+import { AccountScreen } from '../features/profile/screens/AccountScreen';
 import { colors } from '../theme';
 
 export const AppTabs: React.FC = () => {
@@ -23,7 +23,7 @@ export const AppTabs: React.FC = () => {
         ) : activeTab === 'activity' ? (
           <LiveTrackingScreen onBack={() => setActiveTab('discovery')} />
         ) : (
-          <DesignSystemShowcase />
+          <AccountScreen onNavigateToBookings={() => setActiveTab('bookings')} />
         )}
       </View>
 

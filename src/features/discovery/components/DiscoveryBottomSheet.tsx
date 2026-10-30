@@ -77,10 +77,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
           style={styles.destinationPressable}
         >
           <View style={styles.destinationIconCircle}>
-            <Ionicons name="location" size={18} color={colors.primary} />
+            <Ionicons name="location" size={16} color={colors.primary} />
           </View>
           <View style={styles.destinationTextCol}>
-            <Text style={styles.destinationTitle}>Where do you need water?</Text>
+            <Text style={styles.destinationTitle}>DELIVERING TO</Text>
             <Text numberOfLines={1} style={styles.destinationAddress}>
               {deliveryAddress}
             </Text>
@@ -102,7 +102,7 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
           {isRefreshing ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Ionicons name="sync" size={18} color={colors.darkNavy} />
+            <Ionicons name="sync" size={16} color={colors.darkNavy} />
           )}
         </Pressable>
       </View>
@@ -364,32 +364,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing.sm,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
   destinationIconCircle: {
-    width: 36,
-    height: 36,
+    width: 28,
+    height: 28,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   destinationTextCol: {
     flex: 1,
   },
   destinationTitle: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: fontWeights.bold,
     color: colors.primary,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   destinationAddress: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
   },
@@ -405,15 +405,15 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   refreshButton: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: borderRadius.full,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.sm,
+    marginLeft: spacing.xs,
   },
   filterSection: {
     paddingVertical: spacing.xs,
@@ -480,7 +480,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tankersScrollContent: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
     paddingBottom: 110, // Avoid overlap with sticky footer
   },
   loadingWrapper: {
@@ -494,23 +495,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   tankerCardContainer: {
-    marginVertical: spacing.xs,
+    marginVertical: 4,
   },
   tankerCardContent: {
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   tankerMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   tankerAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: borderRadius.xl,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
   tankerAvatarSelected: {
     backgroundColor: colors.primaryLight,

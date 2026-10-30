@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   mapSection: {
-    height: 340,
+    height: 280,
     width: '100%',
   },
   activeBookingWrapper: {
