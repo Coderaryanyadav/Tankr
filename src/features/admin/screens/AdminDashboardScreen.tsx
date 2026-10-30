@@ -14,13 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { useAdminStore } from '../../../stores/adminStore';
-import { useSupplyStore } from '../../../stores/supplyStore';
+import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
 type AdminTab = 'overview' | 'verifications' | 'disputes';
 
 export const AdminDashboardScreen: React.FC = () => {
-  const { setActiveRole } = useSupplyStore();
+  const { signOut } = useAuthStore();
   const {
     metrics,
     pendingSuppliers,
@@ -101,11 +101,11 @@ export const AdminDashboardScreen: React.FC = () => {
         </View>
 
         <Pressable
-          onPress={() => setActiveRole('customer')}
+          onPress={() => signOut()}
           style={styles.switchModeBtn}
         >
-          <Ionicons name="arrow-back" size={16} color={colors.white} />
-          <Text style={styles.switchModeText}>Exit to User App</Text>
+          <Ionicons name="log-out-outline" size={16} color={colors.white} />
+          <Text style={styles.switchModeText}>Sign Out</Text>
         </Pressable>
       </View>
 

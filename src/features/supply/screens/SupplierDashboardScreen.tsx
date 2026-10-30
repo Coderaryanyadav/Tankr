@@ -14,16 +14,17 @@ import { Button } from '../../../components/common/Button/Button';
 import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { useSupplyStore } from '../../../stores/supplyStore';
+import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
 export const SupplierDashboardScreen: React.FC = () => {
+  const { signOut } = useAuthStore();
   const {
     pendingRequests,
     fleetTankers,
     supplierMetrics,
     acceptSupplierBooking,
     rejectSupplierBooking,
-    setActiveRole,
   } = useSupplyStore();
 
   const handleAccept = async (id: string, ref: string) => {
@@ -55,12 +56,12 @@ export const SupplierDashboardScreen: React.FC = () => {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Switch to Customer Mode"
-          onPress={() => setActiveRole('customer')}
+          accessibilityLabel="Sign Out"
+          onPress={() => signOut()}
           style={styles.switchModePill}
         >
-          <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
-          <Text style={styles.switchModeText}>Customer Mode</Text>
+          <Ionicons name="log-out-outline" size={16} color={colors.primary} />
+          <Text style={styles.switchModeText}>Sign Out</Text>
         </Pressable>
       </View>
 

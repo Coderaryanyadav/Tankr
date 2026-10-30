@@ -23,7 +23,7 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
   booking,
   onViewDetails,
 }) => {
-  const { cancelBooking, simulateStatusAdvance, clearActiveBooking } = useBookingStore();
+  const { cancelBooking, clearActiveBooking } = useBookingStore();
   const config = BOOKING_STATUS_CONFIG[booking.status];
 
   const handleCallDriver = () => {
@@ -129,26 +129,28 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
             onPress={clearActiveBooking}
           />
         ) : (
-          <>
+          <View style={{ flex: 1, flexDirection: 'row' }}>
             <View style={{ flex: 1, marginRight: spacing.sm }}>
               <Button
-                title="Advance Status"
+                title={booking.driver_name ? 'Contact Driver' : 'Order Details'}
                 variant="secondary"
                 size="md"
-                onPress={simulateStatusAdvance}
-                rightIcon={<Ionicons name="play-forward" size={16} color={colors.primary} />}
+                onPress={booking.driver_name ? handleCallDriver : () => onViewDetails?.()}
+                rightIcon={<Ionicons name={booking.driver_name ? "call-outline" : "document-text-outline"} size={16} color={colors.primary} />}
               />
             </View>
 
-            <View style={{ flex: 1, marginLeft: spacing.sm }}>
-              <Button
-                title="Cancel Order"
-                variant="outline"
-                size="md"
-                onPress={handleCancel}
-              />
-            </View>
-          </>
+            {(booking.status === 'pending' || booking.status === 'accepted') && (
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <Button
+                  title="Cancel Order"
+                  variant="outline"
+                  size="md"
+                  onPress={handleCancel}
+                />
+              </View>
+            )}
+          </View>
         )}
       </View>
     </View>

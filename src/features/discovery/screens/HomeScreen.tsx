@@ -19,7 +19,6 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
 import { useLocationStore } from '../../../stores/locationStore';
-import { useSupplyStore } from '../../../stores/supplyStore';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { colors } from '../../../theme';
 import { NearbyTanker } from '../../../types/discovery';
@@ -33,8 +32,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToBookings,
   onNavigateToProfile,
 }) => {
-  const { user, signOut } = useAuthStore();
-  const { setActiveRole } = useSupplyStore();
+  const { user, profile, signOut } = useAuthStore();
   const {
     activeCoordinates,
     activeAddressText,
@@ -113,18 +111,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onNotificationsPress={() => setNotificationsModalVisible(true)}
         onProfilePress={() => {
           Alert.alert(
-            'Account & Mode Switcher',
-            `Logged in as: ${user?.phone || 'Customer'}\nCurrent Mode: Customer`,
+            'My Account',
+            `Phone: ${user?.phone || 'Verified'}\nAccount Role: ${(profile?.role || 'Customer').toUpperCase()}\nCity: ${profile?.city || 'Bengaluru'}`,
             [
-              { text: 'Supplier Portal', onPress: () => setActiveRole('supplier') },
-              { text: 'Driver Console', onPress: () => setActiveRole('driver') },
-              { text: 'Admin Operations', onPress: () => setActiveRole('admin') },
               {
                 text: 'Sign Out',
                 style: 'destructive',
                 onPress: () => signOut(),
               },
-              { text: 'Cancel', style: 'cancel' },
+              { text: 'Close', style: 'cancel' },
             ]
           );
         }}

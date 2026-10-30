@@ -1,4 +1,6 @@
 import { registerRootComponent } from 'expo';
+// Register native background location tasks before component initialization
+import './src/services/tracking/backgroundLocationTask';
 
 import App from './App';
 

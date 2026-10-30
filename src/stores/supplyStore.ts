@@ -8,7 +8,6 @@ import { BookingRecord, BookingStatus } from '../types/booking';
 export type AppUserRole = 'customer' | 'supplier' | 'driver' | 'admin';
 
 interface SupplyState {
-  activeRole: AppUserRole;
   supplierId: string;
   driverId: string;
 
@@ -34,7 +33,6 @@ interface SupplyState {
   driverDutyStatus: boolean;
 
   // Actions
-  setActiveRole: (role: AppUserRole) => void;
   acceptSupplierBooking: (bookingId: string) => Promise<{ success: boolean; error?: string }>;
   rejectSupplierBooking: (bookingId: string) => Promise<{ success: boolean; error?: string }>;
   driverUpdateStatus: (
@@ -46,7 +44,6 @@ interface SupplyState {
 }
 
 export const useSupplyStore = create<SupplyState>((set, get) => ({
-  activeRole: 'customer',
   supplierId: 'a1b2c3d4-e5f6-4a5b-8c9d-111111111111',
   driverId: 'drv-001',
 
@@ -145,8 +142,6 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   },
 
   driverDutyStatus: true,
-
-  setActiveRole: (role) => set({ activeRole: role }),
 
   toggleDriverDuty: () => set((s) => ({ driverDutyStatus: !s.driverDutyStatus })),
 

@@ -20,7 +20,7 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
   visible,
   onCancel,
 }) => {
-  const { activeBooking, simulateStatusAdvance } = useBookingStore();
+  const { activeBooking } = useBookingStore();
   const ripple1 = useRef(new Animated.Value(1)).current;
   const ripple2 = useRef(new Animated.Value(1)).current;
 
@@ -60,18 +60,12 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
       anim1.start();
       anim2.start();
 
-      // Automatically simulate driver acceptance in development after 4 seconds
-      const acceptTimer = setTimeout(() => {
-        simulateStatusAdvance();
-      }, 4000);
-
       return () => {
         anim1.stop();
         anim2.stop();
-        clearTimeout(acceptTimer);
       };
     }
-  }, [visible, ripple1, ripple2, simulateStatusAdvance]);
+  }, [visible, ripple1, ripple2]);
 
   if (!visible || !activeBooking) return null;
 

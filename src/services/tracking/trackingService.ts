@@ -1,6 +1,10 @@
 import * as Location from 'expo-location';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../supabase/client';
+import {
+  DRIVER_BACKGROUND_LOCATION_TASK,
+  setActiveTrackingBookingId,
+} from './backgroundLocationTask';
 
 export interface DriverPingData {
   bookingId: string;
@@ -27,25 +31,54 @@ let activeRealtimeChannel: RealtimeChannel | null = null;
 
 export const TrackingService = {
   /**
-   * Driver: Start broadcasting device GPS coordinates
+   * Driver: Start continuous GPS broadcasting (Foreground & Native Background)
    */
   startDriverTracking: async (
     bookingId: string,
     onPingSent?: (data: DriverPingData) => void
   ): Promise<boolean> => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.warn('[TrackingService] Location permission denied for driver');
+      // 1. Foreground Location Permission
+      const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') {
+        console.warn('[TrackingService] Foreground location permission denied for driver');
         return false;
       }
 
-      // 1. Join Realtime Channel
+      // 2. Background Location Permission (Essential for continuous tracking when driver locks phone)
+      const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+      if (bgStatus !== 'granted') {
+        console.warn('[TrackingService] Background location permission denied or limited');
+      }
+
+      // 3. Set Active Global Trip Reference
+      setActiveTrackingBookingId(bookingId);
+
+      // 4. Join Realtime Channel
       const channel = supabase.channel(`booking:tracking:${bookingId}`);
       await channel.subscribe();
       activeRealtimeChannel = channel;
 
-      // 2. Start Device GPS Watcher (interval 4s or 15m delta)
+      // 5. Start Native Background Location Updates (via TaskManager)
+      const hasStartedBg = await Location.hasStartedLocationUpdatesAsync(
+        DRIVER_BACKGROUND_LOCATION_TASK
+      );
+      if (!hasStartedBg && bgStatus === 'granted') {
+        await Location.startLocationUpdatesAsync(DRIVER_BACKGROUND_LOCATION_TASK, {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 15, // Update every 15 meters to balance precision and battery
+          showsBackgroundLocationIndicator: true, // Native iOS blue indicator pill
+          pausesUpdatesAutomatically: false,
+          foregroundService: {
+            notificationTitle: 'TANKR Delivery in Progress',
+            notificationBody: 'Broadcasting live tanker GPS location for active trip.',
+            notificationColor: '#007AFF',
+          },
+        });
+      }
+
+      // 6. Foreground Watcher for low-latency in-app navigation
       activeLocationSubscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
@@ -62,14 +95,14 @@ export const TrackingService = {
             timestamp: Date.now(),
           };
 
-          // Broadcast over WebSocket
+          // Broadcast over Supabase WebSocket
           await channel.send({
             type: 'broadcast',
             event: 'driver_ping',
             payload: pingData,
           });
 
-          // Server-side validation & audit checkpoint
+          // Server-side audit & ETA checkpoint
           supabase.rpc('record_driver_location_ping', {
             p_booking_id: bookingId,
             p_lat: pingData.latitude,
@@ -90,16 +123,33 @@ export const TrackingService = {
   },
 
   /**
-   * Driver / System: Stop location broadcasting
+   * Driver / System: Stop location broadcasting (Cleans up both background & foreground)
    */
   stopDriverTracking: async () => {
-    if (activeLocationSubscription) {
-      activeLocationSubscription.remove();
-      activeLocationSubscription = null;
-    }
-    if (activeRealtimeChannel) {
-      await activeRealtimeChannel.unsubscribe();
-      activeRealtimeChannel = null;
+    try {
+      setActiveTrackingBookingId(null);
+
+      // Stop foreground watcher
+      if (activeLocationSubscription) {
+        activeLocationSubscription.remove();
+        activeLocationSubscription = null;
+      }
+
+      // Stop native background task
+      const hasStartedBg = await Location.hasStartedLocationUpdatesAsync(
+        DRIVER_BACKGROUND_LOCATION_TASK
+      );
+      if (hasStartedBg) {
+        await Location.stopLocationUpdatesAsync(DRIVER_BACKGROUND_LOCATION_TASK);
+      }
+
+      // Unsubscribe from WebSocket channel
+      if (activeRealtimeChannel) {
+        await activeRealtimeChannel.unsubscribe();
+        activeRealtimeChannel = null;
+      }
+    } catch (err) {
+      console.warn('[TrackingService] Error stopping tracking:', err);
     }
   },
 
@@ -108,29 +158,44 @@ export const TrackingService = {
    */
   subscribeToLiveTracking: (
     bookingId: string,
-    destLat: number,
-    destLng: number,
-    onUpdate: (state: LiveTrackingState) => void
-  ): (() => void) => {
+    destinationLat: number,
+    destinationLng: number,
+    onLocationUpdate: (state: LiveTrackingState) => void
+  ) => {
     const channel = supabase.channel(`booking:tracking:${bookingId}`);
 
     channel
-      .on('broadcast', { event: 'driver_ping' }, ({ payload }: { payload: DriverPingData }) => {
-        // Calculate remaining distance in km
-        const dLat = payload.latitude - destLat;
-        const dLng = payload.longitude - destLng;
-        const distKm = Math.round(Math.sqrt(dLat * dLat + dLng * dLng) * 111 * 10) / 10;
-        const etaMin = Math.max(1, Math.round(distKm * 3.3));
+      .on('broadcast', { event: 'driver_ping' }, (payload) => {
+        const ping = payload.payload as DriverPingData;
+        if (!ping || !ping.latitude || !ping.longitude) return;
 
-        onUpdate({
-          currentLat: payload.latitude,
-          currentLng: payload.longitude,
-          heading: payload.heading,
-          speedKmh: payload.speed,
-          lastUpdated: new Date(payload.timestamp),
+        let distanceKm = 3.5;
+        let eta = 12;
+
+        if (destinationLat && destinationLng) {
+          const R = 6371;
+          const dLat = ((destinationLat - ping.latitude) * Math.PI) / 180;
+          const dLon = ((destinationLng - ping.longitude) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((ping.latitude * Math.PI) / 180) *
+              Math.cos((destinationLat * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          distanceKm = Math.round(R * c * 10) / 10;
+          eta = Math.max(2, Math.round((distanceKm / 20) * 60));
+        }
+
+        onLocationUpdate({
+          currentLat: ping.latitude,
+          currentLng: ping.longitude,
+          heading: ping.heading,
+          speedKmh: ping.speed,
+          lastUpdated: new Date(),
           isStale: false,
-          distanceRemainingKm: distKm,
-          etaMinutes: etaMin,
+          distanceRemainingKm: distanceKm,
+          etaMinutes: eta,
         });
       })
       .subscribe();
@@ -140,4 +205,3 @@ export const TrackingService = {
     };
   },
 };
-

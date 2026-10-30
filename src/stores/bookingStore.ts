@@ -40,7 +40,7 @@ interface BookingState {
     reason?: string
   ) => Promise<{ success: boolean; error?: string }>;
   fetchUserBookings: (customerId: string) => Promise<void>;
-  simulateStatusAdvance: () => void;
+  subscribeToBookingUpdates: (bookingId: string) => () => void;
   clearActiveBooking: () => void;
 }
 
@@ -168,6 +168,20 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         created_at: new Date().toISOString(),
       };
 
+      // Phase 8: Authoritative payment processing (Idempotent & Reconciled)
+      const payMethod = paymentPreference === 'cash_on_delivery' ? 'cod' : (paymentPreference as 'upi' | 'card');
+      const paymentRes = await paymentService.processBookingPayment(bookingId, finalAmount, payMethod);
+
+      if (!paymentRes.success) {
+        // Rollback atomic booking reservation upon payment gateway failure
+        await supabase.rpc('cancel_booking_atomic', {
+          p_booking_id: bookingId,
+          p_reason: `Payment failed: ${paymentRes.error}`,
+        });
+        set({ isCreatingBooking: false, isSearchingDriver: false, activeBooking: null, bookingError: paymentRes.error });
+        return { success: false, error: paymentRes.error || 'Payment transaction failed' };
+      }
+
       set({
         activeBooking: newRecord,
         userBookings: [newRecord, ...get().userBookings],
@@ -175,9 +189,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         isSearchingDriver: true,
       });
 
-      // Phase 8: Record idempotent payment transaction
-      const payMethod = paymentPreference === 'cash_on_delivery' ? 'cod' : (paymentPreference as 'upi' | 'card');
-      paymentService.processBookingPayment(bookingId, finalAmount, payMethod).catch(() => {});
+      // Subscribe to authoritative real-time updates from drivers & suppliers
+      get().subscribeToBookingUpdates(bookingId);
 
       // Phase 8: Dispatch booking confirmed notification
       notificationService.triggerNotification(
@@ -276,34 +289,33 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     }
   },
 
-  simulateStatusAdvance: () => {
-    const current = get().activeBooking;
-    if (!current) return;
+  subscribeToBookingUpdates: (bookingId: string) => {
+    const channel = supabase
+      .channel(`booking-live-${bookingId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bookings',
+          filter: `id=eq.${bookingId}`,
+        },
+        (payload) => {
+          const updatedRecord = payload.new as BookingRecord;
+          set((state) => ({
+            activeBooking: updatedRecord,
+            isSearchingDriver: updatedRecord.status === 'pending',
+            userBookings: state.userBookings.map((b) =>
+              b.id === updatedRecord.id ? updatedRecord : b
+            ),
+          }));
+        }
+      )
+      .subscribe();
 
-    const progression: Record<BookingStatus, BookingStatus> = {
-      pending: 'accepted',
-      accepted: 'driver_assigned',
-      supplier_assigned: 'driver_assigned',
-      driver_assigned: 'en_route',
-      en_route: 'arrived',
-      arrived: 'delivering',
-      delivering: 'delivered',
-      delivered: 'delivered',
-      cancelled: 'cancelled',
-      disputed: 'disputed',
+    return () => {
+      supabase.removeChannel(channel);
     };
-
-    const nextStatus = progression[current.status];
-    const updated: BookingRecord = {
-      ...current,
-      status: nextStatus,
-    };
-
-    set({
-      activeBooking: updated,
-      isSearchingDriver: nextStatus === 'pending',
-      userBookings: get().userBookings.map((b) => (b.id === current.id ? updated : b)),
-    });
   },
 
   clearActiveBooking: () => {

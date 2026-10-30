@@ -27,7 +27,7 @@ interface LiveTrackingScreenProps {
 }
 
 export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }) => {
-  const { activeBooking, cancelBooking, simulateStatusAdvance } = useBookingStore();
+  const { activeBooking, cancelBooking } = useBookingStore();
 
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
 
@@ -54,7 +54,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
       activeBooking.id,
       activeBooking.delivery_latitude,
       activeBooking.delivery_longitude,
-      (newState) => {
+      (newState: LiveTrackingState) => {
         setTrackingState(newState);
       }
     );
@@ -250,15 +250,21 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             </Text>
           </View>
 
-          {/* Advance simulation or Cancellation */}
+          {/* Driver Contact & Cancellation */}
           <View style={styles.footerButtonsRow}>
             <View style={{ flex: 1, marginRight: spacing.xs }}>
               <Button
-                title="Next Trip Step"
+                title="Call Driver"
                 variant="secondary"
                 size="md"
-                onPress={simulateStatusAdvance}
-                rightIcon={<Ionicons name="play-forward" size={16} color={colors.primary} />}
+                onPress={() => {
+                  if (activeBooking.driver_phone) {
+                    Linking.openURL(`tel:${activeBooking.driver_phone}`);
+                  } else {
+                    Alert.alert('Driver Contact', 'Calling driver: +91 98451 10001');
+                  }
+                }}
+                rightIcon={<Ionicons name="call-outline" size={16} color={colors.primary} />}
               />
             </View>
 

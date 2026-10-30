@@ -19,16 +19,17 @@ import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { Modal } from '../../../components/common/Overlay/Modal';
 import { useSupplyStore } from '../../../stores/supplyStore';
+import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
 export const DriverDashboardScreen: React.FC = () => {
+  const { signOut } = useAuthStore();
   const {
     assignedDelivery,
     driverDutyStatus,
     toggleDriverDuty,
     driverUpdateStatus,
-    setActiveRole,
   } = useSupplyStore();
 
   const [pinModalVisible, setPinModalVisible] = useState<boolean>(false);
@@ -127,11 +128,11 @@ export const DriverDashboardScreen: React.FC = () => {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Role Switcher Pill */}
+        {/* Role Header Pill */}
         <View style={styles.modeSwitchRow}>
           <StatusBadge label="Driver Console" variant="primary" size="md" />
-          <Pressable onPress={() => setActiveRole('customer')}>
-            <Text style={styles.switchModeText}>← Back to Customer Mode</Text>
+          <Pressable onPress={() => signOut()}>
+            <Text style={styles.switchModeText}>Sign Out</Text>
           </Pressable>
         </View>
 

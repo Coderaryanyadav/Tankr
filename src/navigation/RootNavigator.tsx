@@ -8,14 +8,12 @@ import { DriverDashboardScreen } from '../features/supply/screens/DriverDashboar
 import { AdminDashboardScreen } from '../features/admin/screens/AdminDashboardScreen';
 import { AppTabs } from './AppTabs';
 import { useAuthStore } from '../stores/authStore';
-import { useSupplyStore } from '../stores/supplyStore';
 import { colors } from '../theme';
 
 type AuthStep = 'login' | 'verify' | 'onboarding' | 'main';
 
 export const RootNavigator: React.FC = () => {
   const { session, profile, isInitialized, initialize } = useAuthStore();
-  const { activeRole } = useSupplyStore();
   const [authStep, setAuthStep] = useState<AuthStep>('login');
 
   useEffect(() => {
@@ -66,20 +64,23 @@ export const RootNavigator: React.FC = () => {
     return <OnboardingScreen onComplete={() => setAuthStep('main')} />;
   }
 
-  // Supply-side role routing
-  if (activeRole === 'supplier') {
-    return <SupplierDashboardScreen />;
-  }
+  // Authoritative Server-Driven Role Navigation:
+  // Role is enforced strictly via the authenticated Supabase user profile.
+  const verifiedRole = profile?.role || 'customer';
 
-  if (activeRole === 'driver') {
-    return <DriverDashboardScreen />;
-  }
-
-  if (activeRole === 'admin') {
+  if (verifiedRole === 'admin') {
     return <AdminDashboardScreen />;
   }
 
-  // Authenticated Home & Discovery Experience
+  if (verifiedRole === 'supplier') {
+    return <SupplierDashboardScreen />;
+  }
+
+  if (verifiedRole === 'driver') {
+    return <DriverDashboardScreen />;
+  }
+
+  // Consumer Customer Experience (Default for customer profiles)
   return <AppTabs />;
 };
 
