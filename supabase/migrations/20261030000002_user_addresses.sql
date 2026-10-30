@@ -81,3 +81,4 @@ CREATE POLICY "Users can delete their own saved addresses"
     ON public.saved_addresses
     FOR DELETE
     USING (auth.uid() = user_id);
+

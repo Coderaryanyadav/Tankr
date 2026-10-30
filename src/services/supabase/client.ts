@@ -50,12 +50,12 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Configurable via EXPO_PUBLIC_* environment variables or production config
+// Configured for TANKR project (qicoczialqxulcbipuix)
 const SUPABASE_URL =
-  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://tankr-app.supabase.co';
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://qicoczialqxulcbipuix.supabase.co';
 const SUPABASE_ANON_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.tankr-dev-placeholder';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpY29jemlhbHF4dWxjYmlwdWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzI3OTMsImV4cCI6MjEwODk0ODc5M30.aTT8i9UAydWN33n0SrlZKBmPCgYBmdizgSENAPLfR6Q';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

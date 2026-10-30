@@ -133,9 +133,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     const parsed = OnboardingFormSchema.safeParse(formData);
     if (!parsed.success) {
       const errMap: Record<string, string> = {};
-      parsed.error.errors.forEach((err) => {
-        if (err.path[0]) {
-          errMap[err.path[0].toString()] = err.message;
+      parsed.error.issues.forEach((issue) => {
+        if (issue.path[0]) {
+          errMap[issue.path[0].toString()] = issue.message;
         }
       });
       setValidationErrors(errMap);

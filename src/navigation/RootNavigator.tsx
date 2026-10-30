@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { LoginScreen } from '../features/auth/screens/LoginScreen';
 import { VerifyOtpScreen } from '../features/auth/screens/VerifyOtpScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
-import { DesignSystemShowcase } from '../showcase/DesignSystemShowcase';
+import { AppTabs } from './AppTabs';
 import { useAuthStore } from '../stores/authStore';
 import { colors } from '../theme';
 
@@ -62,7 +62,7 @@ export const RootNavigator: React.FC = () => {
   }
 
   // Authenticated Home & Discovery Experience
-  return <DesignSystemShowcase />;
+  return <AppTabs />;
 };
 
 const styles = StyleSheet.create({
