@@ -33,3 +33,4 @@ SET full_name = 'Seema Water Hub',
     city = 'Bengaluru',
     pincode = '560066'
 WHERE phone_number IN ('919000000004', '+919000000004');
+

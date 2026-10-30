@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Modal } from '../../../components/common/Overlay/Modal';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
 import { DiscoveryHeader } from '../components/DiscoveryHeader';
