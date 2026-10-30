@@ -39,3 +39,4 @@ CREATE POLICY "Admins can update platform settings"
             WHERE id = auth.uid() AND role = 'admin'
         )
     );
+

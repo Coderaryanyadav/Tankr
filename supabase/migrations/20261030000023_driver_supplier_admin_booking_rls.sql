@@ -64,3 +64,4 @@ CREATE POLICY "Admins have full access to bookings"
     USING (
         EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
     );
+
