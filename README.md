@@ -114,6 +114,7 @@ Detailed technical documentation and architecture artifacts are located in the [
 
 | Document | Description |
 | :--- | :--- |
+| 🗺️ **[`docs/REMEDIATION_ROADMAP.md`](docs/REMEDIATION_ROADMAP.md)** | **6-Sprint Remediation & Production Launch Roadmap** (Security, Fleet, Bookings, Payments, Admin, Testing). |
 | 📊 **[`docs/FLOW_DIAGRAMS.md`](docs/FLOW_DIAGRAMS.md)** | Sequence diagrams, PIN verification flowchart, tracking pipeline, and booking state machines. |
 | 🏗️ **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | Multi-tier system blueprint, pessimistic row locking (`FOR UPDATE`), and PostGIS winding formulas. |
 | 🗄️ **[`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)** | Full Mermaid Entity-Relationship (ER) diagram, table schemas, and RPC function catalog. |

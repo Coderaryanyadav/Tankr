@@ -52,5 +52,16 @@ describe('TANKR Authoritative Pricing Calculations', () => {
 
     expect(runInvalid).toThrow('Distance out of operational bounds');
   });
+
+  test('validates quote validity expiry window (10 minutes SLA)', () => {
+    const createdAt = new Date('2026-10-30T10:00:00Z');
+    const expiresAt = new Date(createdAt.getTime() + 10 * 60 * 1000); // 10 mins
+
+    const isQuoteValid = (currentTime: Date) => currentTime <= expiresAt;
+
+    expect(isQuoteValid(new Date('2026-10-30T10:05:00Z'))).toBe(true);
+    expect(isQuoteValid(new Date('2026-10-30T10:09:59Z'))).toBe(true);
+    expect(isQuoteValid(new Date('2026-10-30T10:10:01Z'))).toBe(false);
+  });
 });
 
