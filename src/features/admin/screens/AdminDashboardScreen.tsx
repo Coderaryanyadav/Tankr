@@ -17,7 +17,7 @@ import { useAdminStore } from '../../../stores/adminStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
-type AdminTab = 'overview' | 'verifications' | 'disputes' | 'audit_log';
+type AdminTab = 'overview' | 'verifications' | 'disputes' | 'zones' | 'audit_log';
 
 export const AdminDashboardScreen: React.FC = () => {
   const { signOut } = useAuthStore();
@@ -26,9 +26,11 @@ export const AdminDashboardScreen: React.FC = () => {
     pendingSuppliers,
     disputes,
     auditLogs,
+    serviceZones,
     isLoading,
     emergencyMode,
     fetchDashboardMetrics,
+    fetchServiceZones,
     approveSupplier,
     rejectSupplier,
     setSurgeMultiplier,
@@ -40,7 +42,8 @@ export const AdminDashboardScreen: React.FC = () => {
 
   useEffect(() => {
     fetchDashboardMetrics();
-  }, [fetchDashboardMetrics]);
+    fetchServiceZones();
+  }, [fetchDashboardMetrics, fetchServiceZones]);
 
   const handleApprove = (id: string, name: string) => {
     Alert.alert(
@@ -209,6 +212,25 @@ export const AdminDashboardScreen: React.FC = () => {
             ]}
           >
             Disputes ({disputes.filter((d) => d.status === 'open').length})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setActiveTab('zones')}
+          style={[styles.tabItem, activeTab === 'zones' && styles.tabItemActive]}
+        >
+          <Ionicons
+            name="map"
+            size={16}
+            color={activeTab === 'zones' ? colors.primary : colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'zones' && styles.tabTextActive,
+            ]}
+          >
+            Zones ({serviceZones.length})
           </Text>
         </Pressable>
 
@@ -484,6 +506,48 @@ export const AdminDashboardScreen: React.FC = () => {
                 </View>
               </View>
             ))}
+          </View>
+        )}
+
+        {activeTab === 'zones' && (
+          <View>
+            <Text style={styles.groupHeading}>BENGALURU SERVICE ZONES & FLEET LIQUIDITY</Text>
+            {serviceZones.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="map-outline" size={48} color={colors.textMuted} />
+                <Text style={styles.emptyTitle}>Loading Service Zones</Text>
+                <Text style={styles.emptyText}>
+                  Computing real-time PostGIS polygon fleet density across metropolitan Bengaluru.
+                </Text>
+              </View>
+            ) : (
+              serviceZones.map((zone) => (
+                <View key={zone.zone_name} style={styles.disputeCard}>
+                  <View style={styles.disputeTopRow}>
+                    <Text style={styles.disputeRef}>{zone.zone_name}</Text>
+                    <StatusBadge
+                      label={zone.liquidity_status}
+                      variant={
+                        zone.liquidity_status === 'OPTIMAL'
+                          ? 'success'
+                          : zone.liquidity_status === 'LIMITED_SUPPLY'
+                          ? 'warning'
+                          : 'error'
+                      }
+                      size="sm"
+                    />
+                  </View>
+                  <Text style={styles.disputeParties}>
+                    Available Tankers: {zone.available_fleet_count} • Online: {zone.online_fleet_count} • Active Trips: {zone.active_deliveries}
+                  </Text>
+                  <View style={styles.disputeReasonBox}>
+                    <Text style={styles.disputeReason}>
+                      Estimated ETA: ~{zone.avg_eta_minutes} mins • Traffic Multiplier: {zone.traffic_factor}x
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         )}
 

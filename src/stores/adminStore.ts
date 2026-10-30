@@ -47,16 +47,28 @@ export interface AdminAuditLogItem {
   created_at: string;
 }
 
+export interface ServiceZoneItem {
+  zone_name: string;
+  online_fleet_count: number;
+  available_fleet_count: number;
+  active_deliveries: number;
+  liquidity_status: 'OPTIMAL' | 'LIMITED_SUPPLY' | 'HIGH_DEMAND_SURGE';
+  avg_eta_minutes: number;
+  traffic_factor: number;
+}
+
 interface AdminState {
   metrics: AdminMetrics;
   pendingSuppliers: SupplierKYCItem[];
   disputes: DisputeItem[];
   auditLogs: AdminAuditLogItem[];
+  serviceZones: ServiceZoneItem[];
   isLoading: boolean;
   emergencyMode: boolean;
 
   fetchDashboardMetrics: () => Promise<void>;
   fetchAuditLogs: () => Promise<void>;
+  fetchServiceZones: () => Promise<void>;
   approveSupplier: (supplierId: string) => Promise<boolean>;
   rejectSupplier: (supplierId: string) => Promise<boolean>;
   setSurgeMultiplier: (multiplier: number) => Promise<void>;
@@ -80,6 +92,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   pendingSuppliers: [],
   disputes: [],
   auditLogs: [],
+  serviceZones: [],
   isLoading: false,
   emergencyMode: false,
 
@@ -176,6 +189,27 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             target_id: log.target_id,
             notes: log.notes,
             created_at: log.created_at,
+          })),
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  },
+
+  fetchServiceZones: async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_service_zone_liquidity_health');
+      if (!error && data) {
+        set({
+          serviceZones: data.map((z: any) => ({
+            zone_name: z.zone_name,
+            online_fleet_count: Number(z.online_fleet_count || 0),
+            available_fleet_count: Number(z.available_fleet_count || 0),
+            active_deliveries: Number(z.active_deliveries || 0),
+            liquidity_status: z.liquidity_status || 'OPTIMAL',
+            avg_eta_minutes: Number(z.avg_eta_minutes || 15),
+            traffic_factor: Number(z.traffic_factor || 1.0),
           })),
         });
       }
