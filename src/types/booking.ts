@@ -140,3 +140,4 @@ export const BOOKING_STATUS_CONFIG: Record<
     stepIndex: 0,
   },
 };
+

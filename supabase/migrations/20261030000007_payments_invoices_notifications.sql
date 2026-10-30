@@ -150,3 +150,4 @@ BEGIN
     SELECT v_inv_id, v_inv_ref, v_b.final_payable_amount;
 END;
 $$;
+

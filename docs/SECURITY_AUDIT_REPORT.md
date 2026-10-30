@@ -66,3 +66,4 @@ All PostgreSQL tables have Row Level Security enabled (`ALTER TABLE ... ENABLE R
 ### Threat 5.2: Secret Leakage & API Keys
 - No service role keys, database passwords, or administrative tokens are bundled in the mobile application binary.
 - All secrets are encapsulated in `.env` (ignored via `.gitignore`) and accessed via Supabase authenticated sessions.
+
