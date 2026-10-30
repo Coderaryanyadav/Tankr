@@ -186,3 +186,4 @@ class MapplsServiceClass {
 }
 
 export const MapplsService = new MapplsServiceClass();
+
