@@ -3,6 +3,10 @@
 -- ==============================================================================
 
 -- 1. Platform Settings & Pricing Overrides Table
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'verified';
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS gstin TEXT DEFAULT '29AABCS1429B1Z8';
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS water_source TEXT DEFAULT 'Certified Borewell';
+
 CREATE TABLE IF NOT EXISTS public.platform_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key TEXT NOT NULL UNIQUE,
@@ -35,10 +39,12 @@ CREATE TABLE IF NOT EXISTS public.disputes (
 ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.disputes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admin read platform_settings" ON public.platform_settings;
 CREATE POLICY "Admin read platform_settings"
     ON public.platform_settings FOR SELECT
     USING (TRUE);
 
+DROP POLICY IF EXISTS "Admin manage disputes" ON public.disputes;
 CREATE POLICY "Admin manage disputes"
     ON public.disputes FOR ALL
     USING (TRUE);

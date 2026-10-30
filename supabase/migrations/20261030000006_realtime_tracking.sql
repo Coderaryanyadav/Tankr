@@ -20,6 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_tracking_breadcrumbs_booking_time
 -- Enable RLS
 ALTER TABLE public.tracking_breadcrumbs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authorized booking participants can read breadcrumbs" ON public.tracking_breadcrumbs;
 CREATE POLICY "Authorized booking participants can read breadcrumbs"
     ON public.tracking_breadcrumbs FOR SELECT
     USING (

@@ -64,10 +64,12 @@ CREATE TRIGGER trg_sync_tanker_coordinates
 ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tankers ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Public can view verified suppliers" ON public.suppliers;
 CREATE POLICY "Public can view verified suppliers"
     ON public.suppliers FOR SELECT
     USING (is_verified = TRUE);
 
+DROP POLICY IF EXISTS "Public can view active online tankers" ON public.tankers;
 CREATE POLICY "Public can view active online tankers"
     ON public.tankers FOR SELECT
     USING (is_online = TRUE);

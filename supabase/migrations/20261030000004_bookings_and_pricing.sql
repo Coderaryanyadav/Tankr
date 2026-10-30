@@ -66,14 +66,17 @@ CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON public.bookings (created_a
 -- 5. Enable Row Level Security (RLS)
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Customers can view own bookings" ON public.bookings;
 CREATE POLICY "Customers can view own bookings"
     ON public.bookings FOR SELECT
     USING (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Customers can insert own bookings" ON public.bookings;
 CREATE POLICY "Customers can insert own bookings"
     ON public.bookings FOR INSERT
     WITH CHECK (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Customers can update own bookings" ON public.bookings;
 CREATE POLICY "Customers can update own bookings"
     ON public.bookings FOR UPDATE
     USING (auth.uid() = customer_id)

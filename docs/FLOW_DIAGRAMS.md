@@ -120,3 +120,4 @@ flowchart LR
     Toggle -- "ENABLED" --> Alert["Broadcast Urgent Water Rationing<br/>Alert to All Users"]
     Toggle -- "DISABLED" --> Normal["Resume Standard Algorithmic Pricing<br/>(Dynamic Surge 1.0x - 2.0x)"]
 ```
+

@@ -28,17 +28,20 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- 4. Create RLS Policies
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
 CREATE POLICY "Users can read own profile"
     ON public.profiles
     FOR SELECT
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
     ON public.profiles
     FOR UPDATE
     USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile"
     ON public.profiles
     FOR INSERT
@@ -135,22 +138,26 @@ CREATE TRIGGER trg_sync_address_coordinates
 ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
 
 -- 7. RLS Policies
+DROP POLICY IF EXISTS "Users can view their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can view their own saved addresses"
     ON public.saved_addresses
     FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can create their own saved addresses"
     ON public.saved_addresses
     FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can update their own saved addresses"
     ON public.saved_addresses
     FOR UPDATE
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can delete their own saved addresses"
     ON public.saved_addresses
     FOR DELETE
@@ -222,10 +229,12 @@ CREATE TRIGGER trg_sync_tanker_coordinates
 ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tankers ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Public can view verified suppliers" ON public.suppliers;
 CREATE POLICY "Public can view verified suppliers"
     ON public.suppliers FOR SELECT
     USING (is_verified = TRUE);
 
+DROP POLICY IF EXISTS "Public can view active online tankers" ON public.tankers;
 CREATE POLICY "Public can view active online tankers"
     ON public.tankers FOR SELECT
     USING (is_online = TRUE);
@@ -448,14 +457,17 @@ CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON public.bookings (created_a
 -- 5. Enable Row Level Security (RLS)
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Customers can view own bookings" ON public.bookings;
 CREATE POLICY "Customers can view own bookings"
     ON public.bookings FOR SELECT
     USING (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Customers can insert own bookings" ON public.bookings;
 CREATE POLICY "Customers can insert own bookings"
     ON public.bookings FOR INSERT
     WITH CHECK (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Customers can update own bookings" ON public.bookings;
 CREATE POLICY "Customers can update own bookings"
     ON public.bookings FOR UPDATE
     USING (auth.uid() = customer_id)
@@ -748,10 +760,12 @@ CREATE TABLE IF NOT EXISTS public.driver_profiles (
 ALTER TABLE public.supplier_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.driver_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Suppliers can view own registration" ON public.supplier_registrations;
 CREATE POLICY "Suppliers can view own registration"
     ON public.supplier_registrations FOR SELECT
     USING (auth.uid() = profile_id);
 
+DROP POLICY IF EXISTS "Drivers can view own profile" ON public.driver_profiles;
 CREATE POLICY "Drivers can view own profile"
     ON public.driver_profiles FOR SELECT
     USING (auth.uid() = profile_id);
@@ -858,6 +872,7 @@ CREATE INDEX IF NOT EXISTS idx_tracking_breadcrumbs_booking_time
 -- Enable RLS
 ALTER TABLE public.tracking_breadcrumbs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Authorized booking participants can read breadcrumbs" ON public.tracking_breadcrumbs;
 CREATE POLICY "Authorized booking participants can read breadcrumbs"
     ON public.tracking_breadcrumbs FOR SELECT
     USING (
@@ -1000,10 +1015,12 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own invoices" ON public.invoices;
 CREATE POLICY "Users can view own invoices"
     ON public.invoices FOR SELECT
     USING (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications"
     ON public.notifications FOR SELECT
     USING (auth.uid() = user_id);
@@ -1099,6 +1116,10 @@ $$;
 -- ==============================================================================
 
 -- 1. Platform Settings & Pricing Overrides Table
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'verified';
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS gstin TEXT DEFAULT '29AABCS1429B1Z8';
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS water_source TEXT DEFAULT 'Certified Borewell';
+
 CREATE TABLE IF NOT EXISTS public.platform_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key TEXT NOT NULL UNIQUE,
@@ -1131,10 +1152,12 @@ CREATE TABLE IF NOT EXISTS public.disputes (
 ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.disputes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Admin read platform_settings" ON public.platform_settings;
 CREATE POLICY "Admin read platform_settings"
     ON public.platform_settings FOR SELECT
     USING (TRUE);
 
+DROP POLICY IF EXISTS "Admin manage disputes" ON public.disputes;
 CREATE POLICY "Admin manage disputes"
     ON public.disputes FOR ALL
     USING (TRUE);
@@ -1232,3 +1255,84 @@ BEGIN
 END;
 $$;
 
+-- ==============================================================================
+-- TANKR DATABASE MIGRATION: Fix Supplier Verification & Recompile Admin Analytics
+-- ==============================================================================
+
+-- 1. Ensure supplier compliance columns exist
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'verified';
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS gstin TEXT DEFAULT '29AABCS1429B1Z8';
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS water_source TEXT DEFAULT 'Certified Borewell';
+
+-- 2. Recompile Executive KPI Metrics RPC
+CREATE OR REPLACE FUNCTION get_admin_dashboard_metrics()
+RETURNS TABLE (
+    total_gmv NUMERIC(12,2),
+    platform_revenue NUMERIC(12,2),
+    total_bookings INT,
+    completed_bookings INT,
+    active_tankers_online INT,
+    total_suppliers INT,
+    pending_kyc_suppliers INT,
+    total_liters_delivered BIGINT,
+    surge_multiplier NUMERIC(3,2)
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_total_gmv NUMERIC(12,2);
+    v_platform_rev NUMERIC(12,2);
+    v_total_b INT;
+    v_comp_b INT;
+    v_tankers_online INT;
+    v_suppliers INT;
+    v_pending_kyc INT;
+    v_liters BIGINT;
+    v_surge NUMERIC(3,2);
+BEGIN
+    -- Aggregate Gross Merchandise Value & Volume
+    SELECT 
+        COALESCE(SUM(final_payable_amount), 0),
+        COALESCE(SUM(final_payable_amount * 0.10), 0),
+        COUNT(*),
+        COUNT(*) FILTER (WHERE status = 'delivered'),
+        COALESCE(SUM(capacity_liters) FILTER (WHERE status = 'delivered'), 0)
+    INTO v_total_gmv, v_platform_rev, v_total_b, v_comp_b, v_liters
+    FROM public.bookings;
+
+    -- Aggregate Fleet online
+    SELECT COUNT(*)
+    INTO v_tankers_online
+    FROM public.tankers
+    WHERE is_online = TRUE;
+
+    -- Aggregate Suppliers & Verification
+    SELECT 
+        COUNT(*),
+        COUNT(*) FILTER (WHERE verification_status = 'pending_review')
+    INTO v_suppliers, v_pending_kyc
+    FROM public.suppliers;
+
+    -- Surge multiplier from settings
+    SELECT COALESCE((value->>'surge_multiplier')::NUMERIC, 1.0)
+    INTO v_surge
+    FROM public.platform_settings
+    WHERE key = 'pricing_defaults';
+
+    IF v_surge IS NULL THEN
+        v_surge := 1.0;
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        v_total_gmv,
+        v_platform_rev,
+        v_total_b,
+        v_comp_b,
+        v_tankers_online,
+        v_suppliers,
+        v_pending_kyc,
+        v_liters,
+        v_surge;
+END;
+$$;

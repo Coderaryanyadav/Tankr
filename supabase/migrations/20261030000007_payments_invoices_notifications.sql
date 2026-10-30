@@ -57,10 +57,12 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own invoices" ON public.invoices;
 CREATE POLICY "Users can view own invoices"
     ON public.invoices FOR SELECT
     USING (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications"
     ON public.notifications FOR SELECT
     USING (auth.uid() = user_id);

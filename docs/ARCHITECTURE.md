@@ -100,3 +100,4 @@ flowchart TD
         Admin --> A_Act["• Review supplier KYC<br/>• Dynamic surge adjustments<br/>• Crisis emergency override<br/>• Settle disputes & refunds"]
     end
 ```
+

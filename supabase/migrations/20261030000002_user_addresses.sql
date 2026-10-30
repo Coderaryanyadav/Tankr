@@ -61,22 +61,26 @@ CREATE TRIGGER trg_sync_address_coordinates
 ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
 
 -- 7. RLS Policies
+DROP POLICY IF EXISTS "Users can view their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can view their own saved addresses"
     ON public.saved_addresses
     FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can create their own saved addresses"
     ON public.saved_addresses
     FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can update their own saved addresses"
     ON public.saved_addresses
     FOR UPDATE
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own saved addresses" ON public.saved_addresses;
 CREATE POLICY "Users can delete their own saved addresses"
     ON public.saved_addresses
     FOR DELETE

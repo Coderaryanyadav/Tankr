@@ -35,10 +35,12 @@ CREATE TABLE IF NOT EXISTS public.driver_profiles (
 ALTER TABLE public.supplier_registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.driver_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Suppliers can view own registration" ON public.supplier_registrations;
 CREATE POLICY "Suppliers can view own registration"
     ON public.supplier_registrations FOR SELECT
     USING (auth.uid() = profile_id);
 
+DROP POLICY IF EXISTS "Drivers can view own profile" ON public.driver_profiles;
 CREATE POLICY "Drivers can view own profile"
     ON public.driver_profiles FOR SELECT
     USING (auth.uid() = profile_id);

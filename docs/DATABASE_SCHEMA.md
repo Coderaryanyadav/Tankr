@@ -134,3 +134,4 @@ erDiagram
 | `generate_invoice_for_booking(booking_id)` | `TABLE(...)` | Generates official tax invoice record and delivery completion notification. |
 | `get_admin_dashboard_metrics()` | `TABLE(...)` | Aggregates Gross Merchandise Value (GMV), platform commission, fleet count, and water volume. |
 | `admin_verify_supplier(supplier_id, status)` | `BOOLEAN` | Approves or rejects supplier KYC compliance status. |
+
