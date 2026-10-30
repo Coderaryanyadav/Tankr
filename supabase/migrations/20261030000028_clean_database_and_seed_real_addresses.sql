@@ -69,3 +69,4 @@ INSERT INTO public.saved_addresses (
   ('bca75357-3da7-4106-b7e8-bd275857efbc', 'work', 'Office', 'Tower B, RMZ Ecospace', 'Outer Ring Road, Bellandur', 'Opposite Intel Campus', 'Bengaluru', '560103', 12.9260, 77.6762, false),
   ('d64671d9-665d-4a90-9a45-52be0313978d', 'home', 'Home', 'Villa 42, Prestige Palms', 'Whitefield Main Road', 'Near Forum Mall', 'Bengaluru', '560066', 12.9698, 77.7499, true),
   ('d64671d9-665d-4a90-9a45-52be0313978d', 'work', 'Office', 'Tower B, RMZ Ecospace', 'Outer Ring Road, Bellandur', 'Opposite Intel Campus', 'Bengaluru', '560103', 12.9260, 77.6762, false);
+

@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Image,
   Linking,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
@@ -22,6 +23,15 @@ import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+function projectToTileCoords(lat: number, lng: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const x = ((lng + 180) / 360) * n;
+  const latRad = (lat * Math.PI) / 180;
+  const clampedLatRad = Math.max(-1.4844, Math.min(1.4844, latRad));
+  const y = ((1 - Math.log(Math.tan(clampedLatRad) + 1 / Math.cos(clampedLatRad)) / Math.PI) / 2) * n;
+  return { x, y };
+}
+
 interface LiveTrackingScreenProps {
   onBack?: () => void;
 }
@@ -30,6 +40,47 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   const { activeBooking, cancelBooking } = useBookingStore();
 
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
+
+  const centerLat = activeBooking?.delivery_latitude || 12.9716;
+  const centerLng = activeBooking?.delivery_longitude || 77.5946;
+  const zoom = 14;
+
+  const trackingTiles = useMemo(() => {
+    if (!activeBooking) return [];
+    const center = projectToTileCoords(centerLat, centerLng, zoom);
+    const centerTileX = Math.floor(center.x);
+    const centerTileY = Math.floor(center.y);
+    const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const tileX = centerTileX + dx;
+        const tileY = centerTileY + dy;
+        const left = (tileX - center.x) * 256 + SCREEN_WIDTH / 2;
+        const top = (tileY - center.y) * 256 + 150;
+
+        tiles.push({
+          key: `${zoom}-${tileX}-${tileY}`,
+          url: `https://a.basemaps.cartocdn.com/light_all/${zoom}/${tileX}/${tileY}.png`,
+          left,
+          top,
+        });
+      }
+    }
+    return tiles;
+  }, [activeBooking, centerLat, centerLng]);
+
+  const tankerCoords = useMemo(() => {
+    if (!activeBooking) return { left: SCREEN_WIDTH / 2 - 50, top: 100 };
+    const centerProj = projectToTileCoords(centerLat, centerLng, zoom);
+    const tLat = trackingState?.currentLat ?? (centerLat + 0.008);
+    const tLng = trackingState?.currentLng ?? (centerLng + 0.007);
+    const tProj = projectToTileCoords(tLat, tLng, zoom);
+
+    const left = Math.max(20, Math.min(SCREEN_WIDTH - 60, (tProj.x - centerProj.x) * 256 + SCREEN_WIDTH / 2 - 20));
+    const top = Math.max(30, Math.min(270, (tProj.y - centerProj.y) * 256 + 150 - 20));
+    return { left, top };
+  }, [activeBooking, centerLat, centerLng, trackingState?.currentLat, trackingState?.currentLng]);
 
   // Initialize tracking stream
   useEffect(() => {
@@ -86,7 +137,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     if (activeBooking.driver_phone) {
       Linking.openURL(`tel:${activeBooking.driver_phone}`);
     } else {
-      Alert.alert('Driver Call', 'Calling driver: +91 98451 15001');
+      Alert.alert('Driver Call', 'Driver contact will be available once the tanker is dispatched.');
     }
   };
 
@@ -130,34 +181,48 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
       {/* Main Interactive Tracking Map Canvas */}
       <View style={styles.mapCanvas}>
-        {/* Road Graphics */}
-        <View style={styles.routeRoadBackground} />
-        <View style={styles.activeRoutePolyline} />
+        {/* Real-World Map Tiles Layer */}
+        <View style={styles.tilesContainer}>
+          {trackingTiles.map((tile) => (
+            <Image
+              key={tile.key}
+              source={{ uri: tile.url }}
+              style={[
+                styles.tileImage,
+                {
+                  left: tile.left,
+                  top: tile.top,
+                },
+              ]}
+              resizeMode="cover"
+            />
+          ))}
+        </View>
 
         {/* Tanker Marker (Moving with Heading Bearing) */}
         <View
           style={[
             styles.tankerVehiclePin,
             {
-              left: SCREEN_WIDTH / 2 - 50,
-              top: 100,
+              left: tankerCoords.left,
+              top: tankerCoords.top,
               transform: [{ rotate: `${trackingState?.heading || 0}deg` }],
             },
           ]}
         >
           <View style={styles.vehicleCabIcon}>
-            <Ionicons name="car" size={20} color={colors.white} />
+            <Ionicons name="water" size={18} color={colors.white} />
           </View>
           <View style={styles.speedPill}>
             <Text style={styles.speedText}>{trackingState?.speedKmh || 22} km/h</Text>
           </View>
         </View>
 
-        {/* Customer Destination Sump Marker */}
+        {/* Customer Destination Sump Marker (Centered on Map) */}
         <View
           style={[
             styles.destinationSumpMarker,
-            { left: SCREEN_WIDTH / 2 + 30, top: 220 },
+            { left: SCREEN_WIDTH / 2 - 16, top: 150 - 16 },
           ]}
         >
           <View style={styles.beaconRing} />
@@ -208,7 +273,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             <View style={styles.driverDetails}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={styles.driverName}>
-                  {activeBooking.driver_name || 'Basavaraj Patil'}
+                  {activeBooking.driver_name || 'Assigned Driver'}
                 </Text>
                 <View style={styles.ratingBadge}>
                   <Ionicons name="star" size={11} color="#F59E0B" />
@@ -216,7 +281,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                 </View>
               </View>
               <Text style={styles.vehicleRegText}>
-                {activeBooking.vehicle_number || 'KA-04-TC-5001'} • {activeBooking.supplier_name}
+                {activeBooking.vehicle_number || 'Vehicle Assigned'} • {activeBooking.supplier_name || 'Verified Supplier'}
               </Text>
             </View>
 
@@ -341,6 +406,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#E4EFF9',
     position: 'relative',
     overflow: 'hidden',
+  },
+  tilesContainer: {
+    ...StyleSheet.absoluteFill,
+  },
+  tileImage: {
+    position: 'absolute',
+    width: 256,
+    height: 256,
   },
   routeRoadBackground: {
     position: 'absolute',
