@@ -41,6 +41,10 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   const { activeBooking, cancelBooking } = useBookingStore();
 
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
+  const [layoutWidth, setLayoutWidth] = useState<number>(() => {
+    const w = Dimensions.get('window').width;
+    return w > 520 ? 430 : w;
+  });
 
   const centerLat = activeBooking?.delivery_latitude || 19.1171;
   const centerLng = activeBooking?.delivery_longitude || 72.8809;
@@ -52,36 +56,37 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     const centerTileX = Math.floor(center.x);
     const centerTileY = Math.floor(center.y);
     const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
+    const halfTilesX = Math.max(1, Math.ceil(layoutWidth / (2 * 256)) + 1);
 
-    for (let dx = -1; dx <= 1; dx++) {
+    for (let dx = -halfTilesX; dx <= halfTilesX; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const tileX = centerTileX + dx;
         const tileY = centerTileY + dy;
-        const left = (tileX - center.x) * 256 + SCREEN_WIDTH / 2;
+        const left = (tileX - center.x) * 256 + layoutWidth / 2;
         const top = (tileY - center.y) * 256 + 150;
 
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${tileY}/${tileX}`,
+          url: `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`,
           left,
           top,
         });
       }
     }
     return tiles;
-  }, [activeBooking, centerLat, centerLng]);
+  }, [activeBooking, centerLat, centerLng, layoutWidth]);
 
   const tankerCoords = useMemo(() => {
-    if (!activeBooking) return { left: SCREEN_WIDTH / 2 - 50, top: 100 };
+    if (!activeBooking) return { left: layoutWidth / 2 - 50, top: 100 };
     const centerProj = projectToTileCoords(centerLat, centerLng, zoom);
     const tLat = trackingState?.currentLat ?? centerLat;
     const tLng = trackingState?.currentLng ?? centerLng;
     const tProj = projectToTileCoords(tLat, tLng, zoom);
 
-    const left = Math.max(20, Math.min(SCREEN_WIDTH - 60, (tProj.x - centerProj.x) * 256 + SCREEN_WIDTH / 2 - 20));
+    const left = Math.max(20, Math.min(layoutWidth - 60, (tProj.x - centerProj.x) * 256 + layoutWidth / 2 - 20));
     const top = Math.max(30, Math.min(270, (tProj.y - centerProj.y) * 256 + 150 - 20));
     return { left, top };
-  }, [activeBooking, centerLat, centerLng, trackingState?.currentLat, trackingState?.currentLng]);
+  }, [activeBooking, centerLat, centerLng, trackingState?.currentLat, trackingState?.currentLng, layoutWidth]);
 
   // Initialize tracking stream
   useEffect(() => {
@@ -251,7 +256,15 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
       </View>
 
       {/* Main Interactive Tracking Map Canvas */}
-      <View style={styles.mapCanvas}>
+      <View
+        style={styles.mapCanvas}
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 50 && Math.abs(w - layoutWidth) > 4) {
+            setLayoutWidth(w);
+          }
+        }}
+      >
         {/* Real-World Map Tiles Layer */}
         <View style={styles.tilesContainer}>
           {trackingTiles.map((tile) => (
@@ -293,7 +306,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
         <View
           style={[
             styles.destinationSumpMarker,
-            { left: SCREEN_WIDTH / 2 - 16, top: 150 - 16 },
+            { left: layoutWidth / 2 - 16, top: 150 - 16 },
           ]}
         >
           <View style={styles.beaconRing} />

@@ -47,6 +47,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const [zoom, setZoom] = useState<number>(13);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  // Dynamic layout measurement so mobile container or web frame is always accurately centered
+  const [layoutWidth, setLayoutWidth] = useState<number>(() => {
+    const w = Dimensions.get('window').width;
+    return w > 520 ? 430 : w;
+  });
+
   // Radar pulse animation for customer GPS pin
   useEffect(() => {
     const pulse = Animated.loop(
@@ -74,26 +80,27 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const centerTileY = Math.floor(center.y);
 
     const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
+    const halfTilesX = Math.max(1, Math.ceil(layoutWidth / (2 * TILE_SIZE)) + 1);
 
-    // 3x3 grid around center tile
-    for (let dx = -1; dx <= 1; dx++) {
+    // Grid around center tile
+    for (let dx = -halfTilesX; dx <= halfTilesX; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const tileX = centerTileX + dx;
         const tileY = centerTileY + dy;
-        const left = (tileX - center.x) * TILE_SIZE + SCREEN_WIDTH / 2;
+        const left = (tileX - center.x) * TILE_SIZE + layoutWidth / 2;
         const top = (tileY - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
 
-        // ArcGIS World Street Map (Crisp Mumbai street cartography, zero watermark, no API key needed)
+        // OpenStreetMap global CDN tiles (fast, crisp Mumbai cartography, zero watermark)
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${tileY}/${tileX}`,
+          url: `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`,
           left,
           top,
         });
       }
     }
     return tiles;
-  }, [userLocation.latitude, userLocation.longitude, zoom]);
+  }, [userLocation.latitude, userLocation.longitude, zoom, layoutWidth]);
 
   // Calculate real GPS positions for tankers with proximity collision resolution
   const placedTankers = useMemo(() => {
@@ -101,12 +108,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const center = projectToTileCoords(userLocation.latitude, userLocation.longitude, zoom);
 
     const placed: Array<{ tanker: NearbyTanker; left: number; top: number }> = [];
-    const reservedCenter = { x: SCREEN_WIDTH / 2, y: MAP_HEIGHT / 2 };
+    const reservedCenter = { x: layoutWidth / 2, y: MAP_HEIGHT / 2 };
     const minDistance = 58;
 
     topTankers.forEach((tanker, index) => {
       const projected = projectToTileCoords(tanker.latitude, tanker.longitude, zoom);
-      let rawX = (projected.x - center.x) * TILE_SIZE + SCREEN_WIDTH / 2;
+      let rawX = (projected.x - center.x) * TILE_SIZE + layoutWidth / 2;
       let rawY = (projected.y - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
 
       // Proximity check against center pin and previously placed tankers
@@ -142,21 +149,29 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
 
       // Constrain inside visible map canvas
-      const left = Math.max(12, Math.min(SCREEN_WIDTH - 96, rawX - 40));
+      const left = Math.max(12, Math.min(layoutWidth - 96, rawX - 40));
       const top = Math.max(20, Math.min(MAP_HEIGHT - 48, rawY - 14));
 
       placed.push({ tanker, left, top });
     });
 
     return placed;
-  }, [tankers, userLocation.latitude, userLocation.longitude, zoom]);
+  }, [tankers, userLocation.latitude, userLocation.longitude, zoom, layoutWidth]);
 
   const getCapacityLabel = (capacity: number) => {
     return `${(capacity / 1000).toFixed(0)}kL`;
   };
 
   return (
-    <View style={styles.mapContainer}>
+    <View
+      style={styles.mapContainer}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 50 && Math.abs(w - layoutWidth) > 4) {
+          setLayoutWidth(w);
+        }
+      }}
+    >
       {/* Real-World Map Tiles Layer */}
       <View style={styles.tilesContainer}>
         {mapTiles.map((tile) => (
@@ -180,7 +195,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         style={[
           styles.customerPinContainer,
           {
-            left: SCREEN_WIDTH / 2 - 14,
+            left: layoutWidth / 2 - 14,
             top: MAP_HEIGHT / 2 - 14,
           },
         ]}
