@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Image,
+  LayoutChangeEvent,
   Linking,
   PanResponder,
   Platform,
@@ -14,10 +16,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FleetTankerItem, useAdminStore } from '../../../stores/adminStore';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, fontWeights, shadows, spacing } from '../../../theme';
 
 const TILE_SIZE = 256;
-const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
 
 // Primary Operations Center (Marol HQ, Andheri East, Mumbai)
 const MAROL_HQ_LAT = 19.1171;
@@ -26,375 +27,37 @@ const MAROL_HQ_LNG = 72.8809;
 // Calculate Uber/Ola Surge Multiplier from Deficit Percentage
 function getSurgeInfo(deficitPct: number) {
   if (deficitPct >= 80) {
-    return { multiplier: '⚡ 2.2x', label: 'CRISIS SURGE', color: '#DC2626', bg: '#FEE2E2', radiusMeters: 1400 };
+    return { multiplier: '⚡ 2.2x', label: 'CRISIS SURGE', color: '#DC2626', bg: '#FEE2E2', radiusPixels: 130 };
   }
   if (deficitPct >= 70) {
-    return { multiplier: '⚡ 1.8x', label: 'HIGH SURGE', color: '#EA580C', bg: '#FFEDD5', radiusMeters: 1200 };
+    return { multiplier: '⚡ 1.8x', label: 'HIGH SURGE', color: '#EA580C', bg: '#FFEDD5', radiusPixels: 110 };
   }
   if (deficitPct >= 55) {
-    return { multiplier: '⚡ 1.5x', label: 'ELEVATED', color: '#D97706', bg: '#FEF3C7', radiusMeters: 1000 };
+    return { multiplier: '⚡ 1.5x', label: 'ELEVATED', color: '#D97706', bg: '#FEF3C7', radiusPixels: 95 };
   }
   if (deficitPct >= 40) {
-    return { multiplier: '⚡ 1.2x', label: 'MODERATE', color: '#EAB308', bg: '#FEF9C3', radiusMeters: 850 };
+    return { multiplier: '⚡ 1.2x', label: 'MODERATE', color: '#EAB308', bg: '#FEF9C3', radiusPixels: 80 };
   }
-  return { multiplier: '1.0x', label: 'OPTIMAL', color: '#10B981', bg: '#DCFCE7', radiusMeters: 700 };
+  return { multiplier: '1.0x', label: 'OPTIMAL', color: '#10B981', bg: '#DCFCE7', radiusPixels: 65 };
 }
 
-// Convert WGS84 coordinates to tile coordinates for native fallback
+// Convert WGS84 Lat/Lng to Slippy Map Tile Coordinates
 function projectToTileCoords(lat: number, lng: number, zoom: number) {
   const n = Math.pow(2, zoom);
   const x = ((lng + 180) / 360) * n;
   const latRad = (lat * Math.PI) / 180;
-  const clampedLatRad = Math.max(-1.4844, Math.min(1.4844, latRad));
+  const clampedLatRad = Math.max(-1.4844, Math.min(1.4844, latRad)); // Clamp to ~85 deg
   const y = ((1 - Math.log(Math.tan(clampedLatRad) + 1 / Math.cos(clampedLatRad)) / Math.PI) / 2) * n;
   return { x, y };
 }
 
-// HTML Generator for Interactive Leaflet Web Map
-function buildLeafletHtml(
-  initialLat: number,
-  initialLng: number,
-  initialZoom: number,
-  cartoKey: string,
-  initialFleet: any[] = [],
-  initialZones: any[] = [],
-  initialShowHeatmap: boolean = true,
-  initialSelectedCapacity: number | null = null,
-  initialSelectedTankerId: string | null = null
-): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #map { width: 100%; height: 100%; background: #F1F5F9; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    
-    /* Uber/Ola Surge Heatmap Glow & Pulse */
-    .surge-heat-halo {
-      border-radius: 50%;
-      pointer-events: none;
-      animation: surgePulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-    @keyframes surgePulse {
-      0%, 100% { transform: scale(0.96); opacity: 0.8; }
-      50% { transform: scale(1.04); opacity: 1; }
-    }
-
-    /* Floating Uber / Ola Surge Multiplier Badge */
-    .uber-surge-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 12px;
-      background: rgba(15, 23, 42, 0.92);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1.5px solid rgba(255, 255, 255, 0.3);
-      border-radius: 24px;
-      color: #FFFFFF;
-      font-size: 11px;
-      font-weight: 700;
-      white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-      cursor: pointer;
-      user-select: none;
-      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
-    }
-    .uber-surge-pill:hover {
-      transform: scale(1.1) translateY(-2px);
-      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
-    }
-    .surge-mult-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 7px;
-      border-radius: 12px;
-      font-weight: 900;
-      font-size: 11px;
-      letter-spacing: -0.2px;
-    }
-    .surge-deficit-tag {
-      font-size: 10px;
-      font-weight: 700;
-    }
-
-    /* Tanker Vehicle Markers Matching Mobile/Web Fleet Spec */
-    .tanker-marker-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      cursor: pointer;
-      user-select: none;
-      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .tanker-marker-wrap:hover {
-      transform: translateY(-5px) scale(1.12);
-      z-index: 9999 !important;
-    }
-    .tanker-bubble {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 4px 10px;
-      border-radius: 16px;
-      color: #FFFFFF;
-      font-size: 11px;
-      font-weight: 800;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-      border: 2px solid #FFFFFF;
-    }
-    .bubble-available {
-      background: linear-gradient(135deg, #10B981, #059669);
-    }
-    .bubble-busy {
-      background: linear-gradient(135deg, #F59E0B, #D97706);
-    }
-    .bubble-selected {
-      background: linear-gradient(135deg, #0284C7, #0369A1);
-      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.5), 0 6px 18px rgba(0, 0, 0, 0.35);
-      transform: scale(1.1);
-    }
-    .radar-pulse-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #FFFFFF;
-      box-shadow: 0 0 6px #FFFFFF;
-    }
-    .plate-chip {
-      margin-top: 3px;
-      padding: 1px 6px;
-      background: #FFFFFF;
-      border: 1px solid #CBD5E1;
-      border-radius: 4px;
-      font-size: 9px;
-      font-weight: 800;
-      color: #0F172A;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-      letter-spacing: 0.3px;
-      white-space: nowrap;
-    }
-
-    /* Custom Leaflet Controls */
-    .leaflet-bar {
-      border: none !important;
-      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18) !important;
-      border-radius: 10px !important;
-      overflow: hidden;
-    }
-    .leaflet-bar a {
-      background: #FFFFFF !important;
-      color: #0F172A !important;
-      font-size: 16px !important;
-      font-weight: 800 !important;
-      width: 36px !important;
-      height: 36px !important;
-      line-height: 36px !important;
-      border-bottom: 1px solid #E2E8F0 !important;
-    }
-    .leaflet-bar a:hover {
-      background: #F8FAFC !important;
-      color: #0284C7 !important;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    var map = null;
-    var heatmapGroup = null;
-    var tankersGroup = null;
-
-    var currentFleet = ${JSON.stringify(initialFleet)};
-    var currentZones = ${JSON.stringify(initialZones)};
-    var currentShowHeatmap = ${initialShowHeatmap ? 'true' : 'false'};
-    var currentSelectedCapacity = ${initialSelectedCapacity !== null ? initialSelectedCapacity : 'null'};
-    var currentSelectedTankerId = ${initialSelectedTankerId ? `'${initialSelectedTankerId}'` : 'null'};
-
-    function getZoneSurgeData(deficitPct) {
-      if (deficitPct >= 80) return { multiplier: '⚡ 2.2x', label: 'CRISIS SURGE', color: '#DC2626', radius: 1400 };
-      if (deficitPct >= 70) return { multiplier: '⚡ 1.8x', label: 'HIGH SURGE', color: '#EA580C', radius: 1200 };
-      if (deficitPct >= 55) return { multiplier: '⚡ 1.5x', label: 'ELEVATED', color: '#D97706', radius: 1000 };
-      if (deficitPct >= 40) return { multiplier: '⚡ 1.2x', label: 'MODERATE', color: '#EAB308', radius: 850 };
-      return { multiplier: '1.0x', label: 'OPTIMAL', color: '#10B981', radius: 700 };
-    }
-
-    function renderHeatmap() {
-      if (!heatmapGroup) return;
-      heatmapGroup.clearLayers();
-      if (!currentShowHeatmap) return;
-
-      currentZones.forEach(function(zone) {
-        var pct = zone.deficit_percentage !== undefined 
-          ? zone.deficit_percentage 
-          : (parseInt(String(zone.deficit_level || '').replace(/[^0-9]/g, ''), 10) || 50);
-        var surge = getZoneSurgeData(pct);
-        var lat = parseFloat(zone.center_lat);
-        var lng = parseFloat(zone.center_lng);
-        var color = zone.color || surge.color;
-
-        // 1. Outer Thermal Halo
-        L.circle([lat, lng], {
-          radius: surge.radius,
-          fillColor: color,
-          fillOpacity: 0.16,
-          stroke: false,
-          interactive: false,
-        }).addTo(heatmapGroup);
-
-        // 2. Mid Density Ring
-        L.circle([lat, lng], {
-          radius: surge.radius * 0.55,
-          fillColor: color,
-          fillOpacity: 0.28,
-          color: color,
-          weight: 1.5,
-          dashArray: '5, 5',
-          interactive: false,
-        }).addTo(heatmapGroup);
-
-        // 3. Floating Uber/Ola Surge Pill Marker
-        var shortName = (zone.zone_name || '').split('/')[0].trim();
-        var pillHtml = '<div class="uber-surge-pill" onclick="onZoneClick(' + lat + ',' + lng + ')">' +
-          '<span class="surge-mult-badge" style="background:' + color + '; color:#FFF;">' + surge.multiplier + '</span>' +
-          '<span>' + shortName + '</span>' +
-          '<span class="surge-deficit-tag" style="color:' + color + ';">' + pct + '%</span>' +
-          '</div>';
-
-        var surgeIcon = L.divIcon({
-          className: 'uber-surge-container',
-          html: pillHtml,
-          iconSize: [160, 32],
-          iconAnchor: [80, 16],
-        });
-
-        L.marker([lat, lng], { icon: surgeIcon, zIndexOffset: 500 }).addTo(heatmapGroup);
-      });
-    }
-
-    function renderTankers() {
-      if (!tankersGroup) return;
-      tankersGroup.clearLayers();
-
-      currentFleet.forEach(function(tanker) {
-        if (!tanker.is_online) return;
-        if (currentSelectedCapacity && tanker.capacity_liters !== currentSelectedCapacity) return;
-
-        var isSelected = tanker.id === currentSelectedTankerId;
-        var isAvail = tanker.is_available;
-        var capText = tanker.capacity_liters >= 1000 ? (tanker.capacity_liters / 1000) + 'k' : tanker.capacity_liters + 'L';
-        var bubbleClass = isSelected ? 'bubble-selected' : (isAvail ? 'bubble-available' : 'bubble-busy');
-
-        var markerHtml = '<div class="tanker-marker-wrap" onclick="onTankerClick(\'' + tanker.id + '\')">' +
-          '<div class="tanker-bubble ' + bubbleClass + '">' +
-          '<span class="radar-pulse-dot"></span>' +
-          '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>' +
-          '<span>' + capText + '</span>' +
-          '</div>' +
-          '<div class="plate-chip">' + tanker.vehicle_number + '</div>' +
-          '</div>';
-
-        var tankerIcon = L.divIcon({
-          className: 'tanker-pin-div',
-          html: markerHtml,
-          iconSize: [90, 48],
-          iconAnchor: [45, 24],
-        });
-
-        L.marker([parseFloat(tanker.latitude), parseFloat(tanker.longitude)], {
-          icon: tankerIcon,
-          zIndexOffset: isSelected ? 2000 : 1000,
-        }).addTo(tankersGroup);
-      });
-    }
-
-    window.onTankerClick = function(id) {
-      window.parent.postMessage({ type: 'SELECT_TANKER', tankerId: id }, '*');
-    };
-
-    window.onZoneClick = function(lat, lng) {
-      if (map) map.flyTo([lat, lng], 15, { duration: 1.2 });
-    };
-
-    function initMap() {
-      if (typeof L === 'undefined') {
-        setTimeout(initMap, 50);
-        return;
-      }
-      if (map) return;
-
-      try {
-        map = L.map('map', {
-          zoomControl: true,
-          attributionControl: false,
-          minZoom: 10,
-          maxZoom: 18,
-        }).setView([${initialLat}, ${initialLng}], ${initialZoom});
-
-        var cartoUrl = 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${cartoKey}';
-        var cartoLayer = L.tileLayer(cartoUrl, {
-          subdomains: 'abcd',
-          maxZoom: 19,
-        }).addTo(map);
-
-        cartoLayer.on('tileerror', function() {
-          if (!window._fallbackTriggered) {
-            window._fallbackTriggered = true;
-            console.warn('Carto tile error, fallback to OpenStreetMap');
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-          }
-        });
-
-        heatmapGroup = L.layerGroup().addTo(map);
-        tankersGroup = L.layerGroup().addTo(map);
-
-        map.on('click', function(e) {
-          if (e.originalEvent && (e.originalEvent.target.id === 'map' || (e.originalEvent.target.classList && e.originalEvent.target.classList.contains('leaflet-container')))) {
-            window.parent.postMessage({ type: 'DESELECT_TANKER' }, '*');
-          }
-        });
-
-        renderHeatmap();
-        renderTankers();
-
-        window.parent.postMessage({ type: 'MAP_READY' }, '*');
-      } catch (err) {
-        console.error('Failed to init Leaflet map:', err);
-      }
-    }
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      initMap();
-    } else {
-      window.addEventListener('load', initMap);
-    }
-    setTimeout(initMap, 100);
-
-    window.addEventListener('message', function(event) {
-      if (!event.data || typeof event.data !== 'object') return;
-      var data = event.data;
-
-      if (data.type === 'UPDATE_DATA') {
-        currentFleet = data.fleetTankers || [];
-        currentZones = data.deficitZones || [];
-        currentShowHeatmap = data.showHeatmap !== undefined ? data.showHeatmap : currentShowHeatmap;
-        currentSelectedCapacity = data.selectedCapacity;
-        currentSelectedTankerId = data.selectedTankerId;
-        renderHeatmap();
-        renderTankers();
-      } else if (data.type === 'FLY_TO') {
-        if (map) map.flyTo([data.lat, data.lng], data.zoom || 15, { duration: 1.2 });
-      } else if (data.type === 'RECENTER') {
-        if (map) map.flyTo([${initialLat}, ${initialLng}], 13, { duration: 1 });
-      }
-    });
-  </script>
-</body>
-</html>`;
+// Inverse conversion from Slippy Map Tile Coordinates to WGS84 Lat/Lng
+function unprojectTileCoords(x: number, y: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const lng = (x / n) * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+  const lat = (latRad * 180) / Math.PI;
+  return { lat, lng };
 }
 
 export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
@@ -406,16 +69,21 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     subscribeToLiveFleetAndHeatmap,
   } = useAdminStore();
 
-  const [zoom, setZoom] = useState<number>(13);
+  const [zoom, setZoom] = useState<number>(14);
   const [centerLat, setCenterLat] = useState<number>(MAROL_HQ_LAT);
   const [centerLng, setCenterLng] = useState<number>(MAROL_HQ_LNG);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
   const [selectedCapacity, setSelectedCapacity] = useState<number | null>(null);
   const [selectedTanker, setSelectedTanker] = useState<FleetTankerItem | null>(null);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({
+    width: 1000,
+    height: isDesktop ? 640 : 480,
+  });
 
-  // Web iframe reference
-  const iframeRef = useRef<any>(null);
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Initial data fetch & realtime subscription
   useEffect(() => {
@@ -427,7 +95,7 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     };
   }, [fetchDeficitZones, fetchFleetTankers, subscribeToLiveFleetAndHeatmap]);
 
-  // Center on live zone epicenter when zones arrive
+  // Center on live zone epicenter when zones arrive initially
   useEffect(() => {
     if (deficitZones.length > 0 && centerLat === MAROL_HQ_LAT && centerLng === MAROL_HQ_LNG) {
       setCenterLat(deficitZones[0].center_lat);
@@ -444,89 +112,144 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     });
   }, [fleetTankers, selectedCapacity]);
 
-  // Handle messages from Web Leaflet iframe
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-
-    const handleMessage = (event: MessageEvent) => {
-      if (!event.data || typeof event.data !== 'object') return;
-      if (event.data.type === 'SELECT_TANKER') {
-        const found = fleetTankers.find((t) => t.id === event.data.tankerId);
-        if (found) {
-          setSelectedTanker(found);
-        }
-      } else if (event.data.type === 'DESELECT_TANKER') {
-        setSelectedTanker(null);
-      } else if (event.data.type === 'MAP_READY') {
-        try {
-          iframeRef.current?.contentWindow?.postMessage(
-            {
-              type: 'UPDATE_DATA',
-              fleetTankers: filteredTankers,
-              deficitZones,
-              showHeatmap,
-              selectedCapacity,
-              selectedTankerId: selectedTanker?.id,
-            },
-            '*'
-          );
-        } catch {
-          // Non-blocking sync
-        }
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => {
-      window.removeEventListener('message', handleMessage);
-    };
-  }, [fleetTankers]);
-
-  // Synchronize state changes to Leaflet iframe
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !iframeRef.current?.contentWindow) return;
-    try {
-      iframeRef.current.contentWindow.postMessage(
-        {
-          type: 'UPDATE_DATA',
-          fleetTankers: filteredTankers,
-          deficitZones,
-          showHeatmap,
-          selectedCapacity,
-          selectedTankerId: selectedTanker?.id,
-        },
-        '*'
-      );
-    } catch {
-      // Non-blocking sync
+  // Handle dynamic container resizing
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setContainerSize({ width, height });
     }
-  }, [filteredTankers, deficitZones, showHeatmap, selectedCapacity, selectedTanker]);
+  };
 
-  // Navigation: Fly to specific hotspot / coordinates
+  // Center coordinate projection
+  const centerProj = useMemo(() => {
+    return projectToTileCoords(centerLat, centerLng, zoom);
+  }, [centerLat, centerLng, zoom]);
+
+  // Calculate visible slippy map tiles
+  const visibleTiles = useMemo(() => {
+    const { width, height } = containerSize;
+    const effectiveCenterX = centerProj.x - panOffset.x / TILE_SIZE;
+    const effectiveCenterY = centerProj.y - panOffset.y / TILE_SIZE;
+
+    const minTileX = Math.floor(effectiveCenterX - width / (2 * TILE_SIZE)) - 1;
+    const maxTileX = Math.ceil(effectiveCenterX + width / (2 * TILE_SIZE)) + 1;
+    const minTileY = Math.floor(effectiveCenterY - height / (2 * TILE_SIZE)) - 1;
+    const maxTileY = Math.ceil(effectiveCenterY + height / (2 * TILE_SIZE)) + 1;
+
+    const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
+    const subdomains = ['a', 'b', 'c', 'd'];
+
+    for (let tx = minTileX; tx <= maxTileX; tx++) {
+      for (let ty = minTileY; ty <= maxTileY; ty++) {
+        const left = (tx - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
+        const top = (ty - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
+        const sub = subdomains[Math.abs((tx + ty) % 4)];
+        tiles.push({
+          key: `${zoom}-${tx}-${ty}`,
+          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tx}/${ty}.png`,
+          left,
+          top,
+        });
+      }
+    }
+    return tiles;
+  }, [centerProj, containerSize, panOffset, zoom]);
+
+  // Calculate pixel coordinates for Deficit Heatmap Zones
+  const placedZones = useMemo(() => {
+    const { width, height } = containerSize;
+    return deficitZones.map((zone) => {
+      const zProj = projectToTileCoords(zone.center_lat, zone.center_lng, zoom);
+      const x = (zProj.x - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
+      const y = (zProj.y - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
+      const pct = zone.deficit_percentage !== undefined
+        ? zone.deficit_percentage
+        : (parseInt(String(zone.deficit_level || '').replace(/[^0-9]/g, ''), 10) || 50);
+      const surge = getSurgeInfo(pct);
+      const shortName = (zone.zone_name || '').split('/')[0].trim();
+      return {
+        ...zone,
+        x,
+        y,
+        pct,
+        surge,
+        shortName,
+      };
+    });
+  }, [deficitZones, centerProj, containerSize, panOffset, zoom]);
+
+  // Calculate pixel coordinates for Tanker Fleet Markers
+  const placedTankers = useMemo(() => {
+    const { width, height } = containerSize;
+    return filteredTankers.map((tanker) => {
+      const tProj = projectToTileCoords(tanker.latitude, tanker.longitude, zoom);
+      const x = (tProj.x - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
+      const y = (tProj.y - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
+      const capText = tanker.capacity_liters >= 1000 ? `${tanker.capacity_liters / 1000}k` : `${tanker.capacity_liters}L`;
+      return {
+        ...tanker,
+        x,
+        y,
+        capText,
+      };
+    });
+  }, [filteredTankers, centerProj, containerSize, panOffset, zoom]);
+
+  // Navigation: Jump to specific hotspot zone
   const handleFlyTo = (lat: number, lng: number, zoomLevel = 15) => {
     setCenterLat(lat);
     setCenterLng(lng);
     setZoom(zoomLevel);
-
-    if (Platform.OS === 'web' && iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(
-        {
-          type: 'FLY_TO',
-          lat,
-          lng,
-          zoom: zoomLevel,
-        },
-        '*'
-      );
-    }
+    setPanOffset({ x: 0, y: 0 });
   };
 
   // Recenter to Marol HQ
   const handleRecenter = () => {
-    handleFlyTo(MAROL_HQ_LAT, MAROL_HQ_LNG, 13);
+    handleFlyTo(MAROL_HQ_LAT, MAROL_HQ_LNG, 14);
   };
 
-  // Native PanResponder for mobile touch dragging
+  // Mouse pan handlers for Web
+  const handleWebMouseDown = (e: any) => {
+    if (Platform.OS !== 'web') return;
+    setIsDragging(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    panOffsetRef.current = panOffset;
+  };
+
+  const handleWebMouseMove = (e: any) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    setPanOffset({
+      x: panOffsetRef.current.x + dx,
+      y: panOffsetRef.current.y + dy,
+    });
+  };
+
+  const handleWebMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (panOffset.x !== 0 || panOffset.y !== 0) {
+      const effectiveCenterX = centerProj.x - panOffset.x / TILE_SIZE;
+      const effectiveCenterY = centerProj.y - panOffset.y / TILE_SIZE;
+      const newCenter = unprojectTileCoords(effectiveCenterX, effectiveCenterY, zoom);
+      setCenterLat(newCenter.lat);
+      setCenterLng(newCenter.lng);
+      setPanOffset({ x: 0, y: 0 });
+    }
+  };
+
+  // Scroll wheel zoom for Web
+  const handleWebWheel = (e: any) => {
+    if (Platform.OS !== 'web') return;
+    if (e.deltaY < 0) {
+      setZoom((z) => Math.min(18, z + 1));
+    } else if (e.deltaY > 0) {
+      setZoom((z) => Math.max(11, z - 1));
+    }
+  };
+
+  // Native Mobile PanResponder for touch panning
   const panResponder = useMemo(() => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -534,33 +257,23 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
         setPanOffset({ x: gestureState.dx, y: gestureState.dy });
       },
       onPanResponderRelease: (_, gestureState) => {
-        const deltaX = gestureState.dx;
-        const deltaY = gestureState.dy;
-        const scale = Math.pow(2, zoom);
-        const lngShift = -(deltaX / TILE_SIZE) * (360 / scale);
-        const latShift = (deltaY / TILE_SIZE) * (180 / scale);
-
-        setCenterLat((prev) => Math.max(-85, Math.min(85, prev + latShift)));
-        setCenterLng((prev) => ((prev + lngShift + 180) % 360) - 180);
+        const effectiveCenterX = centerProj.x - gestureState.dx / TILE_SIZE;
+        const effectiveCenterY = centerProj.y - gestureState.dy / TILE_SIZE;
+        const newCenter = unprojectTileCoords(effectiveCenterX, effectiveCenterY, zoom);
+        setCenterLat(newCenter.lat);
+        setCenterLng(newCenter.lng);
         setPanOffset({ x: 0, y: 0 });
       },
     });
-  }, [zoom]);
+  }, [centerProj, zoom]);
 
-  // Memoized HTML for Web Leaflet map
-  const leafletHtml = useMemo(() => {
-    return buildLeafletHtml(
-      centerLat,
-      centerLng,
-      zoom,
-      CARTO_KEY,
-      filteredTankers,
-      deficitZones,
-      showHeatmap,
-      selectedCapacity,
-      selectedTanker?.id || null
-    );
-  }, [CARTO_KEY]);
+  const webDragProps = Platform.OS === 'web' ? {
+    onMouseDown: handleWebMouseDown,
+    onMouseMove: handleWebMouseMove,
+    onMouseUp: handleWebMouseUp,
+    onMouseLeave: handleWebMouseUp,
+    onWheel: handleWebWheel,
+  } : {};
 
   return (
     <View style={styles.container}>
@@ -656,37 +369,175 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
       </View>
 
       {/* 3. MAIN INTERACTIVE MAP CANVAS + TELEMETRY DRAWER */}
-      <View style={[styles.mapWrapper, isDesktop && styles.mapWrapperDesktop]}>
-        {/* Real Leaflet Map Container for Web */}
-        {Platform.OS === 'web' ? (
-          <View style={styles.mapCanvasBox}>
-            {React.createElement('iframe', {
-              ref: iframeRef,
-              srcDoc: leafletHtml,
-              style: {
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                backgroundColor: '#F8FAFC',
-              },
-              title: 'TANKR Mumbai Live Fleet Map',
-            })}
-          </View>
-        ) : (
-          /* Native Interactive Touch-Pannable View Fallback */
-          <View style={styles.mapCanvasBox} {...panResponder.panHandlers}>
-            <View style={[styles.nativeCenterTarget, { transform: [{ translateX: panOffset.x }, { translateY: panOffset.y }] }]}>
-              <Text style={styles.nativeNotice}>
-                Drag to explore Mumbai (Marol, Sakinaka, Andheri, Powai).
-              </Text>
-            </View>
-          </View>
-        )}
+      <View
+        style={[styles.mapWrapper, isDesktop && styles.mapWrapperDesktop]}
+        onLayout={handleLayout}
+      >
+        <View
+          style={[styles.mapCanvasBox, isDragging && styles.mapCanvasDragging]}
+          {...(Platform.OS === 'web' ? webDragProps : panResponder.panHandlers)}
+        >
+          {/* A. REAL CARTO VOYAGER MAP TILES */}
+          {visibleTiles.map((tile) => (
+            <Image
+              key={tile.key}
+              source={{ uri: tile.url }}
+              style={{
+                position: 'absolute',
+                left: tile.left,
+                top: tile.top,
+                width: TILE_SIZE,
+                height: TILE_SIZE,
+              }}
+              resizeMode="cover"
+            />
+          ))}
 
-        {/* Floating Uber / Ola Demand Surge Legend (Bottom-Left) */}
+          {/* B. UBER/OLA DEMAND DEFICIT HEATMAP OVERLAYS */}
+          {showHeatmap &&
+            placedZones.map((zone) => {
+              const radius = zone.surge.radiusPixels;
+              return (
+                <View
+                  key={`zone-${zone.id}`}
+                  style={{
+                    position: 'absolute',
+                    left: zone.x - radius,
+                    top: zone.y - radius,
+                    width: radius * 2,
+                    height: radius * 2,
+                    pointerEvents: 'box-none',
+                  }}
+                >
+                  {/* Outer Thermal Glow Corona */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      width: radius * 2,
+                      height: radius * 2,
+                      borderRadius: radius,
+                      backgroundColor: zone.surge.color,
+                      opacity: 0.16,
+                    }}
+                  />
+                  {/* Mid Density Concentric Ring */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: radius * 0.25,
+                      top: radius * 0.25,
+                      width: radius * 1.5,
+                      height: radius * 1.5,
+                      borderRadius: radius * 0.75,
+                      borderWidth: 2,
+                      borderColor: zone.surge.color,
+                      borderStyle: 'dashed',
+                      backgroundColor: zone.surge.color,
+                      opacity: 0.24,
+                    }}
+                  />
+                  {/* Floating Uber Surge Pill Badge */}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: radius - 75,
+                      top: radius - 16,
+                      width: 150,
+                      height: 32,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => handleFlyTo(zone.center_lat, zone.center_lng, 15)}
+                      style={[styles.uberSurgePill, shadows.subtle]}
+                    >
+                      <View style={[styles.surgeMultBadge, { backgroundColor: zone.surge.color }]}>
+                        <Text style={styles.surgeMultText}>{zone.surge.multiplier}</Text>
+                      </View>
+                      <Text style={styles.surgeZoneName}>{zone.shortName}</Text>
+                      <Text style={[styles.surgeDeficitTag, { color: zone.surge.color }]}>{zone.pct}%</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+
+          {/* C. LIVE POSTGIS TANKER FLEET PINS */}
+          {placedTankers.map((tanker) => {
+            const isSelected = selectedTanker?.id === tanker.id;
+            return (
+              <View
+                key={`tanker-${tanker.id}`}
+                style={{
+                  position: 'absolute',
+                  left: tanker.x - 45,
+                  top: tanker.y - 24,
+                  width: 90,
+                  height: 52,
+                  zIndex: isSelected ? 300 : 200,
+                }}
+              >
+                <Pressable
+                  onPress={() => setSelectedTanker(isSelected ? null : tanker)}
+                  style={styles.tankerPinWrap}
+                >
+                  <View
+                    style={[
+                      styles.tankerBubble,
+                      tanker.is_available ? styles.bubbleAvailable : styles.bubbleBusy,
+                      isSelected && styles.bubbleSelected,
+                    ]}
+                  >
+                    <View style={styles.radarPulseDot} />
+                    <Ionicons name="water" size={11} color="#FFFFFF" />
+                    <Text style={styles.tankerCapText}>{tanker.capText}</Text>
+                  </View>
+                  <View style={styles.plateChip}>
+                    <Text style={styles.plateChipText}>{tanker.vehicle_number}</Text>
+                  </View>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* D. FLOATING MAP CONTROLS (ZOOM & RECENTER) */}
+        <View style={styles.mapControlsGroup}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zoom In"
+            onPress={() => setZoom((z) => Math.min(18, z + 1))}
+            style={styles.mapControlBtn}
+          >
+            <Ionicons name="add" size={20} color="#0F172A" />
+          </Pressable>
+          <View style={styles.mapControlDivider} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Zoom Out"
+            onPress={() => setZoom((z) => Math.max(11, z - 1))}
+            style={styles.mapControlBtn}
+          >
+            <Ionicons name="remove" size={20} color="#0F172A" />
+          </Pressable>
+          <View style={styles.mapControlDivider} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Recenter to Marol HQ"
+            onPress={handleRecenter}
+            style={styles.mapControlBtn}
+          >
+            <Ionicons name="locate" size={18} color="#0284C7" />
+          </Pressable>
+        </View>
+
+        {/* E. FLOATING UBER/OLA SURGE LEGEND (BOTTOM-LEFT) */}
         <View style={styles.floatingLegend}>
           <View style={styles.legendHeaderRow}>
-            <Ionicons name="analytics" size={13} color="#CBD5E1" />
+            <Ionicons name="analytics" size={13} color="#64748B" />
             <Text style={styles.legendTitle}>UBER SURGE & FLEET STATUS</Text>
           </View>
           <View style={styles.legendScaleRow}>
@@ -719,10 +570,9 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
           </View>
         </View>
 
-        {/* 4. SAMSARA / UBER FLEET TELEMETRY DRAWER (FLOATING OVERLAY) */}
+        {/* F. SAMSARA / UBER FLEET TELEMETRY DRAWER (FLOATING OVERLAY) */}
         {selectedTanker && (
           <View style={[styles.telemetryDrawer, !isDesktop && styles.telemetryDrawerMobile]}>
-            {/* Drawer Header */}
             <View style={styles.drawerHeader}>
               <View style={styles.hsrpPlateBox}>
                 <View style={styles.hsrpIndBar}>
@@ -741,7 +591,6 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
               </Pressable>
             </View>
 
-            {/* Live Operational Status */}
             <View
               style={[
                 styles.statusBanner,
@@ -762,44 +611,30 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
                   { color: selectedTanker.is_available ? '#16A34A' : '#D97706' },
                 ]}
               >
-                {selectedTanker.is_available ? 'ONLINE & READY FOR RAPID DISPATCH' : 'ENGAGED IN ACTIVE WATER DELIVERY'}
+                {selectedTanker.is_available ? 'ONLINE & READY FOR DISPATCH' : 'EN ROUTE / ON ACTIVE DELIVERY'}
               </Text>
             </View>
 
-            {/* Driver Dossier */}
             <View style={styles.driverCard}>
               <View style={styles.driverAvatar}>
                 <Text style={styles.driverInitials}>
-                  {selectedTanker.driver_name
-                    ? selectedTanker.driver_name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .slice(0, 2)
-                        .toUpperCase()
-                    : 'DR'}
+                  {selectedTanker.driver_name ? selectedTanker.driver_name.slice(0, 2).toUpperCase() : 'TK'}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.driverName}>{selectedTanker.driver_name || 'Assigned Driver'}</Text>
-                  <Ionicons name="checkmark-circle" size={16} color="#0284C7" />
-                </View>
-                <Text style={styles.driverPhone}>{selectedTanker.driver_phone || '+91 98200 11001'}</Text>
+                <Text style={styles.driverName}>{selectedTanker.driver_name || 'Assigned Driver'}</Text>
+                <Text style={styles.driverPhone}>{selectedTanker.driver_phone || '+91 90000 00000'}</Text>
               </View>
-              <Pressable
-                onPress={() => {
-                  if (selectedTanker.driver_phone) {
-                    Linking.openURL(`tel:${selectedTanker.driver_phone}`).catch(() => {});
-                  }
-                }}
-                style={styles.callDriverBtn}
-              >
-                <Ionicons name="call" size={16} color="#FFFFFF" />
-              </Pressable>
+              {selectedTanker.driver_phone && (
+                <Pressable
+                  onPress={() => Linking.openURL(`tel:${selectedTanker.driver_phone}`)}
+                  style={styles.callDriverBtn}
+                >
+                  <Ionicons name="call" size={16} color="#FFFFFF" />
+                </Pressable>
+              )}
             </View>
 
-            {/* 4 Telemetry Metrics */}
             <View style={styles.metricsGrid}>
               <View style={styles.metricCell}>
                 <Text style={styles.metricLabel}>CAPACITY</Text>
@@ -812,62 +647,67 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
               <View style={styles.metricCell}>
                 <Text style={styles.metricLabel}>WATER GRADE</Text>
                 <Text style={styles.metricVal}>{selectedTanker.water_type}</Text>
-                <Text style={styles.metricSub}>BIS-10500 Certified</Text>
+                <Text style={styles.metricSub}>TDS &lt; 250 ppm</Text>
               </View>
 
               <View style={styles.metricCell}>
-                <Text style={styles.metricLabel}>LIVE GPS FIX</Text>
+                <Text style={styles.metricLabel}>GPS COORDINATES</Text>
                 <Text style={styles.metricVal}>
                   {selectedTanker.latitude.toFixed(4)}, {selectedTanker.longitude.toFixed(4)}
                 </Text>
-                <Text style={styles.metricSub}>Marol / Andheri Sector</Text>
+                <Text style={styles.metricSub}>PostGIS Live</Text>
               </View>
 
               <View style={styles.metricCell}>
-                <Text style={styles.metricLabel}>BASE PRICING</Text>
-                <Text style={[styles.metricVal, { color: '#059669' }]}>₹{selectedTanker.base_price || 750}</Text>
-                <Text style={styles.metricSub}>Standard Dispatch</Text>
+                <Text style={styles.metricLabel}>BASE FARE</Text>
+                <Text style={styles.metricVal}>₹{selectedTanker.base_price || 1200}</Text>
+                <Text style={styles.metricSub}>Surge Included</Text>
               </View>
             </View>
 
-            {/* IoT Digital Flow Meter & Sensor Readout */}
             <View style={styles.iotCard}>
               <View style={styles.iotHeader}>
-                <Ionicons name="speedometer-outline" size={16} color="#0284C7" />
-                <Text style={styles.iotTitle}>IoT Flow Meter & Sensor Telemetry</Text>
+                <Ionicons name="speedometer-outline" size={15} color="#0284C7" />
+                <Text style={styles.iotTitle}>Flow Meter & IoT Sensor Logs</Text>
               </View>
               <Text style={styles.iotDesc}>
-                Calibrated digital telemetry streaming real-time dispensing logs via Bluetooth BLE.
+                Calibrated digital valve streaming flow volume via Bluetooth BLE & PostGIS.
               </Text>
               <View style={styles.iotStatsRow}>
                 <View style={styles.iotStatItem}>
                   <Text style={styles.iotStatKey}>Valve Status</Text>
-                  <Text style={[styles.iotStatVal, { color: '#16A34A' }]}>SEALED</Text>
+                  <Text style={styles.iotStatVal}>SEALED</Text>
                 </View>
                 <View style={styles.iotStatItem}>
                   <Text style={styles.iotStatKey}>Calibration</Text>
-                  <Text style={styles.iotStatVal}>ISO 4064 B</Text>
+                  <Text style={styles.iotStatVal}>ISO 4064 Class B</Text>
                 </View>
                 <View style={styles.iotStatItem}>
-                  <Text style={styles.iotStatKey}>Water Purity</Text>
-                  <Text style={styles.iotStatVal}>TDS 165 ppm</Text>
+                  <Text style={styles.iotStatKey}>Last Heartbeat</Text>
+                  <Text style={styles.iotStatVal}>Just Now</Text>
                 </View>
               </View>
             </View>
 
-            {/* Quick Dispatch Actions */}
             <View style={styles.actionButtonsRow}>
               <Pressable
-                onPress={() => {
+                onPress={() =>
                   Alert.alert(
-                    'Rebalance Order Issued',
-                    `Tanker ${selectedTanker.vehicle_number} has been instructed to reposition to Marol MIDC deficit hotspot with priority routing.`
-                  );
-                }}
+                    'Rebalance Dispatch',
+                    `Route tanker ${selectedTanker.vehicle_number} to high-deficit Marol sector?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Confirm Dispatch',
+                        onPress: () => Alert.alert('Success', 'Dispatch order transmitted to driver mobile unit.'),
+                      },
+                    ]
+                  )
+                }
                 style={styles.rebalanceBtn}
               >
-                <Ionicons name="flash" size={16} color="#FFFFFF" />
-                <Text style={styles.rebalanceBtnText}>Reposition to Hotspot</Text>
+                <Ionicons name="navigate" size={15} color="#FFFFFF" />
+                <Text style={styles.rebalanceBtnText}>Rebalance to Deficit Hotspot</Text>
               </Pressable>
             </View>
           </View>
@@ -881,25 +721,24 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
     ...shadows.card,
   },
 
   // 1. TOOLBAR
   toolbar: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 12,
   },
   toolbarLeft: {
     flex: 1,
@@ -908,21 +747,21 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   toolbarTitle: {
     fontSize: 18,
-    fontWeight: fontWeights.bold,
+    fontWeight: fontWeights.heavy,
     color: '#0F172A',
     letterSpacing: -0.3,
   },
   telemetryLiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: '#DCFCE7',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#86EFAC',
@@ -940,29 +779,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   toolbarSub: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 4,
+    marginTop: 2,
   },
   toolbarRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 16,
+    flexWrap: 'wrap',
   },
   heatmapToggleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   toggleLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: fontWeights.semibold,
     color: '#475569',
   },
@@ -970,23 +809,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F1F5F9',
-    padding: 3,
-    borderRadius: borderRadius.md,
   },
   filterChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: borderRadius.sm,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   filterChipActive: {
     backgroundColor: '#0284C7',
-    ...shadows.subtle,
+    borderColor: '#0284C7',
   },
   filterChipText: {
     fontSize: 12,
-    fontWeight: fontWeights.medium,
-    color: '#64748B',
+    fontWeight: fontWeights.semibold,
+    color: '#475569',
   },
   filterChipTextActive: {
     color: '#FFFFFF',
@@ -997,12 +836,12 @@ const styles = StyleSheet.create({
   quickZonesBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    gap: 10,
   },
   quickZonesLabel: {
     fontSize: 11,
@@ -1014,22 +853,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingRight: 16,
   },
   zoneJumpChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1.5,
     ...shadows.subtle,
   },
   surgeMiniBadge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
   surgeMiniText: {
     fontSize: 10,
@@ -1062,12 +902,13 @@ const styles = StyleSheet.create({
     color: '#0284C7',
   },
 
-  // 3. MAP WRAPPER
+  // 3. MAP CANVAS & OVERLAYS
   mapWrapper: {
     position: 'relative',
     width: '100%',
     height: 520,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
   },
   mapWrapperDesktop: {
     height: 640,
@@ -1075,16 +916,124 @@ const styles = StyleSheet.create({
   mapCanvasBox: {
     width: '100%',
     height: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+    cursor: 'grab' as any,
   },
-  nativeCenterTarget: {
-    flex: 1,
+  mapCanvasDragging: {
+    cursor: 'grabbing' as any,
+  },
+
+  // UBER SURGE PILL
+  uberSurgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  surgeMultBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  surgeMultText: {
+    color: '#FFFFFF',
+    fontWeight: fontWeights.heavy,
+    fontSize: 11,
+  },
+  surgeZoneName: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+  },
+  surgeDeficitTag: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+  },
+
+  // TANKER PIN
+  tankerPinWrap: {
+    alignItems: 'center',
+    cursor: 'pointer' as any,
+  },
+  tankerBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    ...shadows.subtle,
+  },
+  bubbleAvailable: {
+    backgroundColor: '#10B981',
+  },
+  bubbleBusy: {
+    backgroundColor: '#F59E0B',
+  },
+  bubbleSelected: {
+    backgroundColor: '#0284C7',
+    borderColor: '#BAE6FD',
+    transform: [{ scale: 1.15 }],
+  },
+  radarPulseDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#FFFFFF',
+  },
+  tankerCapText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: fontWeights.heavy,
+  },
+  plateChip: {
+    marginTop: 2,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    ...shadows.subtle,
+  },
+  plateChipText: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+    letterSpacing: 0.3,
+  },
+
+  // MAP CONTROLS
+  mapControlsGroup: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    ...shadows.floating,
+    zIndex: 100,
+  },
+  mapControlBtn: {
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
   },
-  nativeNotice: {
-    color: '#64748B',
-    fontSize: 13,
+  mapControlDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    width: '100%',
   },
 
   // FLOATING UBER/OLA SURGE LEGEND
@@ -1143,14 +1092,14 @@ const styles = StyleSheet.create({
     fontWeight: fontWeights.medium,
   },
 
-  // 4. TELEMETRY DRAWER (FLOATING SAMSARA / UBER FLEET DESK)
+  // TELEMETRY DRAWER (FLOATING SAMSARA / UBER FLEET DESK)
   telemetryDrawer: {
     position: 'absolute',
     top: 16,
     right: 16,
     bottom: 16,
     width: 390,
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: '#E2E8F0',
