@@ -13,6 +13,7 @@ import { FleetTankerItem, useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
 const TILE_SIZE = 256;
+const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
 
 // Mercator Projection for Slippy Map Tiles
 function projectToTileCoords(lat: number, lng: number, zoom: number) {
@@ -73,7 +74,7 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
 
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://a.basemaps.cartocdn.com/light_all/${zoom}/${tileX}/${tileY}.png`,
+          url: `https://basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tileX}/${tileY}.png?key=${CARTO_KEY}`,
           left,
           top,
         });

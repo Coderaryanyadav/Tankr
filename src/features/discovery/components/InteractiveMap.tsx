@@ -16,6 +16,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_HEIGHT = 280;
 const TILE_SIZE = 256;
 
+const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
+
 interface InteractiveMapProps {
   userLocation: { latitude: number; longitude: number };
   tankers: NearbyTanker[];
@@ -85,7 +87,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://a.basemaps.cartocdn.com/light_all/${zoom}/${tileX}/${tileY}.png`,
+          url: `https://basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tileX}/${tileY}.png?key=${CARTO_KEY}`,
           left,
           top,
         });
