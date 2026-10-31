@@ -19,11 +19,27 @@ import { useAdminStore } from '../../../stores/adminStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
-type AdminTab = 'overview' | 'verifications' | 'disputes' | 'zones' | 'audit_log';
+import { AdminFleetMapView } from '../components/AdminFleetMapView';
+import { AdminEmergencyDispatchView } from '../components/AdminEmergencyDispatchView';
+import { AdminPayoutsView } from '../components/AdminPayoutsView';
+import { AdminWaterSafetyView } from '../components/AdminWaterSafetyView';
+import { AdminSubscriptionsView } from '../components/AdminSubscriptionsView';
+
+type AdminTab =
+  | 'overview'
+  | 'fleet_map'
+  | 'priority_dispatch'
+  | 'payouts'
+  | 'water_safety'
+  | 'subscriptions'
+  | 'verifications'
+  | 'disputes'
+  | 'zones'
+  | 'audit_log';
 
 export const AdminDashboardScreen: React.FC = () => {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 860;
+  const isDesktop = width >= 960;
 
   const { user, signOut } = useAuthStore();
   const {
@@ -32,6 +48,10 @@ export const AdminDashboardScreen: React.FC = () => {
     disputes,
     auditLogs,
     serviceZones,
+    fleetTankers,
+    emergencyDispatches,
+    waterCertificates,
+    corporateSubscriptions,
     isLoading,
     emergencyMode,
     fetchDashboardMetrics,
@@ -92,11 +112,51 @@ export const AdminDashboardScreen: React.FC = () => {
   };
 
   const navItems: Array<{ id: AdminTab; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number }> = [
-    { id: 'overview', label: 'Dashboard Overview', icon: 'speedometer-outline' },
-    { id: 'verifications', label: 'KYC Approvals', icon: 'checkmark-circle-outline', badge: pendingSuppliers.length },
-    { id: 'disputes', label: 'Disputes & Refunds', icon: 'shield-outline', badge: disputes.filter((d) => d.status === 'open').length },
-    { id: 'zones', label: 'Service Zones & PostGIS', icon: 'map-outline', badge: serviceZones.length },
-    { id: 'audit_log', label: 'Audit Trail & Compliance', icon: 'receipt-outline', badge: auditLogs.length },
+    { id: 'overview', label: 'Operations Desk', icon: 'speedometer-outline' },
+    {
+      id: 'fleet_map',
+      label: 'Fleet Map & Heatmap',
+      icon: 'map-outline',
+      badge: fleetTankers.filter((t) => t.is_online).length,
+    },
+    {
+      id: 'priority_dispatch',
+      label: 'Hospital Dispatch (20m SLA)',
+      icon: 'flash-outline',
+      badge: emergencyDispatches.filter((e) => e.status === 'en_route').length,
+    },
+    { id: 'payouts', label: 'Financial & Payouts', icon: 'cash-outline' },
+    {
+      id: 'water_safety',
+      label: 'Water Quality Audit',
+      icon: 'shield-checkmark-outline',
+      badge: waterCertificates.length,
+    },
+    {
+      id: 'subscriptions',
+      label: 'Corporate Contracts',
+      icon: 'business-outline',
+      badge: corporateSubscriptions.length,
+    },
+    {
+      id: 'verifications',
+      label: 'KYC Approvals',
+      icon: 'checkmark-circle-outline',
+      badge: pendingSuppliers.length,
+    },
+    {
+      id: 'disputes',
+      label: 'Disputes & Escrow',
+      icon: 'alert-circle-outline',
+      badge: disputes.filter((d) => d.status === 'open').length,
+    },
+    {
+      id: 'zones',
+      label: 'PostGIS Service Zones',
+      icon: 'navigate-outline',
+      badge: serviceZones.length,
+    },
+    { id: 'audit_log', label: 'System Audit Trail', icon: 'receipt-outline', badge: auditLogs.length },
   ];
 
   return (
@@ -105,7 +165,7 @@ export const AdminDashboardScreen: React.FC = () => {
 
       <View style={[styles.mainLayout, isDesktop && styles.desktopLayout]}>
         {/* ============================================================ */}
-        {/* 1. LEFT SIDEBAR (Desktop Enterprise Portal Nav)               */}
+        {/* 1. LEFT SIDEBAR (Enterprise Desktop Nav)                     */}
         {/* ============================================================ */}
         <View style={[styles.sidebar, !isDesktop && styles.mobileSidebar]}>
           {/* Brand & Portal Title */}
@@ -117,10 +177,10 @@ export const AdminDashboardScreen: React.FC = () => {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={styles.brandTitle}>TANKR</Text>
                 <View style={styles.opsBadge}>
-                  <Text style={styles.opsBadgeText}>OPS CONSOLE</Text>
+                  <Text style={styles.opsBadgeText}>OPS COMMAND</Text>
                 </View>
               </View>
-              <Text style={styles.brandSub}>Bengaluru Operations</Text>
+              <Text style={styles.brandSub}>Bengaluru Operations Hub</Text>
             </View>
           </View>
 
@@ -130,8 +190,8 @@ export const AdminDashboardScreen: React.FC = () => {
             <Text style={styles.systemStatusText}>Cluster: BLR-1 (Production)</Text>
           </View>
 
-          {/* Navigation Links */}
-          <View style={styles.navMenu}>
+          {/* Navigation Links (Scrollable for 10 items) */}
+          <ScrollView style={styles.navMenu} showsVerticalScrollIndicator={false}>
             {navItems.map((item) => {
               const isActive = activeTab === item.id;
               return (
@@ -144,11 +204,14 @@ export const AdminDashboardScreen: React.FC = () => {
                 >
                   <Ionicons
                     name={item.icon}
-                    size={18}
+                    size={17}
                     color={isActive ? colors.white : '#94A3B8'}
                     style={{ marginRight: 10 }}
                   />
-                  <Text style={[styles.navItemText, isActive && styles.navItemTextActive]}>
+                  <Text
+                    style={[styles.navItemText, isActive && styles.navItemTextActive]}
+                    numberOfLines={1}
+                  >
                     {item.label}
                   </Text>
                   {typeof item.badge === 'number' && item.badge > 0 && (
@@ -161,9 +224,9 @@ export const AdminDashboardScreen: React.FC = () => {
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
 
-          {/* Sidebar Bottom: Admin Persona & Sign Out */}
+          {/* Sidebar Footer */}
           <View style={styles.sidebarFooter}>
             <View style={styles.adminUserRow}>
               <View style={styles.adminAvatar}>
@@ -204,6 +267,16 @@ export const AdminDashboardScreen: React.FC = () => {
               <Text style={styles.pageTitle}>
                 {activeTab === 'overview'
                   ? 'Real-Time Dispatch Command Desk'
+                  : activeTab === 'fleet_map'
+                  ? 'Bengaluru Live Geospatial Fleet & Deficit Heatmap'
+                  : activeTab === 'priority_dispatch'
+                  ? 'Hospital & Critical Sump Priority Dispatch (20m SLA)'
+                  : activeTab === 'payouts'
+                  ? 'Financial Reconciliation & Automated Payout Engine'
+                  : activeTab === 'water_safety'
+                  ? 'Water Purity & Lab Compliance Audit Desk'
+                  : activeTab === 'subscriptions'
+                  ? 'Corporate Tech Park & Society Recurring Contracts'
                   : activeTab === 'verifications'
                   ? 'Supplier KYC & Compliance Review'
                   : activeTab === 'disputes'
@@ -249,13 +322,13 @@ export const AdminDashboardScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Scrollable Dashboard Body */}
+          {/* Body Content */}
           <ScrollView
             style={styles.bodyScroll}
             contentContainerStyle={styles.bodyScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* TAB 1: OVERVIEW DASHBOARD */}
+            {/* 1. OVERVIEW DESK */}
             {activeTab === 'overview' && (
               <View style={styles.overviewContainer}>
                 {/* 4 KPI Metrics Row */}
@@ -333,55 +406,85 @@ export const AdminDashboardScreen: React.FC = () => {
                   </View>
                 </View>
 
-                {/* 2-Column Ops Desk Section */}
-                <View style={[styles.opsDeskGrid, isDesktop && styles.opsDeskGridDesktop]}>
-                  {/* Left Ops Desk: Fleet Liquidity & Dynamic Surge Controller */}
-                  <View style={styles.opsDeskColumn}>
-                    {/* Fleet Liquidity Card */}
-                    <View style={styles.portalCard}>
-                      <View style={styles.portalCardHeader}>
-                        <View>
-                          <Text style={styles.portalCardTitle}>Fleet Online & Liquidity</Text>
-                          <Text style={styles.portalCardSubtitle}>
-                            Active tankers streaming telemetry in Bengaluru
-                          </Text>
-                        </View>
-                        <StatusBadge label="FLEET ACTIVE" variant="success" size="sm" />
-                      </View>
-
-                      {/* Progress Bar */}
-                      <View style={styles.progressBarTrack}>
-                        <View style={[styles.progressBarFill, { width: '74%' }]} />
-                      </View>
-
-                      <View style={styles.fleetMetricRow}>
-                        <View style={styles.fleetStatItem}>
-                          <View style={[styles.statDot, { backgroundColor: '#16A34A' }]} />
-                          <Text style={styles.fleetStatTitle}>28 Online Tankers (74%)</Text>
-                        </View>
-                        <View style={styles.fleetStatItem}>
-                          <View style={[styles.statDot, { backgroundColor: '#94A3B8' }]} />
-                          <Text style={styles.fleetStatTitle}>10 Off-Duty (26%)</Text>
-                        </View>
-                      </View>
-
-                      {/* Distribution Badges */}
-                      <View style={styles.capacityDistributionRow}>
-                        <View style={styles.capChip}>
-                          <Text style={styles.capChipText}>1kL: 6 units</Text>
-                        </View>
-                        <View style={styles.capChip}>
-                          <Text style={styles.capChipText}>2kL: 8 units</Text>
-                        </View>
-                        <View style={styles.capChip}>
-                          <Text style={styles.capChipText}>5kL: 9 units</Text>
-                        </View>
-                        <View style={styles.capChip}>
-                          <Text style={styles.capChipText}>10kL+: 5 units</Text>
-                        </View>
-                      </View>
+                {/* Quick Access to Approved Enterprise Modules */}
+                <View style={styles.quickModulesGrid}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Fleet Map"
+                    onPress={() => setActiveTab('fleet_map')}
+                    style={styles.moduleCard}
+                  >
+                    <View style={[styles.moduleIconBox, { backgroundColor: '#E0F2FE' }]}>
+                      <Ionicons name="map-outline" size={20} color="#0284C7" />
                     </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.moduleTitle}>Live Geospatial Fleet Map</Text>
+                      <Text style={styles.moduleSub}>
+                        {fleetTankers.filter((t) => t.is_online).length} online tankers streaming telemetry with deficit heatmaps
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color="#94A3B8" />
+                  </Pressable>
 
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Hospital Dispatch"
+                    onPress={() => setActiveTab('priority_dispatch')}
+                    style={styles.moduleCard}
+                  >
+                    <View style={[styles.moduleIconBox, { backgroundColor: '#FEE2E2' }]}>
+                      <Ionicons name="flash-outline" size={20} color="#DC2626" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.moduleTitle}>Hospital 20m SLA Dispatch</Text>
+                      <Text style={styles.moduleSub}>
+                        Priority console for dialysis units, ICUs, and critical society sumps
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color="#94A3B8" />
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Payouts Engine"
+                    onPress={() => setActiveTab('payouts')}
+                    style={styles.moduleCard}
+                  >
+                    <View style={[styles.moduleIconBox, { backgroundColor: '#DCFCE7' }]}>
+                      <Ionicons name="cash-outline" size={20} color="#16A34A" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.moduleTitle}>Payout Reconciliation Engine</Text>
+                      <Text style={styles.moduleSub}>
+                        Automated 85/5/10 breakdown, GST invoicing & dispute escrow
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color="#94A3B8" />
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Water Compliance"
+                    onPress={() => setActiveTab('water_safety')}
+                    style={styles.moduleCard}
+                  >
+                    <View style={[styles.moduleIconBox, { backgroundColor: '#EDE9FE' }]}>
+                      <Ionicons name="shield-checkmark-outline" size={20} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.moduleTitle}>Water Purity & Safety Audit</Text>
+                      <Text style={styles.moduleSub}>
+                        TDS sensors (&lt;250 ppm), pH balances, and BWSSB lab certificate repository
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color="#94A3B8" />
+                  </Pressable>
+                </View>
+
+                {/* 2-Column Ops Desk Section: Surge Pricing & Fleet Liquidity */}
+                <View style={[styles.opsDeskGrid, isDesktop && styles.opsDeskGridDesktop]}>
+                  {/* Left Column: Fleet Liquidity & Dynamic Surge Controller */}
+                  <View style={styles.opsDeskColumn}>
                     {/* Surge Multiplier Controller Card */}
                     <View style={styles.portalCard}>
                       <View style={styles.portalCardHeader}>
@@ -441,89 +544,59 @@ export const AdminDashboardScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {/* Right Ops Desk: Action Feed & Alerts */}
+                  {/* Right Column: Pending Supplier KYC Applications */}
                   <View style={styles.opsDeskColumn}>
-                    {/* Pending KYC Desk */}
                     <View style={styles.portalCard}>
                       <View style={styles.portalCardHeader}>
                         <View>
                           <Text style={styles.portalCardTitle}>Supplier KYC Verification Queue</Text>
                           <Text style={styles.portalCardSubtitle}>
-                            {pendingSuppliers.length} applications awaiting compliance approval
+                            {pendingSuppliers.length} pending review
                           </Text>
                         </View>
-                        <Pressable onPress={() => setActiveTab('verifications')}>
-                          <Text style={styles.cardHeaderLink}>View All ➔</Text>
-                        </Pressable>
+                        <StatusBadge
+                          label={`${pendingSuppliers.length} PENDING`}
+                          variant={pendingSuppliers.length > 0 ? 'warning' : 'neutral'}
+                          size="sm"
+                        />
                       </View>
 
                       {pendingSuppliers.length === 0 ? (
-                        <View style={styles.cleanQueueBox}>
-                          <Ionicons name="checkmark-circle" size={32} color="#16A34A" />
-                          <Text style={styles.cleanQueueTitle}>KYC Queue Is Clear</Text>
-                          <Text style={styles.cleanQueueSub}>
-                            All active suppliers in Bengaluru are fully compliant and BWSSB certified.
+                        <View style={styles.emptyCardBox}>
+                          <Ionicons name="shield-checkmark" size={36} color="#16A34A" />
+                          <Text style={styles.emptyCardTitle}>KYC Queue Clear</Text>
+                          <Text style={styles.emptyCardSub}>
+                            All active water suppliers in Bangalore are verified.
                           </Text>
                         </View>
                       ) : (
-                        pendingSuppliers.slice(0, 2).map((s) => (
-                          <View key={s.id} style={styles.queueItemRow}>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.queueItemName}>{s.business_name}</Text>
-                              <Text style={styles.queueItemDetails}>
-                                {s.contact_person} • GSTIN: {s.gstin}
-                              </Text>
+                        <View style={styles.kycList}>
+                          {pendingSuppliers.slice(0, 3).map((sup) => (
+                            <View key={sup.id} style={styles.kycItemBox}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.kycItemTitle}>{sup.business_name}</Text>
+                                <Text style={styles.kycItemSub}>
+                                  {sup.contact_person} • {sup.phone_number}
+                                </Text>
+                                <Text style={styles.kycGstText}>GSTIN: {sup.gstin}</Text>
+                              </View>
+                              <View style={styles.kycActions}>
+                                <Button
+                                  title="Approve"
+                                  size="sm"
+                                  variant="primary"
+                                  onPress={() => handleApprove(sup.id, sup.business_name)}
+                                />
+                                <Button
+                                  title="Reject"
+                                  size="sm"
+                                  variant="outline"
+                                  onPress={() => handleReject(sup.id, sup.business_name)}
+                                />
+                              </View>
                             </View>
-                            <Button
-                              title="Approve"
-                              variant="primary"
-                              size="sm"
-                              onPress={() => handleApprove(s.id, s.business_name)}
-                            />
-                          </View>
-                        ))
-                      )}
-                    </View>
-
-                    {/* Disputes & SLA Health Card */}
-                    <View style={styles.portalCard}>
-                      <View style={styles.portalCardHeader}>
-                        <View>
-                          <Text style={styles.portalCardTitle}>Active Customer Disputes</Text>
-                          <Text style={styles.portalCardSubtitle}>
-                            Flow-meter variances and delivery delay reports
-                          </Text>
+                          ))}
                         </View>
-                        <Pressable onPress={() => setActiveTab('disputes')}>
-                          <Text style={styles.cardHeaderLink}>View Desk ➔</Text>
-                        </Pressable>
-                      </View>
-
-                      {disputes.filter((d) => d.status === 'open').length === 0 ? (
-                        <View style={styles.cleanQueueBox}>
-                          <Ionicons name="shield-checkmark" size={32} color="#0284C7" />
-                          <Text style={styles.cleanQueueTitle}>Zero Open Disputes</Text>
-                          <Text style={styles.cleanQueueSub}>
-                            100% of deliveries verified via customer PIN and meter telemetry.
-                          </Text>
-                        </View>
-                      ) : (
-                        disputes.filter((d) => d.status === 'open').slice(0, 2).map((d) => (
-                          <View key={d.id} style={styles.queueItemRow}>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.queueItemName}>{d.booking_reference}</Text>
-                              <Text style={styles.queueItemDetails}>
-                                {d.customer_name} • ₹{d.amount}
-                              </Text>
-                            </View>
-                            <Button
-                              title="Resolve"
-                              variant="outline"
-                              size="sm"
-                              onPress={() => setActiveTab('disputes')}
-                            />
-                          </View>
-                        ))
                       )}
                     </View>
                   </View>
@@ -531,232 +604,209 @@ export const AdminDashboardScreen: React.FC = () => {
               </View>
             )}
 
-            {/* TAB 2: KYC APPROVALS DESK */}
+            {/* TAB 2: LIVE GEOSPATIAL FLEET MAP & DEFICIT HEATMAP */}
+            {activeTab === 'fleet_map' && <AdminFleetMapView isDesktop={isDesktop} />}
+
+            {/* TAB 3: EMERGENCY HOSPITAL PRIORITY DISPATCH CONSOLE */}
+            {activeTab === 'priority_dispatch' && <AdminEmergencyDispatchView isDesktop={isDesktop} />}
+
+            {/* TAB 4: FINANCIAL RECONCILIATION & AUTOMATED PAYOUT ENGINE */}
+            {activeTab === 'payouts' && <AdminPayoutsView isDesktop={isDesktop} />}
+
+            {/* TAB 5: WATER PURITY & LAB COMPLIANCE AUDIT DESK */}
+            {activeTab === 'water_safety' && <AdminWaterSafetyView isDesktop={isDesktop} />}
+
+            {/* TAB 6: SCHEDULED SOCIETY SUBSCRIPTIONS & CORPORATE CONTRACTS */}
+            {activeTab === 'subscriptions' && <AdminSubscriptionsView isDesktop={isDesktop} />}
+
+            {/* TAB 7: SUPPLIER KYC APPROVALS */}
             {activeTab === 'verifications' && (
-              <View style={styles.sectionContainer}>
-                <View style={styles.tableHeaderBar}>
-                  <Text style={styles.tableHeaderTitle}>
-                    Pending Supplier Applications ({pendingSuppliers.length})
-                  </Text>
-                  <Text style={styles.tableHeaderSub}>
-                    Requires valid GSTIN, BWSSB water source certificate, and driver license verification.
-                  </Text>
+              <View style={styles.portalCard}>
+                <View style={styles.portalCardHeader}>
+                  <View>
+                    <Text style={styles.portalCardTitle}>Supplier Onboarding & KYC Queue</Text>
+                    <Text style={styles.portalCardSubtitle}>
+                      Verify GSTIN, water source lab test, and tanker registrations
+                    </Text>
+                  </View>
                 </View>
-
                 {pendingSuppliers.length === 0 ? (
-                  <View style={styles.cleanQueueBox}>
-                    <Ionicons name="shield-checkmark" size={48} color="#16A34A" />
-                    <Text style={styles.cleanQueueTitle}>All Suppliers Verified</Text>
-                    <Text style={styles.cleanQueueSub}>No applications pending review in the queue.</Text>
-                  </View>
-                ) : (
-                  pendingSuppliers.map((supplier) => (
-                    <View key={supplier.id} style={styles.enterpriseTableRow}>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={styles.tableEntityName}>{supplier.business_name}</Text>
-                        <Text style={styles.tableEntitySub}>
-                          {supplier.contact_person} • {supplier.phone_number}
-                        </Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>GSTIN</Text>
-                        <Text style={styles.tableColVal}>{supplier.gstin}</Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>FLEET SIZE</Text>
-                        <Text style={styles.tableColVal}>{supplier.fleet_size} Tankers</Text>
-                      </View>
-
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={styles.tableColLabel}>WATER SOURCE</Text>
-                        <Text style={styles.tableColVal}>{supplier.water_source}</Text>
-                      </View>
-
-                      <View style={styles.tableActionGroup}>
-                        <Button
-                          title="Reject"
-                          variant="secondary"
-                          size="sm"
-                          onPress={() => handleReject(supplier.id, supplier.business_name)}
-                        />
-                        <Button
-                          title="Approve KYC"
-                          variant="primary"
-                          size="sm"
-                          onPress={() => handleApprove(supplier.id, supplier.business_name)}
-                        />
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-            )}
-
-            {/* TAB 3: DISPUTES & REFUNDS */}
-            {activeTab === 'disputes' && (
-              <View style={styles.sectionContainer}>
-                <View style={styles.tableHeaderBar}>
-                  <Text style={styles.tableHeaderTitle}>Customer Disputes & SLA Mediation</Text>
-                  <Text style={styles.tableHeaderSub}>
-                    Review water volume discrepancy claims, flow-meter audit logs, and trigger direct refunds.
-                  </Text>
-                </View>
-
-                {disputes.length === 0 ? (
-                  <View style={styles.cleanQueueBox}>
-                    <Ionicons name="checkmark-circle" size={48} color="#16A34A" />
-                    <Text style={styles.cleanQueueTitle}>Zero Open Disputes</Text>
-                    <Text style={styles.cleanQueueSub}>No contested orders on record.</Text>
-                  </View>
-                ) : (
-                  disputes.map((d) => (
-                    <View key={d.id} style={styles.enterpriseTableRow}>
-                      <View style={{ flex: 1.2 }}>
-                        <Text style={styles.tableEntityName}>{d.booking_reference}</Text>
-                        <Text style={styles.tableEntitySub}>
-                          Customer: {d.customer_name} • Supplier: {d.supplier_name}
-                        </Text>
-                      </View>
-
-                      <View style={{ flex: 2 }}>
-                        <Text style={styles.tableColLabel}>REASON</Text>
-                        <Text style={styles.tableColVal}>{d.reason}</Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>DISPUTE VALUE</Text>
-                        <Text style={[styles.tableColVal, { fontWeight: '700' }]}>₹{d.amount}</Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <StatusBadge
-                          label={d.status.toUpperCase()}
-                          variant={d.status === 'open' ? 'error' : 'success'}
-                          size="sm"
-                        />
-                      </View>
-
-                      {d.status === 'open' && (
-                        <View style={styles.tableActionGroup}>
-                          <Button
-                            title="Dismiss"
-                            variant="secondary"
-                            size="sm"
-                            onPress={() => resolveDispute(d.id, false)}
-                          />
-                          <Button
-                            title="Refund Customer"
-                            variant="primary"
-                            size="sm"
-                            onPress={() => resolveDispute(d.id, true)}
-                          />
-                        </View>
-                      )}
-                    </View>
-                  ))
-                )}
-              </View>
-            )}
-
-            {/* TAB 4: SERVICE ZONES */}
-            {activeTab === 'zones' && (
-              <View style={styles.sectionContainer}>
-                <View style={styles.tableHeaderBar}>
-                  <Text style={styles.tableHeaderTitle}>
-                    Metropolitan Bengaluru Service Zones ({serviceZones.length})
-                  </Text>
-                  <Text style={styles.tableHeaderSub}>
-                    PostGIS polygon geographic service partitions with automated liquidity balancing.
-                  </Text>
-                </View>
-
-                {serviceZones.length === 0 ? (
-                  <View style={styles.cleanQueueBox}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.cleanQueueTitle}>Loading PostGIS Zones...</Text>
-                  </View>
-                ) : (
-                  serviceZones.map((zone) => (
-                    <View key={zone.zone_name} style={styles.enterpriseTableRow}>
-                      <View style={{ flex: 1.5 }}>
-                        <Text style={styles.tableEntityName}>{zone.zone_name}</Text>
-                        <Text style={styles.tableEntitySub}>Bengaluru Urban District</Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>LIQUIDITY STATUS</Text>
-                        <StatusBadge
-                          label={zone.liquidity_status}
-                          variant={
-                            zone.liquidity_status === 'OPTIMAL'
-                              ? 'success'
-                              : zone.liquidity_status === 'LIMITED_SUPPLY'
-                              ? 'warning'
-                              : 'error'
-                          }
-                          size="sm"
-                        />
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>AVAILABLE FLEET</Text>
-                        <Text style={styles.tableColVal}>{zone.available_fleet_count} Tankers</Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>AVG ETA</Text>
-                        <Text style={styles.tableColVal}>~{zone.avg_eta_minutes} mins</Text>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.tableColLabel}>TRAFFIC MULTIPLIER</Text>
-                        <Text style={styles.tableColVal}>{zone.traffic_factor}x</Text>
-                      </View>
-                    </View>
-                  ))
-                )}
-              </View>
-            )}
-
-            {/* TAB 5: AUDIT LOGS */}
-            {activeTab === 'audit_log' && (
-              <View style={styles.sectionContainer}>
-                <View style={styles.tableHeaderBar}>
-                  <Text style={styles.tableHeaderTitle}>Cryptographic System Audit Trail</Text>
-                  <Text style={styles.tableHeaderSub}>
-                    Immutable log of administrative authorizations, surge price changes, and KYC reviews.
-                  </Text>
-                </View>
-
-                {auditLogs.length === 0 ? (
-                  <View style={styles.cleanQueueBox}>
-                    <Ionicons name="document-text-outline" size={48} color="#94A3B8" />
-                    <Text style={styles.cleanQueueTitle}>No Audit Events Yet</Text>
-                    <Text style={styles.cleanQueueSub}>
-                      All privileged actions performed by operators are recorded here in real-time.
+                  <View style={styles.emptyCardBox}>
+                    <Ionicons name="checkmark-circle-outline" size={44} color="#16A34A" />
+                    <Text style={styles.emptyCardTitle}>No Pending KYC Reviews</Text>
+                    <Text style={styles.emptyCardSub}>
+                      All commercial water suppliers currently meet operational compliance.
                     </Text>
                   </View>
                 ) : (
-                  auditLogs.map((log) => (
-                    <View key={log.id} style={styles.auditLogItem}>
-                      <View style={styles.auditActionPill}>
-                        <Text style={styles.auditActionText}>{log.action.toUpperCase()}</Text>
+                  <View style={styles.kycList}>
+                    {pendingSuppliers.map((sup) => (
+                      <View key={sup.id} style={styles.kycItemBox}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.kycItemTitle}>{sup.business_name}</Text>
+                          <Text style={styles.kycItemSub}>
+                            {sup.contact_person} • {sup.phone_number}
+                          </Text>
+                          <Text style={styles.kycGstText}>GSTIN: {sup.gstin}</Text>
+                          <Text style={styles.kycGstText}>Source: {sup.water_source}</Text>
+                        </View>
+                        <View style={styles.kycActions}>
+                          <Button
+                            title="Approve & Verify"
+                            size="sm"
+                            variant="primary"
+                            onPress={() => handleApprove(sup.id, sup.business_name)}
+                          />
+                          <Button
+                            title="Reject"
+                            size="sm"
+                            variant="outline"
+                            onPress={() => handleReject(sup.id, sup.business_name)}
+                          />
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.auditTargetText}>
-                          Target: {log.target_type} ({log.target_id || 'Global'})
-                        </Text>
-                        {log.notes && <Text style={styles.auditNotesText}>{log.notes}</Text>}
-                      </View>
-                      <Text style={styles.auditTimestamp}>
-                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •{' '}
-                        {new Date(log.created_at).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  ))
+                    ))}
+                  </View>
                 )}
+              </View>
+            )}
+
+            {/* TAB 8: CUSTOMER DISPUTES & MEDIATION */}
+            {activeTab === 'disputes' && (
+              <View style={styles.portalCard}>
+                <View style={styles.portalCardHeader}>
+                  <View>
+                    <Text style={styles.portalCardTitle}>Disputes & Volume Short-Delivery Mediation</Text>
+                    <Text style={styles.portalCardSubtitle}>
+                      {disputes.length} recorded incidents
+                    </Text>
+                  </View>
+                </View>
+
+                {disputes.length === 0 ? (
+                  <View style={styles.emptyCardBox}>
+                    <Ionicons name="shield-checkmark-outline" size={44} color="#16A34A" />
+                    <Text style={styles.emptyCardTitle}>Zero Active Disputes</Text>
+                    <Text style={styles.emptyCardSub}>
+                      Delivery meter confirmations and PIN handoffs are 100% satisfied.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.kycList}>
+                    {disputes.map((disp) => (
+                      <View key={disp.id} style={styles.kycItemBox}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.kycItemTitle}>{disp.booking_reference}</Text>
+                          <Text style={styles.kycItemSub}>
+                            {disp.customer_name} vs {disp.supplier_name} • ₹{disp.amount}
+                          </Text>
+                          <Text style={styles.kycGstText}>{disp.reason}</Text>
+                        </View>
+                        <View style={styles.kycActions}>
+                          {disp.status === 'open' ? (
+                            <>
+                              <Button
+                                title="Approve Refund"
+                                size="sm"
+                                variant="outline"
+                                onPress={() => resolveDispute(disp.id, true)}
+                              />
+                              <Button
+                                title="Dismiss / Resolve"
+                                size="sm"
+                                variant="primary"
+                                onPress={() => resolveDispute(disp.id, false)}
+                              />
+                            </>
+                          ) : (
+                            <StatusBadge
+                              label={disp.status.toUpperCase()}
+                              variant={disp.status === 'refunded' ? 'error' : 'success'}
+                              size="sm"
+                            />
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* TAB 9: POSTGIS SERVICE ZONES */}
+            {activeTab === 'zones' && (
+              <View style={styles.portalCard}>
+                <View style={styles.portalCardHeader}>
+                  <View>
+                    <Text style={styles.portalCardTitle}>Bengaluru Service Zones & PostGIS Telemetry</Text>
+                    <Text style={styles.portalCardSubtitle}>
+                      Zone polygon liquidity and traffic ETA multipliers
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.zonesGrid}>
+                  {serviceZones.map((zone, idx) => (
+                    <View key={idx} style={styles.zoneCard}>
+                      <View style={styles.zoneTop}>
+                        <Text style={styles.zoneName}>{zone.zone_name}</Text>
+                        <StatusBadge
+                          label={zone.liquidity_status}
+                          variant={zone.liquidity_status === 'OPTIMAL' ? 'success' : 'warning'}
+                          size="sm"
+                        />
+                      </View>
+                      <View style={styles.zoneSpecs}>
+                        <Text style={styles.zoneSpecText}>
+                          Online Tankers: <Text style={{ fontWeight: fontWeights.bold }}>{zone.online_fleet_count}</Text>
+                        </Text>
+                        <Text style={styles.zoneSpecText}>
+                          Available: <Text style={{ fontWeight: fontWeights.bold }}>{zone.available_fleet_count}</Text>
+                        </Text>
+                        <Text style={styles.zoneSpecText}>
+                          Active Deliveries: <Text style={{ fontWeight: fontWeights.bold }}>{zone.active_deliveries}</Text>
+                        </Text>
+                        <Text style={styles.zoneSpecText}>
+                          Avg ETA: <Text style={{ fontWeight: fontWeights.bold }}>~{zone.avg_eta_minutes} mins</Text>
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* TAB 10: IMMUTABLE AUDIT TRAIL */}
+            {activeTab === 'audit_log' && (
+              <View style={styles.portalCard}>
+                <View style={styles.portalCardHeader}>
+                  <View>
+                    <Text style={styles.portalCardTitle}>Immutable System Audit Trail</Text>
+                    <Text style={styles.portalCardSubtitle}>
+                      Append-only log of admin actions, dispatches, and KYC decisions
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.auditList}>
+                  {auditLogs.map((log) => (
+                    <View key={log.id} style={styles.auditItem}>
+                      <View style={styles.auditDot} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.auditAction}>{log.action.replace(/_/g, ' ').toUpperCase()}</Text>
+                          <Text style={styles.auditTarget}>
+                            • {log.target_type} ({log.target_id.substring(0, 8)})
+                          </Text>
+                        </View>
+                        {log.notes && <Text style={styles.auditNotes}>{log.notes}</Text>}
+                        <Text style={styles.auditTime}>
+                          {new Date(log.created_at).toLocaleString('en-IN')}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
               </View>
             )}
           </ScrollView>
@@ -779,51 +829,36 @@ const styles = StyleSheet.create({
   desktopLayout: {
     flexDirection: 'row',
   },
-  // ==========================================
-  // SIDEBAR STYLING
-  // ==========================================
+
+  // 1. LEFT SIDEBAR STYLES
   sidebar: {
-    width: 260,
+    width: 270,
     backgroundColor: '#0F172A',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
     borderRightWidth: 1,
     borderRightColor: '#1E293B',
+    padding: spacing.md,
     justifyContent: 'space-between',
   },
   mobileSidebar: {
     width: '100%',
-    paddingVertical: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginBottom: spacing.md,
-    paddingHorizontal: 4,
   },
   logoCircle: {
     width: 36,
     height: 36,
-    borderRadius: 8,
-    backgroundColor: '#0284C7',
+    borderRadius: 18,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTitle: {
     fontSize: 18,
-    fontWeight: fontWeights.heavy,
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  opsBadge: {
-    backgroundColor: '#0369A1',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  opsBadgeText: {
-    fontSize: 9,
     fontWeight: fontWeights.bold,
     color: '#FFFFFF',
     letterSpacing: 0.5,
@@ -833,21 +868,34 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 1,
   },
+  opsBadge: {
+    backgroundColor: 'rgba(2, 132, 199, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+    borderWidth: 1,
+    borderColor: '#0284C7',
+  },
+  opsBadgeText: {
+    fontSize: 8,
+    fontWeight: fontWeights.bold,
+    color: '#38BDF8',
+  },
   systemStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     backgroundColor: '#1E293B',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
-    gap: 8,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.md,
   },
   statusDotGreen: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22C55E',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
   },
   systemStatusText: {
     fontSize: 11,
@@ -856,14 +904,14 @@ const styles = StyleSheet.create({
   },
   navMenu: {
     flex: 1,
-    gap: 4,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.md,
+    marginBottom: 4,
   },
   navItemActive: {
     backgroundColor: '#1E293B',
@@ -871,8 +919,8 @@ const styles = StyleSheet.create({
   navItemText: {
     flex: 1,
     fontSize: 13,
-    color: '#94A3B8',
     fontWeight: fontWeights.medium,
+    color: '#94A3B8',
   },
   navItemTextActive: {
     color: '#FFFFFF',
@@ -882,83 +930,82 @@ const styles = StyleSheet.create({
     backgroundColor: '#334155',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: borderRadius.full,
   },
   navBadgeActive: {
-    backgroundColor: '#0284C7',
+    backgroundColor: colors.primary,
   },
   navBadgeText: {
-    fontSize: 11,
-    color: '#CBD5E1',
+    fontSize: 10,
     fontWeight: fontWeights.bold,
+    color: '#94A3B8',
   },
   navBadgeTextActive: {
     color: '#FFFFFF',
   },
   sidebarFooter: {
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
-    paddingTop: spacing.md,
-    gap: spacing.sm,
+    gap: 10,
   },
   adminUserRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 4,
+    gap: 8,
   },
   adminAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#0284C7',
+    backgroundColor: '#334155',
     alignItems: 'center',
     justifyContent: 'center',
   },
   adminAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: fontWeights.bold,
     fontSize: 14,
+    fontWeight: fontWeights.bold,
+    color: '#FFFFFF',
   },
   adminName: {
     fontSize: 13,
-    color: '#FFFFFF',
     fontWeight: fontWeights.bold,
+    color: '#FFFFFF',
   },
   adminRole: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#64748B',
   },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: borderRadius.sm,
   },
   signOutBtnText: {
     fontSize: 12,
     color: '#EF4444',
-    fontWeight: fontWeights.bold,
+    fontWeight: fontWeights.semibold,
   },
-  // ==========================================
-  // MAIN CONTENT STYLING
-  // ==========================================
+
+  // 2. MAIN CONTENT STYLES
   contentArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   breadcrumbRow: {
     flexDirection: 'row',
@@ -972,18 +1019,18 @@ const styles = StyleSheet.create({
   },
   breadcrumbActive: {
     fontSize: 11,
-    color: '#0F172A',
-    fontWeight: fontWeights.bold,
+    fontWeight: fontWeights.semibold,
+    color: colors.primary,
   },
   pageTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: fontWeights.bold,
     color: '#0F172A',
   },
   topRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
   },
   crisisToggleBox: {
     flexDirection: 'row',
@@ -992,13 +1039,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   crisisToggleBoxActive: {
     backgroundColor: '#DC2626',
-    borderColor: '#B91C1C',
+    borderColor: '#DC2626',
   },
   crisisToggleText: {
     fontSize: 12,
@@ -1019,56 +1066,49 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bodyScrollContent: {
-    padding: spacing.xl,
-    maxWidth: 1400,
-    width: '100%',
-    alignSelf: 'center',
+    padding: spacing.lg,
+    paddingBottom: 60,
   },
-  // ==========================================
-  // KPI METRIC CARDS
-  // ==========================================
-  overviewContainer: {
-    gap: spacing.xl,
-  },
+
+  // KPI CARDS ROW
   kpiRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   kpiCard: {
     flex: 1,
-    minWidth: 220,
+    minWidth: 200,
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    padding: spacing.md,
+    gap: 8,
     ...shadows.card,
   },
   kpiTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
   },
   kpiLabel: {
     fontSize: 11,
     fontWeight: fontWeights.bold,
     color: '#64748B',
-    letterSpacing: 0.5,
   },
   kpiIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   kpiValue: {
     fontSize: 24,
-    fontWeight: fontWeights.heavy,
+    fontWeight: fontWeights.bold,
     color: '#0F172A',
-    marginBottom: 6,
   },
   kpiFooter: {
     flexDirection: 'row',
@@ -1077,7 +1117,7 @@ const styles = StyleSheet.create({
   },
   kpiTrend: {
     fontSize: 11,
-    fontWeight: fontWeights.bold,
+    fontWeight: fontWeights.semibold,
     color: '#16A34A',
   },
   kpiSub: {
@@ -1086,47 +1126,89 @@ const styles = StyleSheet.create({
   },
   kpiSuccessText: {
     fontSize: 11,
-    fontWeight: fontWeights.bold,
-    color: '#16A34A',
+    color: '#7C3AED',
+    fontWeight: fontWeights.semibold,
   },
   marginPill: {
     backgroundColor: '#DCFCE7',
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
   },
   marginPillText: {
     fontSize: 9,
     fontWeight: fontWeights.bold,
     color: '#16A34A',
   },
-  // ==========================================
-  // OPS DESK 2-COLUMN GRID
-  // ==========================================
+
+  // QUICK MODULES GRID
+  quickModulesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: spacing.lg,
+  },
+  moduleCard: {
+    flex: 1,
+    minWidth: 260,
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    ...shadows.card,
+  },
+  moduleIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moduleTitle: {
+    fontSize: 14,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  moduleSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  // OPS DESK 2-COL SECTION
+  overviewContainer: {
+    gap: spacing.md,
+  },
   opsDeskGrid: {
-    flexDirection: 'column',
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   opsDeskGridDesktop: {
     flexDirection: 'row',
   },
   opsDeskColumn: {
     flex: 1,
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   portalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    padding: spacing.md,
     ...shadows.card,
   },
   portalCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   portalCardTitle: {
     fontSize: 15,
@@ -1138,70 +1220,16 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  cardHeaderLink: {
-    fontSize: 12,
-    fontWeight: fontWeights.bold,
-    color: colors.primary,
-  },
-  progressBarTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginBottom: spacing.sm,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#22C55E',
-    borderRadius: 4,
-  },
-  fleetMetricRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  fleetStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  fleetStatTitle: {
-    fontSize: 12,
-    fontWeight: fontWeights.semibold,
-    color: '#334155',
-  },
-  capacityDistributionRow: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  capChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  capChipText: {
-    fontSize: 11,
-    fontWeight: fontWeights.medium,
-    color: '#475569',
-  },
-  // Surge Controller
   surgeActiveTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   surgeActiveTagText: {
     fontSize: 10,
@@ -1210,20 +1238,22 @@ const styles = StyleSheet.create({
   },
   surgeButtonsGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 8,
+    marginTop: 12,
   },
   surgeSelectorCard: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderWidth: 1.5,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
     borderColor: '#E2E8F0',
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   surgeSelectorCardActive: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0369A1',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   surgeRateNumber: {
     fontSize: 16,
@@ -1238,135 +1268,126 @@ const styles = StyleSheet.create({
   surgeTextActive: {
     color: '#FFFFFF',
   },
-  // Queues and Lists
-  cleanQueueBox: {
+  emptyCardBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xl,
+    paddingVertical: 32,
     gap: 6,
   },
-  cleanQueueTitle: {
+  emptyCardTitle: {
     fontSize: 14,
     fontWeight: fontWeights.bold,
-    color: '#0F172A',
+    color: '#334155',
   },
-  cleanQueueSub: {
+  emptyCardSub: {
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    maxWidth: 320,
   },
-  queueItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: spacing.sm,
+  kycList: {
+    marginTop: 12,
+    gap: 10,
   },
-  queueItemName: {
-    fontSize: 13,
-    fontWeight: fontWeights.bold,
-    color: '#0F172A',
-  },
-  queueItemDetails: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  // ==========================================
-  // ENTERPRISE DATA TABLES
-  // ==========================================
-  sectionContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+  kycItemBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    ...shadows.card,
-  },
-  tableHeaderBar: {
-    marginBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingBottom: spacing.md,
-  },
-  tableHeaderTitle: {
-    fontSize: 16,
-    fontWeight: fontWeights.bold,
-    color: '#0F172A',
-  },
-  tableHeaderSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  enterpriseTableRow: {
+    padding: 12,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: spacing.md,
+    gap: 12,
   },
-  tableEntityName: {
+  kycItemTitle: {
     fontSize: 14,
     fontWeight: fontWeights.bold,
     color: '#0F172A',
   },
-  tableEntitySub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  tableColLabel: {
-    fontSize: 9,
-    fontWeight: fontWeights.bold,
-    color: '#64748B',
-    textTransform: 'uppercase',
-  },
-  tableColVal: {
+  kycItemSub: {
     fontSize: 12,
-    fontWeight: fontWeights.semibold,
-    color: '#1E293B',
+    color: '#64748B',
     marginTop: 2,
   },
-  tableActionGroup: {
+  kycGstText: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 2,
+    fontFamily: 'monospace',
+  },
+  kycActions: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 6,
+  },
+  zonesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+  },
+  zoneCard: {
+    flex: 1,
+    minWidth: 220,
+    backgroundColor: '#F8FAFC',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
     gap: 8,
   },
-  auditLogItem: {
+  zoneTop: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: spacing.md,
   },
-  auditActionPill: {
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  auditActionText: {
-    fontSize: 10,
-    fontWeight: fontWeights.heavy,
-    color: '#0369A1',
-  },
-  auditTargetText: {
-    fontSize: 13,
+  zoneName: {
+    fontSize: 14,
     fontWeight: fontWeights.bold,
     color: '#0F172A',
   },
-  auditNotesText: {
+  zoneSpecs: {
+    gap: 4,
+  },
+  zoneSpecText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  auditList: {
+    marginTop: 12,
+    gap: 12,
+  },
+  auditItem: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 8,
+  },
+  auditDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginTop: 5,
+  },
+  auditAction: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  auditTarget: {
     fontSize: 11,
     color: '#64748B',
+  },
+  auditNotes: {
+    fontSize: 12,
+    color: '#475569',
     marginTop: 2,
   },
-  auditTimestamp: {
-    fontSize: 11,
+  auditTime: {
+    fontSize: 10,
     color: '#94A3B8',
+    marginTop: 2,
   },
 });

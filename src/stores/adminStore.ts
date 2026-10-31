@@ -57,18 +57,133 @@ export interface ServiceZoneItem {
   traffic_factor: number;
 }
 
+export interface FleetTankerItem {
+  id: string;
+  vehicle_number: string;
+  driver_name: string;
+  driver_phone: string;
+  capacity_liters: number;
+  water_type: string;
+  is_available: boolean;
+  is_online: boolean;
+  latitude: number;
+  longitude: number;
+  heading_degrees?: number;
+  base_price?: number;
+  supplier_id?: string;
+}
+
+export interface EmergencyDispatchItem {
+  id: string;
+  institution_name: string;
+  institution_type: 'hospital_dialysis' | 'icu_facility' | 'critical_sump' | 'elderly_care';
+  contact_person: string;
+  contact_phone: string;
+  delivery_address: string;
+  latitude: number;
+  longitude: number;
+  required_liters: number;
+  water_type: string;
+  sla_minutes: number;
+  status: 'en_route' | 'delivered' | 'diverted';
+  assigned_tanker_id?: string;
+  vehicle_number?: string;
+  driver_name?: string;
+  driver_phone?: string;
+  dispatched_at: string;
+  created_at: string;
+}
+
+export interface PayoutLedgerItem {
+  id: string;
+  driver_phone: string;
+  booking_id?: string;
+  entry_type: string;
+  amount: number;
+  notes?: string;
+  created_at: string;
+}
+
+export interface FinancialSummary {
+  totalCollected: number;
+  supplierPayout: number;
+  driverTipTake: number;
+  platformTake: number;
+  escrowHoldback: number;
+}
+
+export interface WaterCertificateItem {
+  id: string;
+  supplier_id: string;
+  source_type: string;
+  lab_name: string;
+  test_report_number: string;
+  tds_ppm: number;
+  ph_level: number;
+  turbidity_ntu: number;
+  coliform_detected: boolean;
+  certified_date: string;
+  expiry_date: string;
+  is_potable: boolean;
+  certificate_url?: string;
+}
+
+export interface CorporateSubscriptionItem {
+  id: string;
+  client_name: string;
+  category: 'tech_park' | 'society' | 'hospital' | 'commercial';
+  contact_person: string;
+  contact_phone: string;
+  delivery_address: string;
+  latitude: number;
+  longitude: number;
+  daily_liters: number;
+  preferred_time_slot: string;
+  monthly_rate: number;
+  status: 'active' | 'paused' | 'expired';
+  assigned_supplier_name?: string;
+  start_date: string;
+}
+
 interface AdminState {
   metrics: AdminMetrics;
   pendingSuppliers: SupplierKYCItem[];
   disputes: DisputeItem[];
   auditLogs: AdminAuditLogItem[];
   serviceZones: ServiceZoneItem[];
+  fleetTankers: FleetTankerItem[];
+  emergencyDispatches: EmergencyDispatchItem[];
+  payoutLedger: PayoutLedgerItem[];
+  financialSummary: FinancialSummary;
+  waterCertificates: WaterCertificateItem[];
+  corporateSubscriptions: CorporateSubscriptionItem[];
   isLoading: boolean;
   emergencyMode: boolean;
 
   fetchDashboardMetrics: () => Promise<void>;
   fetchAuditLogs: () => Promise<void>;
   fetchServiceZones: () => Promise<void>;
+  fetchFleetTankers: () => Promise<void>;
+  fetchEmergencyDispatches: () => Promise<void>;
+  triggerEmergencyDispatch: (params: {
+    institution_name: string;
+    institution_type: string;
+    contact_person: string;
+    contact_phone: string;
+    delivery_address: string;
+    latitude: number;
+    longitude: number;
+    required_liters: number;
+    water_type?: string;
+    sla_minutes?: number;
+  }) => Promise<boolean>;
+  fetchPayoutLedger: () => Promise<void>;
+  executeBatchPayout: () => Promise<boolean>;
+  fetchWaterCertificates: () => Promise<void>;
+  suspendWaterCertificate: (certificateId: string, reason: string) => Promise<boolean>;
+  fetchCorporateSubscriptions: () => Promise<void>;
+  toggleSubscriptionStatus: (subscriptionId: string, currentStatus: string) => Promise<boolean>;
+  createCorporateSubscription: (sub: Omit<CorporateSubscriptionItem, 'id'>) => Promise<boolean>;
   approveSupplier: (supplierId: string) => Promise<boolean>;
   rejectSupplier: (supplierId: string) => Promise<boolean>;
   setSurgeMultiplier: (multiplier: number) => Promise<void>;
@@ -93,6 +208,18 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   disputes: [],
   auditLogs: [],
   serviceZones: [],
+  fleetTankers: [],
+  emergencyDispatches: [],
+  payoutLedger: [],
+  financialSummary: {
+    totalCollected: 0,
+    supplierPayout: 0,
+    driverTipTake: 0,
+    platformTake: 0,
+    escrowHoldback: 0,
+  },
+  waterCertificates: [],
+  corporateSubscriptions: [],
   isLoading: false,
   emergencyMode: false,
 
@@ -163,11 +290,313 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         });
       }
 
-      // 4. Fetch Audit Logs
-      await get().fetchAuditLogs();
+      // 4. Parallel fetch enterprise suite modules
+      await Promise.allSettled([
+        get().fetchFleetTankers(),
+        get().fetchEmergencyDispatches(),
+        get().fetchPayoutLedger(),
+        get().fetchWaterCertificates(),
+        get().fetchCorporateSubscriptions(),
+        get().fetchAuditLogs(),
+      ]);
+
       set({ isLoading: false });
     } catch {
       set({ isLoading: false });
+    }
+  },
+
+  fetchFleetTankers: async () => {
+    try {
+      const { data } = await supabase
+        .from('tankers')
+        .select('*')
+        .order('capacity_liters', { ascending: false });
+
+      if (data) {
+        set({
+          fleetTankers: data.map((t: any) => ({
+            id: t.id,
+            vehicle_number: t.vehicle_number,
+            driver_name: t.driver_name,
+            driver_phone: t.driver_phone,
+            capacity_liters: t.capacity_liters,
+            water_type: t.water_type || 'Potable (Drinking)',
+            is_available: t.is_available,
+            is_online: t.is_online,
+            latitude: Number(t.latitude || 12.9716),
+            longitude: Number(t.longitude || 77.6412),
+            heading_degrees: t.heading_degrees,
+            base_price: t.base_price,
+            supplier_id: t.supplier_id,
+          })),
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  },
+
+  fetchEmergencyDispatches: async () => {
+    try {
+      const { data } = await supabase
+        .from('emergency_dispatches')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        set({
+          emergencyDispatches: data.map((e: any) => ({
+            id: e.id,
+            institution_name: e.institution_name,
+            institution_type: e.institution_type,
+            contact_person: e.contact_person,
+            contact_phone: e.contact_phone,
+            delivery_address: e.delivery_address,
+            latitude: Number(e.latitude),
+            longitude: Number(e.longitude),
+            required_liters: Number(e.required_liters),
+            water_type: e.water_type,
+            sla_minutes: Number(e.sla_minutes || 20),
+            status: e.status,
+            assigned_tanker_id: e.assigned_tanker_id,
+            vehicle_number: e.vehicle_number,
+            driver_name: e.driver_name,
+            driver_phone: e.driver_phone,
+            dispatched_at: e.dispatched_at,
+            created_at: e.created_at,
+          })),
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  },
+
+  triggerEmergencyDispatch: async (params) => {
+    try {
+      const { data, error } = await supabase.rpc('admin_emergency_dispatch', {
+        p_institution_name: params.institution_name,
+        p_institution_type: params.institution_type,
+        p_contact_person: params.contact_person,
+        p_contact_phone: params.contact_phone,
+        p_delivery_address: params.delivery_address,
+        p_latitude: params.latitude,
+        p_longitude: params.longitude,
+        p_required_liters: params.required_liters,
+        p_water_type: params.water_type || 'Potable (Drinking)',
+        p_sla_minutes: params.sla_minutes || 20,
+      });
+
+      if (!error && data?.success) {
+        await Promise.all([get().fetchEmergencyDispatches(), get().fetchFleetTankers(), get().fetchAuditLogs()]);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  fetchPayoutLedger: async () => {
+    try {
+      const { data } = await supabase
+        .from('driver_payout_ledger')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        const rows: PayoutLedgerItem[] = data.map((p: any) => ({
+          id: p.id,
+          driver_phone: p.driver_phone,
+          booking_id: p.booking_id,
+          entry_type: p.entry_type,
+          amount: Number(p.amount || 0),
+          notes: p.notes,
+          created_at: p.created_at,
+        }));
+
+        const totalEarnings = rows.reduce((acc, cur) => acc + (cur.entry_type === 'delivery_earnings' ? cur.amount : 0), 0);
+        const totalCollected = totalEarnings > 0 ? totalEarnings / 0.85 : 0;
+        const supplierPayout = totalEarnings;
+        const platformTake = totalCollected * 0.10;
+        const driverTipTake = totalCollected * 0.05;
+        const escrowHoldback = get().disputes.filter((d) => d.status === 'open').reduce((acc, d) => acc + d.amount, 0);
+
+        set({
+          payoutLedger: rows,
+          financialSummary: {
+            totalCollected,
+            supplierPayout,
+            driverTipTake,
+            platformTake,
+            escrowHoldback,
+          },
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  },
+
+  executeBatchPayout: async () => {
+    try {
+      const { data, error } = await supabase.rpc('admin_execute_batch_payout');
+      if (!error && data?.success) {
+        await Promise.all([get().fetchPayoutLedger(), get().fetchAuditLogs()]);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  fetchWaterCertificates: async () => {
+    try {
+      const { data } = await supabase
+        .from('water_quality_certificates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        set({
+          waterCertificates: data.map((c: any) => ({
+            id: c.id,
+            supplier_id: c.supplier_id,
+            source_type: c.source_type,
+            lab_name: c.lab_name,
+            test_report_number: c.test_report_number,
+            tds_ppm: Number(c.tds_ppm || 0),
+            ph_level: Number(c.ph_level || 7.0),
+            turbidity_ntu: Number(c.turbidity_ntu || 1.0),
+            coliform_detected: Boolean(c.coliform_detected),
+            certified_date: c.certified_date,
+            expiry_date: c.expiry_date,
+            is_potable: Boolean(c.is_potable),
+            certificate_url: c.certificate_url,
+          })),
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  },
+
+  suspendWaterCertificate: async (certificateId: string, reason: string) => {
+    try {
+      await supabase
+        .from('water_quality_certificates')
+        .update({ is_potable: false })
+        .eq('id', certificateId);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('admin_audit_logs').insert({
+          admin_id: user.id,
+          action: 'SUSPEND_WATER_CERTIFICATE',
+          target_type: 'water_quality_certificates',
+          target_id: certificateId,
+          notes: `Certificate suspended by Safety Desk: ${reason}`,
+        });
+      }
+
+      await Promise.all([get().fetchWaterCertificates(), get().fetchAuditLogs()]);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  fetchCorporateSubscriptions: async () => {
+    try {
+      const { data } = await supabase
+        .from('corporate_subscriptions')
+        .select('*')
+        .order('monthly_rate', { ascending: false });
+
+      if (data) {
+        set({
+          corporateSubscriptions: data.map((s: any) => ({
+            id: s.id,
+            client_name: s.client_name,
+            category: s.category,
+            contact_person: s.contact_person,
+            contact_phone: s.contact_phone,
+            delivery_address: s.delivery_address,
+            latitude: Number(s.latitude),
+            longitude: Number(s.longitude),
+            daily_liters: Number(s.daily_liters),
+            preferred_time_slot: s.preferred_time_slot,
+            monthly_rate: Number(s.monthly_rate),
+            status: s.status,
+            assigned_supplier_name: s.assigned_supplier_name || 'Seema Water Hub',
+            start_date: s.start_date,
+          })),
+        });
+      }
+    } catch {
+      // Ignored
+    }
+  },
+
+  toggleSubscriptionStatus: async (subscriptionId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'active' ? 'paused' : 'active';
+    try {
+      await supabase
+        .from('corporate_subscriptions')
+        .update({ status: nextStatus })
+        .eq('id', subscriptionId);
+
+      set((state) => ({
+        corporateSubscriptions: state.corporateSubscriptions.map((s) =>
+          s.id === subscriptionId ? { ...s, status: nextStatus as any } : s
+        ),
+      }));
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('admin_audit_logs').insert({
+          admin_id: user.id,
+          action: 'UPDATE_SUBSCRIPTION_STATUS',
+          target_type: 'corporate_subscriptions',
+          target_id: subscriptionId,
+          notes: `Contract status changed to ${nextStatus}`,
+        });
+      }
+
+      get().fetchAuditLogs();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  createCorporateSubscription: async (sub) => {
+    try {
+      const { error } = await supabase.from('corporate_subscriptions').insert({
+        client_name: sub.client_name,
+        category: sub.category,
+        contact_person: sub.contact_person,
+        contact_phone: sub.contact_phone,
+        delivery_address: sub.delivery_address,
+        latitude: sub.latitude,
+        longitude: sub.longitude,
+        daily_liters: sub.daily_liters,
+        preferred_time_slot: sub.preferred_time_slot,
+        monthly_rate: sub.monthly_rate,
+        status: sub.status,
+        assigned_supplier_name: sub.assigned_supplier_name || 'Seema Water Hub',
+        start_date: sub.start_date,
+      });
+
+      if (!error) {
+        await Promise.all([get().fetchCorporateSubscriptions(), get().fetchAuditLogs()]);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
     }
   },
 
@@ -187,7 +616,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             action: log.action,
             target_type: log.target_type,
             target_id: log.target_id,
-            notes: log.notes,
+            notes: log.notes || (typeof log.details === 'object' ? JSON.stringify(log.details) : undefined),
             created_at: log.created_at,
           })),
         });
@@ -225,7 +654,6 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         p_status: 'verified',
       });
 
-      // Write to audit log
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from('admin_audit_logs').insert({
