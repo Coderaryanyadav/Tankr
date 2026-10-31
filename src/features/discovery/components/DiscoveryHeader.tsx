@@ -46,7 +46,11 @@ export const DiscoveryHeader: React.FC<DiscoveryHeaderProps> = ({
         style={({ pressed }) => [styles.addressPill, pressed && styles.pillPressed]}
       >
         <View style={styles.pinCircle}>
-          <Ionicons name="location-sharp" size={18} color={colors.primary} />
+          <Image
+            source={require('../../../../assets/images/logo.png')}
+            style={styles.headerLogoImg}
+            resizeMode="contain"
+          />
         </View>
 
         <View style={styles.textContainer}>
@@ -127,13 +131,20 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   pinCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primaryLight,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.xs,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  headerLogoImg: {
+    width: 32,
+    height: 24,
   },
   textContainer: {
     flex: 1,

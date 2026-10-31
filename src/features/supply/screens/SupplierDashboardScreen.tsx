@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StatusBar,
@@ -64,17 +65,24 @@ export const SupplierDashboardScreen: React.FC = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <View style={styles.badgeRow}>
-            <StatusBadge label="Supplier Portal" variant="primary" size="sm" />
-            <StatusBadge
-              label={verificationStatus === 'verified' ? 'Verified Partner' : 'KYC Pending'}
-              variant={verificationStatus === 'verified' ? 'success' : 'warning'}
-              size="sm"
-            />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Image
+            source={require('../../../../assets/images/logo.png')}
+            style={styles.supplierLogo}
+            resizeMode="contain"
+          />
+          <View>
+            <View style={styles.badgeRow}>
+              <StatusBadge label="Supplier Portal" variant="primary" size="sm" />
+              <StatusBadge
+                label={verificationStatus === 'verified' ? 'Verified Partner' : 'KYC Pending'}
+                variant={verificationStatus === 'verified' ? 'success' : 'warning'}
+                size="sm"
+              />
+            </View>
+            <Text style={styles.supplierTitle}>{supplierBusinessName}</Text>
+            <Text style={styles.supplierSubtitle}>Registered Hub • Mumbai Metro (Marol HQ)</Text>
           </View>
-          <Text style={styles.supplierTitle}>{supplierBusinessName}</Text>
-          <Text style={styles.supplierSubtitle}>Registered Hub • Mumbai Metro (Marol HQ)</Text>
         </View>
 
         <Pressable
@@ -233,6 +241,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardSurface,
     borderBottomWidth: 1,
     borderBottomColor: colors.cardBorder,
+  },
+  supplierLogo: {
+    width: 44,
+    height: 38,
   },
   badgeRow: {
     flexDirection: 'row',

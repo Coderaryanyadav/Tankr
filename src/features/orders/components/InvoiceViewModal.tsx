@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -103,9 +104,16 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
           <View style={styles.invoiceCard}>
             {/* Top Brand & Title */}
             <View style={styles.brandRow}>
-              <View>
-                <Text style={styles.tankrBrand}>TANKR</Text>
-                <Text style={styles.tagline}>Water delivery, just a tap away.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Image
+                  source={require('../../../../assets/images/logo.png')}
+                  style={styles.invoiceLogo}
+                  resizeMode="contain"
+                />
+                <View>
+                  <Text style={styles.tankrBrand}>TANKR</Text>
+                  <Text style={styles.tagline}>Water delivery, just a tap away.</Text>
+                </View>
               </View>
               <View style={styles.invoiceTag}>
                 <Text style={styles.invoiceTagText}>TAX INVOICE</Text>
@@ -294,6 +302,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  invoiceLogo: {
+    width: 48,
+    height: 38,
   },
   tankrBrand: {
     fontSize: 24,

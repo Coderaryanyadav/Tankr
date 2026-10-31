@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -170,6 +171,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
 
         {/* Version Footer */}
         <View style={styles.footer}>
+          <Image
+            source={require('../../../../assets/images/logo.png')}
+            style={styles.footerLogo}
+            resizeMode="contain"
+          />
           <Text style={styles.footerText}>TANKR v1.0.0 • Mumbai Metropolitan Ops (Marol HQ)</Text>
           <Text style={styles.footerSubtext}>Encrypted • BMC Compliant • PostGIS Live Radar</Text>
         </View>
@@ -329,6 +335,11 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: 'center',
     paddingBottom: spacing.lg,
+  },
+  footerLogo: {
+    width: 100,
+    height: 50,
+    marginBottom: spacing.xs,
   },
   footerText: {
     fontSize: 12,

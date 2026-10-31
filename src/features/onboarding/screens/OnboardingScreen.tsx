@@ -193,6 +193,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
         >
           {/* Header */}
           <View style={styles.header}>
+            <Image
+              source={require('../../../../assets/images/logo.png')}
+              style={styles.onboardingLogo}
+              resizeMode="contain"
+            />
             <View style={styles.brandPill}>
               <Ionicons name="water" size={16} color={colors.primary} />
               <Text style={styles.brandPillText}>TANKR DELIVERY SETUP</Text>
@@ -375,6 +380,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginVertical: spacing.md,
+  },
+  onboardingLogo: {
+    width: 140,
+    height: 70,
+    marginBottom: spacing.xs,
   },
   brandPill: {
     flexDirection: 'row',

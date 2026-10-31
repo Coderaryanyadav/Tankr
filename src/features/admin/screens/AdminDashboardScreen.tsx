@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StatusBar,
@@ -171,7 +172,11 @@ export const AdminDashboardScreen: React.FC = () => {
           {/* Brand & Portal Title */}
           <View style={styles.brandRow}>
             <View style={styles.logoCircle}>
-              <Ionicons name="water" size={20} color={colors.white} />
+              <Image
+                source={require('../../../../assets/images/logo.png')}
+                style={styles.adminLogoImage}
+                resizeMode="contain"
+              />
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -850,12 +855,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   logoCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+  },
+  adminLogoImage: {
+    width: 40,
+    height: 40,
   },
   brandTitle: {
     fontSize: 18,

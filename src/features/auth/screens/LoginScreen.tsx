@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -63,18 +64,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOtpRequested }) => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Top Decorative Motif */}
-          <View style={styles.topWaveContainer}>
-            <View style={styles.outerDropletRing}>
-              <View style={styles.innerDropletCircle}>
-                <Ionicons name="water" size={44} color={colors.white} />
-              </View>
-            </View>
+          {/* Top Brand Logo */}
+          <View style={styles.topLogoContainer}>
+            <Image
+              source={require('../../../../assets/images/logo.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Brand Presentation */}
           <View style={styles.brandContainer}>
-            <Text style={styles.brandTitle}>TANKR</Text>
             <Text style={styles.tagline}>Water delivery, just a tap away.</Text>
             <Text style={styles.loginSubtitle}>
               Enter your mobile number to get started. No password required.
@@ -164,26 +164,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['3xl'],
     justifyContent: 'space-between',
   },
-  topWaveContainer: {
-    alignItems: 'center',
-    marginVertical: spacing.lg,
-  },
-  outerDropletRing: {
-    width: 96,
-    height: 96,
-    borderRadius: borderRadius.full,
-    backgroundColor: '#D7E9FB',
+  topLogoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  innerDropletCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.floating,
+  brandLogo: {
+    width: 260,
+    height: 130,
   },
   brandContainer: {
     alignItems: 'center',
