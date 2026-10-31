@@ -26,3 +26,4 @@ ALTER TABLE public.tankers REPLICA IDENTITY FULL;
 ALTER TABLE public.bookings REPLICA IDENTITY FULL;
 ALTER TABLE public.community_pools REPLICA IDENTITY FULL;
 ALTER TABLE public.tracking_breadcrumbs REPLICA IDENTITY FULL;
+
