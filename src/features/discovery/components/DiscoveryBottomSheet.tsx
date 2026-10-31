@@ -285,7 +285,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Book ${tanker.capacity_liters}L for ₹${tanker.estimated_total_price}`}
-                      onPress={() => onBookSelectedTanker(tanker)}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        onBookSelectedTanker(tanker);
+                      }}
                       style={({ pressed }) => [styles.cardBookBtn, pressed && { opacity: 0.85 }]}
                     >
                       <Text style={styles.cardBookBtnText}>Book</Text>

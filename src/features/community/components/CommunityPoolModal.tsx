@@ -41,6 +41,7 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<'pools' | 'create'>('pools');
   const [selectedPoolCode, setSelectedPoolCode] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Contribution Form State
   const [contributorName, setContributorName] = useState('');
@@ -57,36 +58,42 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
   useEffect(() => {
     if (visible) {
       fetchCommunityPools();
-      const unsub = subscribeToLivePools();
-      return () => {
-        unsub();
-      };
+      try {
+        const unsub = subscribeToLivePools();
+        return () => {
+          try {
+            unsub();
+          } catch {}
+        };
+      } catch (err) {
+        console.warn('[CommunityPoolModal] Subscription notice:', err);
+      }
     }
   }, [visible, fetchCommunityPools, subscribeToLivePools]);
 
   const handlePledge = async (poolCode: string) => {
     if (!contributorName.trim() || !flatNumber.trim()) {
-      Alert.alert('Details Required', 'Please enter your Name and Flat Number to contribute.');
+      setFeedback({ type: 'error', message: 'Please enter your Name and Flat Number to contribute.' });
       return;
     }
 
     const res = await contributeToPool(poolCode, contributorName.trim(), flatNumber.trim(), pledgeAmount);
     if (res.success) {
-      Alert.alert(
-        'Contribution Confirmed! 🎉',
-        `₹${pledgeAmount} pledged from ${flatNumber}. Once the pool reaches 100%, the 20,000L tanker will automatically dispatch!`
-      );
+      setFeedback({
+        type: 'success',
+        message: `₹${pledgeAmount} pledged from ${flatNumber}! Once the pool reaches 100%, the 20,000L jumbo tanker automatically dispatches.`,
+      });
       setSelectedPoolCode(null);
       setContributorName('');
       setFlatNumber('');
     } else {
-      Alert.alert('Contribution Error', res.error || 'Failed to submit pledge.');
+      setFeedback({ type: 'error', message: res.error || 'Failed to submit pledge.' });
     }
   };
 
   const handleCreateNewPool = async () => {
     if (!societyName.trim() || !poolAddress.trim()) {
-      Alert.alert('Required Fields', 'Please enter your society/apartment name and delivery address.');
+      setFeedback({ type: 'error', message: 'Please enter your society/apartment name and delivery address.' });
       return;
     }
 
@@ -102,14 +109,14 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
     setIsCreating(false);
 
     if (res.success) {
-      Alert.alert(
-        'Community Sump Pool Created! 🏢',
-        `Pool code: ${res.poolCode}\nShare this with your society WhatsApp group so neighbors can pool funds!`
-      );
+      setFeedback({
+        type: 'success',
+        message: `Community Sump Pool created! Pool code: ${res.poolCode}. Share this with your society WhatsApp group!`,
+      });
       setActiveTab('pools');
       setSocietyName('');
     } else {
-      Alert.alert('Error', res.error || 'Failed to create pool.');
+      setFeedback({ type: 'error', message: res.error || 'Failed to create pool.' });
     }
   };
 
@@ -175,6 +182,48 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
           </View>
 
           <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Feedback Banner */}
+            {feedback && (
+              <View
+                style={[
+                  styles.feedbackBanner,
+                  feedback.type === 'success'
+                    ? styles.feedbackBannerSuccess
+                    : styles.feedbackBannerError,
+                ]}
+              >
+                <Ionicons
+                  name={feedback.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                  size={18}
+                  color={feedback.type === 'success' ? '#16A34A' : colors.error}
+                />
+                <Text
+                  style={[
+                    styles.feedbackText,
+                    { color: feedback.type === 'success' ? '#166534' : colors.error },
+                  ]}
+                >
+                  {feedback.message}
+                </Text>
+                <Pressable onPress={() => setFeedback(null)}>
+                  <Ionicons name="close" size={16} color="#64748B" />
+                </Pressable>
+              </View>
+            )}
+
+            {/* Feature Purpose Explainer Banner */}
+            <View style={styles.explainerCard}>
+              <View style={styles.explainerIconWrap}>
+                <Ionicons name="people" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.explainerTitle}>What is Community Sump Pooling?</Text>
+                <Text style={styles.explainerBody}>
+                  Instead of individual flats ordering smaller 1,000L or 2,000L tankers at higher rates, neighbors chip in together to fill the shared society sump with a 20,000L Jumbo tanker at 40% lower cost per liter.
+                </Text>
+              </View>
+            </View>
+
             {activeTab === 'pools' ? (
               <View style={styles.poolsList}>
                 {isLoading ? (
@@ -475,6 +524,59 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
+  },
+  explainerCard: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: spacing.md,
+  },
+  explainerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  explainerTitle: {
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+    color: '#0369A1',
+  },
+  explainerBody: {
+    fontSize: 11,
+    color: '#0C4A6E',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  feedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+  },
+  feedbackBannerSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  feedbackBannerError: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  feedbackText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: fontWeights.medium,
+    lineHeight: 16,
   },
   poolsList: {
     gap: 12,

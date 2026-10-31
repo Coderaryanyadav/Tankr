@@ -76,7 +76,7 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
               user_id: c.user_id,
               contributor_name: c.contributor_name,
               flat_number: c.flat_number,
-              amount_paid: Number(c.amount_paid),
+              amount_paid: Number(c.amount || c.amount_paid || 0),
               created_at: c.created_at,
             }));
 
@@ -138,7 +138,7 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
         pool_id: pool.id,
         contributor_name: contributorName,
         flat_number: flatNumber,
-        amount_paid: amount,
+        amount: amount,
       });
 
       const newCollected = Number(pool.collected_amount || 0) + Number(amount);
@@ -190,8 +190,9 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
   },
 
   subscribeToLivePools: () => {
+    const channelName = `public:community_pools:${Date.now()}_${Math.random()}`;
     const channel = supabase
-      .channel('public:community_pools:live')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'community_pools' },
@@ -209,7 +210,7 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   },
 }));
