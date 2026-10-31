@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Linking,
   Pressable,
   StyleSheet,
@@ -10,9 +9,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { ConfirmDialog } from '../../../components/common/Overlay/ConfirmDialog';
 import { CustomerDisputeModal } from '../../disputes/components/CustomerDisputeModal';
 import { useBookingStore } from '../../../stores/bookingStore';
-import { confirmAction, notify } from '../../../utils/alertUtils';
+import { notify } from '../../../utils/alertUtils';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG, BookingRecord } from '../../../types/booking';
 
@@ -26,8 +26,15 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
   onViewDetails,
 }) => {
   const [disputeModalVisible, setDisputeModalVisible] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const { cancelBooking, clearActiveBooking } = useBookingStore();
   const config = BOOKING_STATUS_CONFIG[booking.status];
+
+  const isAwaitingDriver =
+    booking.status === 'pending' ||
+    booking.status === 'supplier_assigned' ||
+    booking.status === 'accepted';
 
   const handleCallDriver = () => {
     if (booking.driver_phone) {
@@ -37,20 +44,22 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
     }
   };
 
-  const handleCancel = () => {
-    confirmAction(
-      'Cancel Tanker Booking?',
-      'Are you sure you want to cancel this order? If the tanker is already en route, cancellation policies apply.',
-      async () => {
-        const res = await cancelBooking(booking.id, 'Customer cancelled from active card');
-        if (res && !res.success) {
-          notify('Cancellation Notice', res.error || 'Could not cancel booking.');
-        } else {
-          clearActiveBooking();
-        }
-      },
-      'Cancel Order'
-    );
+  const handleConfirmCancel = async () => {
+    setIsCancelling(true);
+    try {
+      const res = await cancelBooking(booking.id, 'Customer cancelled from active card');
+      setIsCancelling(false);
+      setCancelModalVisible(false);
+      if (res && !res.success) {
+        notify('Cancellation Notice', res.error || 'Could not cancel booking.');
+      } else {
+        clearActiveBooking();
+        notify('Booking Cancelled', 'Your tanker request has been successfully cancelled.');
+      }
+    } catch {
+      setIsCancelling(false);
+      setCancelModalVisible(false);
+    }
   };
 
   return (
@@ -90,7 +99,7 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
       <View style={styles.driverSection}>
         <View style={styles.driverAvatar}>
           <Ionicons
-            name={booking.status === 'pending' ? 'hourglass-outline' : 'person'}
+            name={isAwaitingDriver ? 'hourglass-outline' : 'person'}
             size={20}
             color={colors.primary}
           />
@@ -98,19 +107,19 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
 
         <View style={styles.driverDetailsCol}>
           <Text style={styles.driverName}>
-            {booking.status === 'pending'
+            {isAwaitingDriver
               ? 'Assigning Driver...'
               : (booking.driver_name || 'Assigned Driver')}
           </Text>
           <Text style={styles.vehicleDetails}>
-            {booking.status === 'pending'
-              ? `Awaiting dispatch confirmation from ${booking.supplier_name}`
-              : `${booking.vehicle_number || 'Vehicle Assigned'} • ${booking.supplier_name}`}
+            {isAwaitingDriver
+              ? `Awaiting dispatch confirmation from ${booking.supplier_name || 'supplier'}`
+              : `${booking.vehicle_number || 'Vehicle Assigned'} • ${booking.supplier_name || 'Water Logistics'}`}
           </Text>
         </View>
 
-        {/* Contact Actions */}
-        {booking.status !== 'pending' && (
+        {/* Contact Actions - Only shown when a driver is assigned and active */}
+        {!isAwaitingDriver && (
           <View style={styles.contactActions}>
             <Pressable
               accessibilityRole="button"
@@ -159,37 +168,41 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
           <View style={{ flex: 1, flexDirection: 'row' }}>
             <View style={{ flex: 1, marginRight: spacing.sm }}>
               <Button
-                title={booking.status === 'pending' ? 'Track Status' : 'Contact Driver'}
+                title={isAwaitingDriver ? 'Track Status' : 'Contact Driver'}
                 variant="secondary"
                 size="md"
-                onPress={booking.status === 'pending' ? () => onViewDetails?.() : handleCallDriver}
-                rightIcon={<Ionicons name={booking.status === 'pending' ? "navigate-circle-outline" : "call-outline"} size={16} color={colors.primary} />}
+                onPress={isAwaitingDriver ? () => onViewDetails?.() : handleCallDriver}
+                rightIcon={<Ionicons name={isAwaitingDriver ? "navigate-circle-outline" : "call-outline"} size={16} color={colors.primary} />}
               />
             </View>
 
-            {(booking.status === 'pending' || booking.status === 'accepted') ? (
-              <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                <Button
-                  title="Cancel Order"
-                  variant="outline"
-                  size="md"
-                  onPress={handleCancel}
-                />
-              </View>
-            ) : (
-              <View style={{ width: 120, marginLeft: spacing.sm }}>
-                <Button
-                  title="Report Issue"
-                  variant="outline"
-                  size="md"
-                  onPress={() => setDisputeModalVisible(true)}
-                />
-              </View>
-            )}
+            <View style={{ flex: 1, marginLeft: spacing.sm }}>
+              <Button
+                title={isAwaitingDriver ? "Cancel Order" : "Cancel"}
+                variant="outline"
+                size="md"
+                onPress={() => setCancelModalVisible(true)}
+              />
+            </View>
           </View>
         )}
       </View>
 
+      {/* Confirm Cancellation In-App Dialog with Close (X) button */}
+      <ConfirmDialog
+        visible={cancelModalVisible}
+        title="Cancel Water Order?"
+        message="Are you sure you want to cancel this booking? If the tanker is already en route, cancellation policies may apply."
+        confirmLabel="Confirm Cancellation"
+        cancelLabel="Keep Order"
+        isDestructive={true}
+        isLoading={isCancelling}
+        iconName="close-circle-outline"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelModalVisible(false)}
+      />
+
+      {/* Dispute Modal */}
       <CustomerDisputeModal
         visible={disputeModalVisible}
         bookingId={booking.id}

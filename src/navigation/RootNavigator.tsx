@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LoginScreen } from '../features/auth/screens/LoginScreen';
 import { VerifyOtpScreen } from '../features/auth/screens/VerifyOtpScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
 import { SupplierDashboardScreen } from '../features/supply/screens/SupplierDashboardScreen';
+import { SupplierRegistrationScreen } from '../features/supply/screens/SupplierRegistrationScreen';
 import { DriverDashboardScreen } from '../features/supply/screens/DriverDashboardScreen';
 import { AdminDashboardScreen } from '../features/admin/screens/AdminDashboardScreen';
+import { DesignSystemShowcase } from '../showcase/DesignSystemShowcase';
 import { AppTabs } from './AppTabs';
 import { useAuthStore } from '../stores/authStore';
 import { colors } from '../theme';
@@ -43,10 +45,71 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
+  // URL Query Parameter Override for Automated Screenshot Capture & Navigation
+  const getUrlParams = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.search) {
+      const sp = new URLSearchParams(window.location.search);
+      return {
+        app: sp.get('app'),
+        screen: sp.get('screen'),
+        tab: sp.get('tab'),
+        modal: sp.get('modal'),
+        desk: sp.get('desk'),
+      };
+    }
+    return null;
+  };
+
+  const urlParams = getUrlParams();
+  const isExplicitRoute = Boolean(
+    urlParams && (urlParams.app || urlParams.screen || urlParams.tab || urlParams.modal || urlParams.desk)
+  );
+
+  const renderExplicitRoute = () => {
+    if (!urlParams) return null;
+
+    if (urlParams.app === 'showcase') {
+      return <DesignSystemShowcase />;
+    }
+
+    if (urlParams.app === 'admin') {
+      return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
+    }
+
+    if (urlParams.app === 'supplier') {
+      if (urlParams.screen === 'registration') {
+        return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
+      }
+      return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
+    }
+
+    if (urlParams.app === 'driver') {
+      return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
+    }
+
+    if (urlParams.app === 'auth' || urlParams.screen === 'login' || urlParams.screen === 'verify' || urlParams.screen === 'onboarding') {
+      if (urlParams.screen === 'verify') {
+        return <VerifyOtpScreen onBackToLogin={() => {}} onVerificationSuccess={() => {}} />;
+      }
+      if (urlParams.screen === 'onboarding') {
+        return <OnboardingScreen onComplete={() => {}} />;
+      }
+      return <LoginScreen onOtpRequested={() => {}} />;
+    }
+
+    // Default to Customer App with requested tab or modal
+    const targetTab = urlParams.tab || (urlParams.screen === 'bookings' ? 'bookings' : urlParams.screen === 'tracking' ? 'activity' : urlParams.screen === 'account' ? 'account' : 'discovery');
+    return <AppTabs initialTab={targetTab as any} initialModal={urlParams.modal || undefined} />;
+  };
+
   // Authoritative Server-Driven Role Navigation
   const verifiedRole = profile?.role || 'customer';
 
   const renderContent = () => {
+    if (isExplicitRoute) {
+      return renderExplicitRoute();
+    }
+
     // 1. Auth Flow
     if (!session) {
       if (authStep === 'verify') {
@@ -88,8 +151,12 @@ export const RootNavigator: React.FC = () => {
     return <AppTabs />;
   };
 
-  // For Admin and Supplier on desktop, allow full wide viewport
-  if (session && (verifiedRole === 'admin' || verifiedRole === 'supplier')) {
+  // Allow wide viewport for Admin, Supplier, Showcase, or Wide screen modes
+  const isWideTarget =
+    (isExplicitRoute && (urlParams?.app === 'admin' || urlParams?.app === 'supplier' || urlParams?.app === 'showcase')) ||
+    (session && (verifiedRole === 'admin' || verifiedRole === 'supplier'));
+
+  if (isWideTarget) {
     return renderContent();
   }
 
@@ -133,4 +200,3 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
 });
-

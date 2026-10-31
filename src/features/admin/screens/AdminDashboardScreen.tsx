@@ -41,7 +41,11 @@ type AdminTab =
   | 'zones'
   | 'audit_log';
 
-export const AdminDashboardScreen: React.FC = () => {
+interface AdminDashboardScreenProps {
+  initialTab?: AdminTab;
+}
+
+export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ initialTab }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 960;
 
@@ -71,7 +75,13 @@ export const AdminDashboardScreen: React.FC = () => {
     updateServiceZone,
   } = useAdminStore();
 
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'overview');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [isAddZoneModalOpen, setIsAddZoneModalOpen] = useState(false);
   const [newZoneName, setNewZoneName] = useState('Goregaon East IT Hub');
   const [newZoneLat, setNewZoneLat] = useState('19.1663');

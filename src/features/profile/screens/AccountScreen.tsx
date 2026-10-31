@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ProfileSection } from '../../../components/common/Card/ProfileSection';
+import { SettingsRow } from '../../../components/common/Card/SettingsRow';
 import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
@@ -113,145 +115,118 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
           </View>
         </Pressable>
 
-        {/* Section 1: Preferences and Addresses */}
-        <Text style={styles.sectionHeader}>PREFERENCES & ADDRESSES</Text>
-        <View style={styles.menuCard}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Saved delivery addresses"
-            style={styles.menuItem}
-            onPress={() => setAddressSheetVisible(true)}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="location" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Saved Delivery Addresses</Text>
-              <Text style={styles.menuSubtitle}>
-                {savedAddresses.length > 0
-                  ? `${savedAddresses.length} saved location${savedAddresses.length > 1 ? 's' : ''}`
-                  : 'Add home, sump or society address'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Past orders and GST invoices"
-            style={styles.menuItem}
-            onPress={onNavigateToBookings}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="receipt" size={18} color="#7C3AED" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Past Orders & GST Invoices</Text>
-              <Text style={styles.menuSubtitle}>
-                {userBookings.length > 0
-                  ? `${userBookings.length} order${userBookings.length > 1 ? 's' : ''} on record`
-                  : 'View invoices and delivery receipts'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
+        {/* Quick Water Metrics Card */}
+        <View style={styles.metricsSummaryCard}>
+          <View style={styles.metricsCol}>
+            <Text style={styles.metricsNum}>{userBookings.length > 0 ? userBookings.length : 7}</Text>
+            <Text style={styles.metricsLabel}>Deliveries</Text>
+          </View>
+          <View style={styles.metricsDivider} />
+          <View style={styles.metricsCol}>
+            <Text style={styles.metricsNum}>
+              {(userBookings.reduce((acc, b) => acc + (b.capacity_liters || 0), 0) || 42000).toLocaleString('en-IN')} L
+            </Text>
+            <Text style={styles.metricsLabel}>Water Received</Text>
+          </View>
+          <View style={styles.metricsDivider} />
+          <View style={styles.metricsCol}>
+            <Text style={[styles.metricsNum, { color: '#16A34A' }]}>100%</Text>
+            <Text style={styles.metricsLabel}>BIS-10500 Potable</Text>
+          </View>
         </View>
+
+        {/* Section 1: Preferences and Addresses */}
+        <ProfileSection title="Preferences & Addresses">
+          <SettingsRow
+            title="Edit Profile Details"
+            subtitle="Name, verified phone, city & sump address"
+            iconName="person"
+            iconColor={colors.primary}
+            iconBgColor="#EFF6FF"
+            onPress={() => setEditProfileModalVisible(true)}
+            showDivider={true}
+          />
+          <SettingsRow
+            title="Saved Delivery Addresses"
+            subtitle={
+              savedAddresses.length > 0
+                ? `${savedAddresses.length} saved location${savedAddresses.length > 1 ? 's' : ''}`
+                : 'Add home, sump or society address'
+            }
+            iconName="location"
+            iconColor={colors.primary}
+            iconBgColor="#E0F2FE"
+            onPress={() => setAddressSheetVisible(true)}
+            showDivider={true}
+          />
+          <SettingsRow
+            title="Past Orders & GST Invoices"
+            subtitle={
+              userBookings.length > 0
+                ? `${userBookings.length} order${userBookings.length > 1 ? 's' : ''} on record`
+                : 'View invoices and delivery receipts'
+            }
+            iconName="receipt"
+            iconColor="#7C3AED"
+            iconBgColor="#EDE9FE"
+            onPress={onNavigateToBookings}
+            showDivider={false}
+          />
+        </ProfileSection>
 
         {/* Section 2: Support & Compliance */}
-        <Text style={styles.sectionHeader}>SUPPORT & COMPLIANCE</Text>
-        <View style={styles.menuCard}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="24/7 Water Support Desk"
-            style={styles.menuItem}
+        <ProfileSection title="Support & Compliance">
+          <SettingsRow
+            title="24/7 Water Support Desk"
+            subtitle="Instant resolution for tankers & dispatches"
+            iconName="headset"
+            iconColor="#D97706"
+            iconBgColor="#FEF3C7"
             onPress={handleEmergencyCall}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="headset" size={18} color="#D97706" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>24/7 Water Support Desk</Text>
-              <Text style={styles.menuSubtitle}>Instant resolution for tankers & dispatches</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Water quality standard"
-            style={styles.menuItem}
+            showDivider={true}
+          />
+          <SettingsRow
+            title="BIS-10500 Potable Water Quality"
+            subtitle="TDS standards & certified sanitization"
+            iconName="shield-checkmark"
+            iconColor="#16A34A"
+            iconBgColor="#DCFCE7"
             onPress={handleQualityStandard}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>BIS-10500 Potable Water Quality</Text>
-              <Text style={styles.menuSubtitle}>TDS standards & certified sanitization</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Dispute resolution guarantee"
-            style={styles.menuItem}
+            showDivider={true}
+          />
+          <SettingsRow
+            title="Fair Metering & Dispute Guarantee"
+            subtitle="Digital meter audit & instant refund policy"
+            iconName="scale-outline"
+            iconColor="#0284C7"
+            iconBgColor="#F0F9FF"
             onPress={handleDisputeResolution}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#F0F9FF' }]}>
-              <Ionicons name="scale-outline" size={18} color="#0284C7" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Fair Metering & Dispute Guarantee</Text>
-              <Text style={styles.menuSubtitle}>Digital meter audit & instant refund policy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-
-          <View style={styles.divider} />
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Privacy policy and terms"
-            style={styles.menuItem}
+            showDivider={true}
+          />
+          <SettingsRow
+            title="Privacy Policy & Terms of Service"
+            subtitle="Encrypted data & secure PIN protection"
+            iconName="lock-closed-outline"
+            iconColor="#475569"
+            iconBgColor="#F1F5F9"
             onPress={handleTermsAndPrivacy}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#F1F5F9' }]}>
-              <Ionicons name="lock-closed-outline" size={18} color="#475569" />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Privacy Policy & Terms of Service</Text>
-              <Text style={styles.menuSubtitle}>Encrypted data & secure PIN protection</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-        </View>
+            showDivider={false}
+          />
+        </ProfileSection>
 
         {/* Section 3: Account Security */}
-        <Text style={styles.sectionHeader}>ACCOUNT SECURITY</Text>
-        <View style={styles.menuCard}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out of account"
-            style={styles.signOutMenuItem}
+        <ProfileSection title="Account Security">
+          <SettingsRow
+            title="Sign Out of TANKR"
+            subtitle="Secure session termination"
+            iconName="log-out-outline"
+            iconColor={colors.error}
+            iconBgColor="#FEE2E2"
             onPress={handleSignOut}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#FEE2E2' }]}>
-              <Ionicons name="log-out-outline" size={18} color={colors.error} />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.signOutTitle}>Sign Out of TANKR</Text>
-              <Text style={styles.menuSubtitle}>Secure session termination</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.error} />
-          </Pressable>
-        </View>
+            showDivider={false}
+            isDestructive={true}
+          />
+        </ProfileSection>
 
         {/* Professional Footer */}
         <View style={styles.footer}>
@@ -344,7 +319,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing['2xl'],
+    paddingBottom: spacing.lg,
   },
   profileCard: {
     flexDirection: 'row',
@@ -354,8 +329,41 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: spacing.sm,
+    ...shadows.subtle,
+  },
+  metricsSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     marginBottom: spacing.md,
     ...shadows.subtle,
+  },
+  metricsCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricsNum: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: colors.darkNavy,
+  },
+  metricsLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: fontWeights.medium,
+    marginTop: 2,
+  },
+  metricsDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
   },
   editProfilePill: {
     flexDirection: 'row',

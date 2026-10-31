@@ -15,6 +15,7 @@ import { DiscoveryHeader } from '../components/DiscoveryHeader';
 import { DiscoveryBottomSheet } from '../components/DiscoveryBottomSheet';
 import { InteractiveMap } from '../components/InteractiveMap';
 import { BookingReviewModal } from '../../booking/components/BookingReviewModal';
+import { BookingSuccessModal } from '../../booking/components/BookingSuccessModal';
 import { BookingSearchingOverlay } from '../../booking/components/BookingSearchingOverlay';
 import { ActiveBookingCard } from '../../booking/components/ActiveBookingCard';
 import { NotificationsModal } from '../../notifications/screens/NotificationsModal';
@@ -28,6 +29,7 @@ import { useLocationStore } from '../../../stores/locationStore';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useCommunityPoolStore } from '../../../stores/communityPoolStore';
 import { colors } from '../../../theme';
+import { BookingRecord } from '../../../types/booking';
 import { NearbyTanker } from '../../../types/discovery';
 
 interface HomeScreenProps {
@@ -79,6 +81,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Overlay states
   const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(initialModal === 'saved_addresses');
   const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(initialModal === 'booking_review');
+  const [successModalVisible, setSuccessModalVisible] = useState<boolean>(false);
+  const [confirmedBooking, setConfirmedBooking] = useState<BookingRecord | null>(null);
   const [notificationsModalVisible, setNotificationsModalVisible] = useState<boolean>(initialModal === 'notifications');
   const [communityPoolModalVisible, setCommunityPoolModalVisible] = useState<boolean>(initialModal === 'community_pool');
   const [disputeModalVisible, setDisputeModalVisible] = useState<boolean>(initialModal === 'dispute');
@@ -100,10 +104,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     initializeLocation(user?.id);
   }, [user?.id, initializeLocation]);
 
+  const [bottomSheetSnap, setBottomSheetSnap] = useState<'collapsed' | 'intermediate' | 'expanded'>('intermediate');
+
   // Initial fetch on mount & when coordinates change
   useEffect(() => {
     fetchNearbyTankers(activeCoordinates.latitude, activeCoordinates.longitude);
   }, [activeCoordinates.latitude, activeCoordinates.longitude, fetchNearbyTankers]);
+
+  // When tanker selected on map, ensure sheet is at least intermediate
+  const handleMapTankerSelect = (tankerId: string) => {
+    selectTanker(tankerId);
+    if (bottomSheetSnap === 'collapsed') {
+      setBottomSheetSnap('intermediate');
+    }
+  };
 
   // Fetch real community sump pools from Supabase
   useEffect(() => {
@@ -169,15 +183,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         unreadNotificationsCount={unreadCount}
       />
 
-      {/* 2. Main Section: Interactive Google Map */}
+      {/* 2. Main Section: Interactive Map */}
       <View style={styles.mapSection}>
         <InteractiveMap
           userLocation={activeCoordinates}
           tankers={filteredTankers}
           selectedTankerId={selectedTankerId}
-          onSelectTanker={(id) => selectTanker(id)}
+          onSelectTanker={handleMapTankerSelect}
           onRecenterGps={handleRecenterGps}
           isLocating={isLocating}
+          isLoading={isLoading}
+          hasLocationPermission={true}
+          onRequestPermission={handleRecenterGps}
         />
 
         {/* Floating Contextual Community Sump Pooling Map Overlay (Only if active in DB) */}
@@ -223,6 +240,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           isLoading={isLoading}
           isRefreshing={isRefreshing}
           deliveryAddress={activeAddressText}
+          snapState={bottomSheetSnap}
+          onSnapStateChange={setBottomSheetSnap}
           onChangeAddress={() => setAddressSheetVisible(true)}
           onRefresh={() =>
             fetchNearbyTankers(
@@ -248,6 +267,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             { latitude: addr.latitude, longitude: addr.longitude },
             addr.label.toUpperCase()
           );
+          // Invalidate outdated quote and recalculate eligible tankers
+          useBookingStore.setState({ activeQuote: null });
+          fetchNearbyTankers(addr.latitude, addr.longitude, true);
         }}
       />
 
@@ -256,9 +278,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={reviewModalVisible}
         tanker={tankerToBook}
         onClose={() => setReviewModalVisible(false)}
-        onBookingConfirmed={() => {
-          // Trigger searching overlay
+        onChangeAddress={() => setAddressSheetVisible(true)}
+        onBookingConfirmed={(booking) => {
+          setConfirmedBooking(booking);
+          setSuccessModalVisible(true);
         }}
+      />
+
+      {/* Premium Booking Confirmation Experience */}
+      <BookingSuccessModal
+        visible={successModalVisible}
+        booking={confirmedBooking}
+        onTrackDelivery={() => {
+          setSuccessModalVisible(false);
+          if (onNavigateToTracking) {
+            onNavigateToTracking();
+          }
+        }}
+        onViewOrders={() => {
+          setSuccessModalVisible(false);
+          if (onNavigateToBookings) {
+            onNavigateToBookings();
+          }
+        }}
+        onClose={() => setSuccessModalVisible(false)}
       />
 
       {/* Searching / Dispatching Supplier Radar Overlay */}

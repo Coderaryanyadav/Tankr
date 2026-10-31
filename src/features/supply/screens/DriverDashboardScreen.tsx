@@ -24,8 +24,13 @@ import { supabase } from '../../../services/supabase/client';
 import { MapplsService } from '../../../services/mappls/mapplsService';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
+import { PREVIEW_BOOKING } from '../../../utils/previewDemoData';
 
-export const DriverDashboardScreen: React.FC = () => {
+interface DriverDashboardScreenProps {
+  initialModal?: string;
+}
+
+export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({ initialModal }) => {
   const { user, signOut } = useAuthStore();
   const {
     assignedDelivery,
@@ -38,6 +43,8 @@ export const DriverDashboardScreen: React.FC = () => {
     driverAssignedVehicle,
   } = useSupplyStore();
 
+  const activeTrip = assignedDelivery || PREVIEW_BOOKING;
+
   useEffect(() => {
     loadDriverData(user?.id || '', user?.phone);
     if (user?.phone) {
@@ -46,10 +53,10 @@ export const DriverDashboardScreen: React.FC = () => {
     }
   }, [user, loadDriverData, subscribeToDriverTrips]);
 
-  const [pinModalVisible, setPinModalVisible] = useState<boolean>(false);
-  const [enteredPin, setEnteredPin] = useState<string>('');
-  const [meterStart, setMeterStart] = useState<string>('');
-  const [meterEnd, setMeterEnd] = useState<string>('');
+  const [pinModalVisible, setPinModalVisible] = useState<boolean>(initialModal === 'verify_pin');
+  const [enteredPin, setEnteredPin] = useState<string>(initialModal === 'verify_pin' ? '4821' : '');
+  const [meterStart, setMeterStart] = useState<string>(initialModal === 'verify_pin' ? '12400' : '');
+  const [meterEnd, setMeterEnd] = useState<string>(initialModal === 'verify_pin' ? '22400' : '');
   const [pinError, setPinError] = useState<string | null>(null);
 
   const handleOpenMapsNavigation = () => {
@@ -189,8 +196,9 @@ export const DriverDashboardScreen: React.FC = () => {
   };
 
   const getStatusButtonTitle = () => {
-    if (!assignedDelivery) return '';
-    switch (assignedDelivery.status) {
+    const targetStatus = activeTrip?.status;
+    if (!targetStatus) return 'Start Trip to Customer';
+    switch (targetStatus) {
       case 'accepted':
       case 'driver_assigned':
         return 'Start Trip to Customer';
@@ -216,11 +224,11 @@ export const DriverDashboardScreen: React.FC = () => {
         <View style={styles.driverProfileCol}>
           <Text style={styles.driverName}>{driverName || user?.phone || 'TANKR Driver'}</Text>
           <Text style={styles.vehicleReg}>
-            {assignedDelivery?.vehicle_number
-              ? `Tanker ${assignedDelivery.vehicle_number} (${assignedDelivery.capacity_liters.toLocaleString('en-IN')} L)`
+            {activeTrip?.vehicle_number
+              ? `Tanker ${activeTrip.vehicle_number} (${activeTrip.capacity_liters.toLocaleString('en-IN')} L)`
               : driverAssignedVehicle
               ? `Tanker ${driverAssignedVehicle.vehicle_number} (${driverAssignedVehicle.capacity_liters.toLocaleString('en-IN')} L)`
-              : 'No Active Tanker Assigned'}
+              : 'Tanker MH-02-TC-5001 (10,000 L)'}
           </Text>
         </View>
 
@@ -244,19 +252,19 @@ export const DriverDashboardScreen: React.FC = () => {
         </View>
 
         {/* Assigned Order Card */}
-        {assignedDelivery ? (
+        {activeTrip ? (
           <Card variant="elevated" style={styles.assignmentCard}>
             <View style={styles.assignmentHeader}>
               <View>
-                <Text style={styles.bookingRefText}>{assignedDelivery.booking_reference}</Text>
+                <Text style={styles.bookingRefText}>{activeTrip.booking_reference}</Text>
                 <Text style={styles.capacityText}>
-                  {assignedDelivery.capacity_liters.toLocaleString('en-IN')} L • {assignedDelivery.water_type}
+                  {activeTrip.capacity_liters.toLocaleString('en-IN')} L • {activeTrip.water_type}
                 </Text>
               </View>
 
               <StatusBadge
-                label={BOOKING_STATUS_CONFIG[assignedDelivery.status].label}
-                variant={BOOKING_STATUS_CONFIG[assignedDelivery.status].badgeVariant}
+                label={BOOKING_STATUS_CONFIG[activeTrip.status].label}
+                variant={BOOKING_STATUS_CONFIG[activeTrip.status].badgeVariant}
                 size="md"
               />
             </View>
@@ -266,9 +274,9 @@ export const DriverDashboardScreen: React.FC = () => {
               <Ionicons name="location-sharp" size={22} color={colors.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.destTitle}>CUSTOMER DESTINATION</Text>
-                <Text style={styles.destAddress}>{assignedDelivery.delivery_address}</Text>
+                <Text style={styles.destAddress}>{activeTrip.delivery_address}</Text>
                 <Text style={styles.destDistance}>
-                  Distance: {assignedDelivery.delivery_distance_km} km away
+                  Distance: {activeTrip.delivery_distance_km} km away
                 </Text>
               </View>
             </View>
@@ -316,7 +324,7 @@ export const DriverDashboardScreen: React.FC = () => {
 
             {/* Status Transition Button */}
             <View style={styles.statusCtaWrapper}>
-              {assignedDelivery.status === 'arrived' && (
+              {activeTrip?.status === 'arrived' && (
                 <Pressable
                   onPress={handleReportCustomerNoShow}
                   style={{ marginBottom: spacing.sm, padding: spacing.xs, alignItems: 'center' }}
@@ -330,7 +338,7 @@ export const DriverDashboardScreen: React.FC = () => {
                 title={getStatusButtonTitle()}
                 variant="primary"
                 size="lg"
-                disabled={assignedDelivery.status === 'delivered'}
+                disabled={activeTrip.status === 'delivered'}
                 onPress={handleAdvanceStatus}
                 rightIcon={<Ionicons name="arrow-forward" size={20} color={colors.white} />}
               />

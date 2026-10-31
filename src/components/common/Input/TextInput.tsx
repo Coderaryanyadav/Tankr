@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   StyleProp,
   StyleSheet,
   Text,
@@ -17,6 +18,8 @@ import { fontSizes, fontWeights } from '../../../theme/typography';
 export interface TextInputProps extends RNTextInputProps {
   label?: string;
   error?: string;
+  success?: boolean;
+  loading?: boolean;
   helperText?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -27,6 +30,8 @@ export interface TextInputProps extends RNTextInputProps {
 export const TextInput: React.FC<TextInputProps> = ({
   label,
   error,
+  success,
+  loading = false,
   helperText,
   leftIcon,
   rightIcon,
@@ -47,6 +52,7 @@ export const TextInput: React.FC<TextInputProps> = ({
         style={[
           styles.inputContainer,
           isFocused && styles.inputFocused,
+          Boolean(success) && styles.inputSuccess,
           Boolean(error) && styles.inputError,
           !editable && styles.inputDisabled,
         ]}
@@ -55,7 +61,7 @@ export const TextInput: React.FC<TextInputProps> = ({
 
         <RNTextInput
           placeholderTextColor={colors.textMuted}
-          editable={editable}
+          editable={editable && !loading}
           onFocus={(e) => {
             setIsFocused(true);
             onFocus?.(e);
@@ -68,7 +74,13 @@ export const TextInput: React.FC<TextInputProps> = ({
           {...rest}
         />
 
-        {rightIcon && <View style={styles.rightIconWrapper}>{rightIcon}</View>}
+        {loading ? (
+          <View style={styles.rightIconWrapper}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : rightIcon ? (
+          <View style={styles.rightIconWrapper}>{rightIcon}</View>
+        ) : null}
       </View>
 
       {error ? (
@@ -105,12 +117,16 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.white,
   },
+  inputSuccess: {
+    borderColor: colors.success,
+  },
   inputError: {
     borderColor: colors.error,
   },
   inputDisabled: {
     backgroundColor: colors.backgroundMuted,
     borderColor: colors.divider,
+    opacity: 0.7,
   },
   input: {
     flex: 1,
@@ -143,4 +159,3 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
 });
-

@@ -27,6 +27,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
   const { user, profile, updateProfile } = useAuthStore();
 
   const [fullName, setFullName] = useState(profile?.full_name || 'Jeet');
+  const [phoneNumber, setPhoneNumber] = useState(
+    profile?.phone_number || user?.phone || '919876543210'
+  );
   const [city, setCity] = useState(profile?.city || 'Mumbai');
   const [preferredAddress, setPreferredAddress] = useState(
     profile?.preferred_address || 'Building A, Flat 301, Near ruby bar'
@@ -34,8 +37,6 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
   const [pincode, setPincode] = useState(profile?.pincode || '400059');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
-
-  const displayPhone = user?.phone || profile?.phone_number || '+91 91987 65432';
 
   const handleSave = async () => {
     if (!fullName.trim()) return;
@@ -46,6 +47,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
     try {
       await updateProfile({
         fullName: fullName.trim(),
+        phone: phoneNumber.trim(),
         city,
         preferredAddress: preferredAddress.trim(),
         pincode: pincode.trim(),
@@ -135,21 +137,25 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ visible, onC
               />
             </View>
 
-            {/* Field: Phone (Verified / Read-Only) */}
+            {/* Field: Phone Number */}
             <View style={styles.fieldGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
                 <View style={styles.verifiedTag}>
                   <Ionicons name="shield-checkmark" size={12} color="#16A34A" />
-                  <Text style={styles.verifiedTagText}>OTP Verified</Text>
+                  <Text style={styles.verifiedTagText}>Active</Text>
                 </View>
               </View>
-              <View style={styles.disabledInputRow}>
-                <Text style={styles.disabledInputText}>{displayPhone}</Text>
-                <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
-              </View>
+              <TextInput
+                style={styles.textInput}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="Enter mobile number"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+              />
               <Text style={styles.helperText}>
-                Phone number is linked to your OTP authentication session.
+                Primary contact number used for tanker delivery alerts & dispatch coordination.
               </Text>
             </View>
 

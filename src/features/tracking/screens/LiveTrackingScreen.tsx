@@ -17,13 +17,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { ConfirmDialog } from '../../../components/common/Overlay/ConfirmDialog';
 import { LiveTrackingState, TrackingService } from '../../../services/tracking/trackingService';
 import { supabase } from '../../../services/supabase/client';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG, BookingStatus } from '../../../types/booking';
-import { confirmAction, notify } from '../../../utils/alertUtils';
+import { notify } from '../../../utils/alertUtils';
 import { InvoiceViewModal } from '../../orders/components/InvoiceViewModal';
 import { invoiceService, InvoiceRecord } from '../../../services/invoice/invoiceService';
 
@@ -56,13 +57,16 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
   const [invoiceData, setInvoiceData] = useState<InvoiceRecord | null>(null);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [layoutWidth, setLayoutWidth] = useState<number>(() => {
     const w = Dimensions.get('window').width;
     return w > 520 ? 430 : w;
   });
 
-  const isPending = activeBooking?.status === 'pending' || activeBooking?.status === 'supplier_assigned';
-  const isAccepted = activeBooking?.status === 'accepted' || activeBooking?.status === 'driver_assigned';
+  const isPending = activeBooking?.status === 'pending';
+  const isAccepted = activeBooking?.status === 'accepted' || activeBooking?.status === 'supplier_assigned';
+  const isDriverAssigned = activeBooking?.status === 'driver_assigned';
   const isEnRoute = activeBooking?.status === 'en_route';
   const isArrived = activeBooking?.status === 'arrived';
   const isDelivering = activeBooking?.status === 'delivering';
@@ -70,10 +74,12 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
   const handleSimulateNextStep = async () => {
     if (!activeBooking) return;
-    let nextStatus: BookingStatus = 'driver_assigned';
+    let nextStatus: BookingStatus = 'accepted';
     if (isPending) {
-      nextStatus = 'driver_assigned';
+      nextStatus = 'accepted';
     } else if (isAccepted) {
+      nextStatus = 'driver_assigned';
+    } else if (isDriverAssigned) {
       nextStatus = 'en_route';
     } else if (isEnRoute) {
       nextStatus = 'arrived';
@@ -108,6 +114,25 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     }
   };
 
+  const handleConfirmCancel = async () => {
+    if (!activeBooking) return;
+    setIsCancelling(true);
+    try {
+      const res = await cancelBooking(activeBooking.id, 'Customer cancelled trip');
+      setIsCancelling(false);
+      setCancelModalVisible(false);
+      if (res && !res.success) {
+        notify('Cancellation Notice', res.error || 'Could not cancel delivery.');
+      } else {
+        notify('Trip Cancelled', 'Your water tanker delivery has been cancelled.');
+        if (onBack) onBack();
+      }
+    } catch {
+      setIsCancelling(false);
+      setCancelModalVisible(false);
+    }
+  };
+
   const handleViewInvoice = async () => {
     if (!activeBooking) return;
     const inv = await invoiceService.getInvoiceByBookingId(activeBooking.id);
@@ -127,16 +152,20 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     }
   }, [userBookings.length, user?.id, fetchUserBookings]);
 
-  // If no active booking selected, auto-select the first active delivery (or most recent booking)
+  // If no active booking selected, auto-select the first active delivery
   useEffect(() => {
     if (!activeBooking) {
       if (activeTrips.length > 0) {
         setActiveBooking(activeTrips[0]);
-      } else if (userBookings.length > 0) {
-        setActiveBooking(userBookings[0]);
+      }
+    } else if (activeBooking.status === 'cancelled') {
+      if (activeTrips.length > 0) {
+        setActiveBooking(activeTrips[0]);
+      } else {
+        setActiveBooking(null);
       }
     }
-  }, [activeBooking, activeTrips, userBookings, setActiveBooking]);
+  }, [activeBooking, activeTrips, setActiveBooking]);
 
   const centerLat = activeBooking?.delivery_latitude || 19.1171;
   const centerLng = activeBooking?.delivery_longitude || 72.8809;
@@ -252,12 +281,12 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             etaMinutes: eta,
           });
         } else if (isMounted) {
-          // If no breadcrumb recorded yet, retrieve assigned tanker or approach coordinate
+          // If no breadcrumb recorded yet, retrieve assigned tanker location when active
           let lat = activeBooking.delivery_latitude;
           let lng = activeBooking.delivery_longitude;
           let heading = 135;
 
-          if (activeBooking.tanker_id) {
+          if (activeBooking.tanker_id && (isEnRoute || isDriverAssigned || isArrived || isDelivering)) {
             const { data: tanker } = await supabase
               .from('tankers')
               .select('latitude, longitude, heading_degrees')
@@ -265,24 +294,10 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
               .maybeSingle();
 
             if (tanker?.latitude && tanker?.longitude) {
-              const dLatDiff = Math.abs(Number(tanker.latitude) - activeBooking.delivery_latitude);
-              const dLngDiff = Math.abs(Number(tanker.longitude) - activeBooking.delivery_longitude);
-              if (dLatDiff > 0.001 || dLngDiff > 0.001) {
-                lat = Number(tanker.latitude);
-                lng = Number(tanker.longitude);
-                heading = Number(tanker.heading_degrees || 135);
-              }
+              lat = Number(tanker.latitude);
+              lng = Number(tanker.longitude);
+              heading = Number(tanker.heading_degrees || 135);
             }
-          }
-
-          // If coordinates still equal destination and trip is in progress, place tanker along the approach corridor (~1.5km out)
-          if (
-            Math.abs(lat - activeBooking.delivery_latitude) < 0.001 &&
-            Math.abs(lng - activeBooking.delivery_longitude) < 0.001 &&
-            activeBooking.status !== 'delivered'
-          ) {
-            lat = activeBooking.delivery_latitude + 0.008;
-            lng = activeBooking.delivery_longitude - 0.007;
           }
 
           const distKm = Number(activeBooking.delivery_distance_km) || 1.8;
@@ -294,7 +309,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             currentLat: lat,
             currentLng: lng,
             heading,
-            speedKmh: activeBooking.status === 'en_route' ? 24 : 0,
+            speedKmh: isEnRoute ? 24 : 0,
             lastUpdated: new Date(),
             isStale: false,
             distanceRemainingKm: distKm,
@@ -464,8 +479,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
           ))}
         </View>
 
-        {/* Tanker Marker (Moving with Heading Bearing) - Only rendered when assigned and active */}
-        {!isPending && !isDelivered && (
+        {/* Tanker Marker (Moving with Heading Bearing) - Only rendered when assigned and en route/arrived/delivering */}
+        {(isEnRoute || isArrived || isDelivering) && (
           <View
             style={[
               styles.tankerVehiclePin,
@@ -509,7 +524,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             style={[
               styles.greenPulse,
               isPending && { backgroundColor: '#F59E0B' },
-              isAccepted && { backgroundColor: '#0284C7' },
+              (isAccepted || isDriverAssigned) && { backgroundColor: '#0284C7' },
               (isArrived || isDelivered) && { backgroundColor: '#16A34A' },
             ]}
           />
@@ -517,7 +532,9 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             {isPending
               ? 'Connecting Supplier Dispatch Desk...'
               : isAccepted
-              ? 'Driver Staging at Supplier Depot'
+              ? 'Order Confirmed • Staging Depot'
+              : isDriverAssigned
+              ? 'Driver Staged • Pre-trip Check'
               : isEnRoute
               ? `Live GPS Connected • ${trackingState?.speedKmh || 24} km/h`
               : isArrived
@@ -542,6 +559,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                 {isPending
                   ? 'Connecting with Supplier...'
                   : isAccepted
+                  ? 'Order Confirmed by Supplier'
+                  : isDriverAssigned
                   ? 'Driver Assigned • Staging Tanker'
                   : isEnRoute
                   ? `Arriving in ~${trackingState?.etaMinutes || activeBooking.estimated_arrival_minutes || 8} mins`
@@ -555,14 +574,16 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                 {isPending
                   ? `Request sent to ${activeBooking.supplier_name || 'verified supplier'} • Awaiting confirmation`
                   : isAccepted
-                  ? `${activeBooking.driver_name || 'Sunil Pawar'} is inspecting tanker for dispatch`
+                  ? `${activeBooking.supplier_name || 'Supplier'} is preparing tanker at the depot.`
+                  : isDriverAssigned
+                  ? `${activeBooking.driver_name || 'Driver'} is inspecting tanker for departure`
                   : isEnRoute
                   ? `${trackingState?.distanceRemainingKm || activeBooking.delivery_distance_km || 1.8} km away • ${activeBooking.delivery_address}`
                   : isArrived
                   ? `Parked outside • Ready to connect discharge hose`
                   : isDelivering
                   ? `Ultrasonic flow-meter measuring pumping rate (~350 L/min)`
-                  : `${activeBooking.capacity_liters.toLocaleString()} L Potable Water filled to sump.`}
+                  : `${activeBooking.capacity_liters.toLocaleString('en-IN')} L Potable Water filled to sump.`}
               </Text>
             </View>
 
@@ -580,9 +601,19 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             <View style={styles.pendingNoticeCard}>
               <Ionicons name="time" size={24} color="#D97706" />
               <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                <Text style={styles.pendingNoticeTitle}>Awaiting Driver Acceptance</Text>
+                <Text style={styles.pendingNoticeTitle}>Awaiting Supplier Acceptance</Text>
                 <Text style={styles.pendingNoticeSub}>
                   Assigned driver name, live GPS telemetry and vehicle registration will appear once accepted.
+                </Text>
+              </View>
+            </View>
+          ) : isAccepted ? (
+            <View style={styles.pendingNoticeCard}>
+              <Ionicons name="hourglass-outline" size={24} color="#0284C7" />
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <Text style={[styles.pendingNoticeTitle, { color: '#0369A1' }]}>Preparing Tanker at Depot</Text>
+                <Text style={[styles.pendingNoticeSub, { color: '#0284C7' }]}>
+                  {activeBooking.supplier_name || 'Supplier'} has confirmed availability and is assigning the delivery vehicle.
                 </Text>
               </View>
             </View>
@@ -595,7 +626,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
               <View style={styles.driverDetails}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.driverName}>
-                    {activeBooking.driver_name || 'Sunil Pawar'}
+                    {activeBooking.driver_name || 'Assigned Driver'}
                   </Text>
                   <View style={styles.verifiedBadge}>
                     <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
@@ -603,7 +634,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                   </View>
                 </View>
                 <Text style={styles.vehicleRegText}>
-                  {activeBooking.vehicle_number || 'MH-02-TN-1001'} • {activeBooking.supplier_name || 'Marol Express Water Logistics'}
+                  {activeBooking.vehicle_number || 'Vehicle Assigned'} • {activeBooking.supplier_name || 'Water Logistics'}
                 </Text>
               </View>
 
@@ -699,7 +730,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
               <>
                 <View style={{ flex: 1, marginRight: spacing.xs }}>
                   <Button
-                    title={isPending ? "Contact Supplier" : "Call Driver"}
+                    title={isPending || isAccepted ? "Contact Supplier" : "Call Driver"}
                     variant="secondary"
                     size="md"
                     onPress={handleCallDriver}
@@ -712,22 +743,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                     title={isPending ? "Cancel Request" : "Cancel"}
                     variant="outline"
                     size="md"
-                    onPress={() => {
-                      confirmAction(
-                        'Cancel Delivery?',
-                        'Are you sure you want to cancel this water delivery?',
-                        async () => {
-                          const res = await cancelBooking(activeBooking.id, 'Customer cancelled trip');
-                          if (res && !res.success) {
-                            notify('Cancellation Notice', res.error || 'Could not cancel delivery.');
-                          } else {
-                            notify('Trip Cancelled', 'Your water tanker delivery has been cancelled.');
-                            if (onBack) onBack();
-                          }
-                        },
-                        'Cancel'
-                      );
-                    }}
+                    onPress={() => setCancelModalVisible(true)}
                   />
                 </View>
               </>
@@ -745,8 +761,10 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
               <Ionicons name="play-forward" size={13} color={colors.primary} />
               <Text style={styles.simStepperText}>
                 {isPending
-                  ? 'Simulate: Driver Acceptance ➔'
+                  ? 'Simulate: Supplier Acceptance ➔'
                   : isAccepted
+                  ? 'Simulate: Driver Assigned ➔'
+                  : isDriverAssigned
                   ? 'Simulate: Tanker En Route ➔'
                   : isEnRoute
                   ? 'Simulate: Tanker Arrival at Sump ➔'
@@ -758,6 +776,20 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
           )}
         </ScrollView>
       </View>
+
+      {/* Confirm Cancellation In-App Modal with Close (X) button */}
+      <ConfirmDialog
+        visible={cancelModalVisible}
+        title="Cancel Water Delivery?"
+        message="Are you sure you want to cancel this booking? If the tanker is already en route, cancellation policies may apply."
+        confirmLabel="Confirm Cancellation"
+        cancelLabel="Keep Order"
+        isDestructive={true}
+        isLoading={isCancelling}
+        iconName="close-circle-outline"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelModalVisible(false)}
+      />
 
       {/* Invoice View Modal */}
       {invoiceModalVisible && (
@@ -942,12 +974,12 @@ const styles = StyleSheet.create({
     color: colors.darkNavy,
   },
   bottomTripSheet: {
+    flex: 1,
     backgroundColor: colors.cardSurface,
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
     borderTopWidth: 1,
     borderTopColor: colors.cardBorder,
-    maxHeight: Math.min(SCREEN_HEIGHT * 0.54, 460),
     ...shadows.modal,
   },
   bottomTripScrollContent: {

@@ -1,28 +1,33 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Image,
   Pressable,
+  StyleProp,
   StyleSheet,
   Text,
   View,
+  ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NearbyTanker } from '../../../types/discovery';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, colors, fontSizes, fontWeights, shadows, spacing } from '../../../theme';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const MAP_HEIGHT = 280;
 const TILE_SIZE = 256;
 
-interface InteractiveMapProps {
+export interface InteractiveMapProps {
   userLocation: { latitude: number; longitude: number };
   tankers: NearbyTanker[];
   selectedTankerId: string | null;
   onSelectTanker: (tankerId: string) => void;
   onRecenterGps: () => void;
   isLocating?: boolean;
+  isLoading?: boolean;
+  hasLocationPermission?: boolean;
+  onRequestPermission?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 // Convert WGS84 Lat/Lng to Slippy Map Tile Coordinates
@@ -42,15 +47,24 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   onSelectTanker,
   onRecenterGps,
   isLocating = false,
+  isLoading = false,
+  hasLocationPermission = true,
+  onRequestPermission,
+  style,
 }) => {
   // Zoom level: 12 (city overview) to 15 (detailed neighborhood streets)
   const [zoom, setZoom] = useState<number>(13);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const radarSweepAnim = useRef(new Animated.Value(0)).current;
 
-  // Dynamic layout measurement so mobile container or web frame is always accurately centered
-  const [layoutWidth, setLayoutWidth] = useState<number>(() => {
+  // Responsive dimensions for map canvas
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
     const w = Dimensions.get('window').width;
-    return w > 520 ? 430 : w;
+    const h = Dimensions.get('window').height;
+    return {
+      width: w > 520 ? 430 : w,
+      height: 380,
+    };
   });
 
   // Radar pulse animation for customer GPS pin
@@ -58,13 +72,13 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.8,
-          duration: 1500,
+          toValue: 2.0,
+          duration: 1600,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1500,
+          duration: 1600,
           useNativeDriver: true,
         }),
       ])
@@ -73,24 +87,39 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  // Calculate Real-World Map Tiles to cover the viewport
+  // Radar sweep for map loading state
+  useEffect(() => {
+    if (isLoading) {
+      const sweep = Animated.loop(
+        Animated.timing(radarSweepAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      );
+      sweep.start();
+      return () => sweep.stop();
+    }
+  }, [isLoading, radarSweepAnim]);
+
+  // Calculate Real-World Map Tiles to cover the viewport dynamically
   const mapTiles = useMemo(() => {
     const center = projectToTileCoords(userLocation.latitude, userLocation.longitude, zoom);
     const centerTileX = Math.floor(center.x);
     const centerTileY = Math.floor(center.y);
 
     const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
-    const halfTilesX = Math.max(1, Math.ceil(layoutWidth / (2 * TILE_SIZE)) + 1);
+    const halfTilesX = Math.max(1, Math.ceil(dimensions.width / (2 * TILE_SIZE)) + 1);
+    const halfTilesY = Math.max(1, Math.ceil(dimensions.height / (2 * TILE_SIZE)) + 1);
 
     // Grid around center tile
     for (let dx = -halfTilesX; dx <= halfTilesX; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
+      for (let dy = -halfTilesY; dy <= halfTilesY; dy++) {
         const tileX = centerTileX + dx;
         const tileY = centerTileY + dy;
-        const left = (tileX - center.x) * TILE_SIZE + layoutWidth / 2;
-        const top = (tileY - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
+        const left = (tileX - center.x) * TILE_SIZE + dimensions.width / 2;
+        const top = (tileY - center.y) * TILE_SIZE + dimensions.height / 2;
 
-        // OpenStreetMap global CDN tiles (fast, crisp Mumbai cartography, zero watermark)
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
           url: `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`,
@@ -100,26 +129,26 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     }
     return tiles;
-  }, [userLocation.latitude, userLocation.longitude, zoom, layoutWidth]);
+  }, [userLocation.latitude, userLocation.longitude, zoom, dimensions]);
 
-  // Calculate real GPS positions for tankers with proximity collision resolution
+  // Calculate real GPS positions for tankers with proximity collision avoidance
   const placedTankers = useMemo(() => {
-    const topTankers = tankers.slice(0, 6);
+    const topTankers = tankers.slice(0, 8);
     const center = projectToTileCoords(userLocation.latitude, userLocation.longitude, zoom);
 
     const placed: Array<{ tanker: NearbyTanker; left: number; top: number }> = [];
-    const reservedCenter = { x: layoutWidth / 2, y: MAP_HEIGHT / 2 };
-    const minDistance = 58;
+    const reservedCenter = { x: dimensions.width / 2, y: dimensions.height / 2 };
+    const minDistance = 64;
 
     topTankers.forEach((tanker, index) => {
       const projected = projectToTileCoords(tanker.latitude, tanker.longitude, zoom);
-      let rawX = (projected.x - center.x) * TILE_SIZE + layoutWidth / 2;
-      let rawY = (projected.y - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
+      let rawX = (projected.x - center.x) * TILE_SIZE + dimensions.width / 2;
+      let rawY = (projected.y - center.y) * TILE_SIZE + dimensions.height / 2;
 
       // Proximity check against center pin and previously placed tankers
       let attempts = 0;
       let collision = true;
-      let angle = (index * 60 * Math.PI) / 180;
+      let angle = (index * 45 * Math.PI) / 180;
       let offsetRadius = 0;
 
       while (collision && attempts < 8) {
@@ -130,33 +159,33 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         let distOthers = true;
 
         for (const p of placed) {
-          const d = Math.hypot(testX - (p.left + 40), testY - (p.top + 14));
+          const d = Math.hypot(testX - (p.left + 45), testY - (p.top + 16));
           if (d < minDistance) {
             distOthers = false;
             break;
           }
         }
 
-        if (distCenter >= 40 && distOthers) {
+        if (distCenter >= 44 && distOthers) {
           rawX = testX;
           rawY = testY;
           collision = false;
         } else {
-          offsetRadius += 26;
-          angle += Math.PI / 3;
+          offsetRadius += 28;
+          angle += Math.PI / 4;
           attempts++;
         }
       }
 
-      // Constrain inside visible map canvas
-      const left = Math.max(12, Math.min(layoutWidth - 96, rawX - 40));
-      const top = Math.max(20, Math.min(MAP_HEIGHT - 48, rawY - 14));
+      // Constrain inside visible map canvas with margins
+      const left = Math.max(16, Math.min(dimensions.width - 110, rawX - 45));
+      const top = Math.max(30, Math.min(dimensions.height - 60, rawY - 16));
 
       placed.push({ tanker, left, top });
     });
 
     return placed;
-  }, [tankers, userLocation.latitude, userLocation.longitude, zoom, layoutWidth]);
+  }, [tankers, userLocation.latitude, userLocation.longitude, zoom, dimensions]);
 
   const getCapacityLabel = (capacity: number) => {
     return `${(capacity / 1000).toFixed(0)}kL`;
@@ -164,11 +193,15 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   return (
     <View
-      style={styles.mapContainer}
+      style={[styles.mapContainer, style]}
       onLayout={(e) => {
-        const w = e.nativeEvent.layout.width;
-        if (w > 50 && Math.abs(w - layoutWidth) > 4) {
-          setLayoutWidth(w);
+        const { width, height } = e.nativeEvent.layout;
+        if (
+          width > 50 &&
+          height > 50 &&
+          (Math.abs(width - dimensions.width) > 4 || Math.abs(height - dimensions.height) > 4)
+        ) {
+          setDimensions({ width, height });
         }
       }}
     >
@@ -190,13 +223,41 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         ))}
       </View>
 
-      {/* Customer Location Pin ("You") Centered on Map */}
+      {/* Loading Radar Overlay */}
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.loadingText}>Scanning for nearby water tankers...</Text>
+        </View>
+      )}
+
+      {/* Location Permission Missing Banner */}
+      {!hasLocationPermission && (
+        <View style={styles.permissionBanner}>
+          <Ionicons name="location-outline" size={16} color={colors.warning} />
+          <Text style={styles.permissionText}>
+            GPS location disabled. Using default Mumbai service center.
+          </Text>
+          {onRequestPermission && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Enable GPS location"
+              onPress={onRequestPermission}
+              style={styles.enableGpsBtn}
+            >
+              <Text style={styles.enableGpsBtnText}>Enable</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* Customer Location Pin ("Your Sump") Centered on Map */}
       <View
         style={[
           styles.customerPinContainer,
           {
-            left: layoutWidth / 2 - 14,
-            top: MAP_HEIGHT / 2 - 14,
+            left: dimensions.width / 2 - 14,
+            top: dimensions.height / 2 - 14,
           },
         ]}
       >
@@ -206,8 +267,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             {
               transform: [{ scale: pulseAnim }],
               opacity: pulseAnim.interpolate({
-                inputRange: [1, 1.8],
-                outputRange: [0.55, 0],
+                inputRange: [1, 2.0],
+                outputRange: [0.6, 0],
               }),
             },
           ]}
@@ -216,11 +277,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <View style={styles.customerPinCenterDot} />
         </View>
         <View style={styles.youBadge}>
-          <Text style={styles.youBadgeText}>You</Text>
+          <Ionicons name="home" size={9} color={colors.white} style={{ marginRight: 2 }} />
+          <Text style={styles.youBadgeText}>Your Sump</Text>
         </View>
       </View>
 
-      {/* Real-Time Live Tanker Pins */}
+      {/* Real-Time Live Tanker Markers */}
       {placedTankers.map(({ tanker, left, top }) => {
         const isSelected = selectedTankerId === tanker.tanker_id;
         const capText = getCapacityLabel(tanker.capacity_liters);
@@ -229,7 +291,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <Pressable
             key={tanker.tanker_id}
             accessibilityRole="button"
-            accessibilityLabel={`${tanker.supplier_name}, ${capText}, ETA ${tanker.eta_minutes} mins`}
+            accessibilityLabel={`${tanker.supplier_name}, ${capText}, ₹${tanker.estimated_total_price}, ETA ${tanker.eta_minutes} mins`}
             onPress={() => onSelectTanker(tanker.tanker_id)}
             style={[
               styles.markerPill,
@@ -237,6 +299,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               { left, top },
             ]}
           >
+            {/* Pulsing ring for selected tanker */}
+            {isSelected && <View style={styles.selectedMarkerAura} />}
+
             <View
               style={[
                 styles.markerIconCircle,
@@ -245,46 +310,54 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             >
               <Ionicons
                 name="water"
-                size={12}
+                size={13}
                 color={isSelected ? colors.white : colors.primary}
               />
             </View>
 
-            <Text
-              style={[
-                styles.markerCapacityText,
-                isSelected ? styles.textWhite : styles.textNavy,
-              ]}
-            >
-              {capText}
-            </Text>
+            <View style={styles.markerContent}>
+              <View style={styles.markerTopRow}>
+                <Text
+                  style={[
+                    styles.markerCapacityText,
+                    isSelected ? styles.textWhite : styles.textNavy,
+                  ]}
+                >
+                  {capText}
+                </Text>
+                <Text
+                  style={[
+                    styles.markerEtaText,
+                    isSelected ? styles.textWhite : styles.textPrimary,
+                  ]}
+                >
+                  {tanker.eta_minutes}m
+                </Text>
+              </View>
 
-            <Text style={[styles.markerBullet, isSelected ? styles.textWhite : styles.textMuted]}>
-              •
-            </Text>
-
-            <Text
-              style={[
-                styles.markerEtaText,
-                isSelected ? styles.textWhite : styles.textPrimary,
-              ]}
-            >
-              {tanker.eta_minutes}m
-            </Text>
+              <Text
+                style={[
+                  styles.markerPriceText,
+                  isSelected ? styles.textWhiteMuted : styles.textSecondary,
+                ]}
+              >
+                ₹{tanker.estimated_total_price}
+              </Text>
+            </View>
           </Pressable>
         );
       })}
 
       {/* Map Attribution */}
       <View style={styles.attributionPill}>
-        <Text style={styles.attributionText}>© OpenStreetMap © CARTO</Text>
+        <Text style={styles.attributionText}>© OpenStreetMap</Text>
       </View>
 
       {/* Zoom Controls (Top Right) */}
       <View style={styles.zoomControls}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Zoom in"
+          accessibilityLabel="Zoom in map"
           onPress={() => setZoom((z) => Math.min(15, z + 1))}
           style={styles.zoomButton}
         >
@@ -293,7 +366,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <View style={styles.zoomDivider} />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Zoom out"
+          accessibilityLabel="Zoom out map"
           onPress={() => setZoom((z) => Math.max(12, z - 1))}
           style={styles.zoomButton}
         >
@@ -305,16 +378,16 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       <View style={styles.recenterWrapper}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Center map to current location"
+          accessibilityLabel="Center map to my sump GPS location"
           onPress={onRecenterGps}
           disabled={isLocating}
           style={({ pressed }) => [styles.gpsButton, pressed && { opacity: 0.8 }]}
         >
-          <Ionicons
-            name="locate"
-            size={20}
-            color={isLocating ? colors.primaryLight : colors.primary}
-          />
+          {isLocating ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons name="locate" size={20} color={colors.primary} />
+          )}
         </Pressable>
       </View>
     </View>
@@ -324,8 +397,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 const styles = StyleSheet.create({
   mapContainer: {
     width: '100%',
-    height: MAP_HEIGHT,
-    backgroundColor: '#EBF2F7', // Neutral street map tone while tiles load
+    flex: 1,
+    minHeight: 250,
+    backgroundColor: '#EBF2F7',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -337,6 +411,58 @@ const styles = StyleSheet.create({
     width: TILE_SIZE,
     height: TILE_SIZE,
   },
+  loadingOverlay: {
+    position: 'absolute',
+    top: spacing.md,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+    zIndex: 30,
+    ...shadows.card,
+  },
+  loadingText: {
+    fontSize: fontSizes.xs,
+    fontWeight: fontWeights.semibold,
+    color: colors.primary,
+  },
+  permissionBanner: {
+    position: 'absolute',
+    top: spacing.sm,
+    left: spacing.md,
+    right: spacing.md,
+    backgroundColor: colors.warningLight,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 40,
+    gap: spacing.xs,
+    ...shadows.subtle,
+  },
+  permissionText: {
+    flex: 1,
+    fontSize: fontSizes.xs - 1,
+    color: colors.darkNavy,
+  },
+  enableGpsBtn: {
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+  },
+  enableGpsBtnText: {
+    fontSize: fontSizes.xs - 2,
+    fontWeight: fontWeights.bold,
+    color: colors.white,
+  },
   customerPinContainer: {
     position: 'absolute',
     alignItems: 'center',
@@ -347,14 +473,14 @@ const styles = StyleSheet.create({
   },
   radarRing: {
     position: 'absolute',
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
   },
   customerPinCore: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: borderRadius.full,
     backgroundColor: colors.primary,
     borderWidth: 3,
@@ -364,18 +490,20 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   customerPinCenterDot: {
-    width: 5,
-    height: 5,
+    width: 6,
+    height: 6,
     borderRadius: borderRadius.full,
     backgroundColor: colors.white,
   },
   youBadge: {
     position: 'absolute',
-    top: -18,
+    top: -20,
     backgroundColor: colors.darkNavy,
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 2,
     borderRadius: borderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
     ...shadows.subtle,
   },
   youBadgeText: {
@@ -387,9 +515,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
-    height: 28,
     paddingHorizontal: 8,
-    borderRadius: borderRadius.full,
+    paddingVertical: 4,
+    borderRadius: borderRadius.xl,
     zIndex: 10,
     ...shadows.card,
   },
@@ -400,85 +528,103 @@ const styles = StyleSheet.create({
   },
   markerPillSelected: {
     backgroundColor: colors.primary,
-    borderColor: colors.primaryHover,
     borderWidth: 1.5,
-    zIndex: 30,
-    transform: [{ scale: 1.08 }],
+    borderColor: colors.white,
+    zIndex: 35,
+    transform: [{ scale: 1.06 }],
     ...shadows.floating,
   },
+  selectedMarkerAura: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: borderRadius.xl + 4,
+    backgroundColor: 'rgba(11, 100, 192, 0.25)',
+  },
   markerIconCircle: {
-    width: 18,
-    height: 18,
+    width: 24,
+    height: 24,
     borderRadius: borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 4,
+    marginRight: 6,
   },
   markerIconCircleDefault: {
-    backgroundColor: '#E0F2FE',
+    backgroundColor: colors.primaryLight,
   },
   markerIconCircleSelected: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: colors.primaryHover,
+  },
+  markerContent: {
+    justifyContent: 'center',
+  },
+  markerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   markerCapacityText: {
-    fontSize: 11,
+    fontSize: fontSizes.xs,
     fontWeight: fontWeights.bold,
-  },
-  markerBullet: {
-    fontSize: 10,
-    marginHorizontal: 3,
   },
   markerEtaText: {
-    fontSize: 11,
-    fontWeight: fontWeights.bold,
+    fontSize: fontSizes.xs - 1,
+    fontWeight: fontWeights.semibold,
+  },
+  markerPriceText: {
+    fontSize: fontSizes.xs - 2,
+    fontWeight: fontWeights.medium,
   },
   textNavy: {
     color: colors.darkNavy,
   },
-  textWhite: {
-    color: colors.white,
-  },
   textPrimary: {
     color: colors.primary,
   },
-  textMuted: {
-    color: colors.textMuted,
+  textSecondary: {
+    color: colors.textSecondary,
+  },
+  textWhite: {
+    color: colors.white,
+  },
+  textWhiteMuted: {
+    color: '#E0F2FE',
   },
   attributionPill: {
     position: 'absolute',
     bottom: 6,
     left: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    paddingHorizontal: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
-    zIndex: 5,
+    borderRadius: borderRadius.xs,
   },
   attributionText: {
     fontSize: 8,
-    color: colors.textMuted,
+    color: colors.textSecondary,
   },
   zoomControls: {
     position: 'absolute',
-    top: spacing.sm,
+    top: spacing.md,
     right: spacing.md,
     backgroundColor: colors.cardSurface,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    overflow: 'hidden',
     zIndex: 25,
     ...shadows.card,
   },
   zoomButton: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomDivider: {
-    height: 1,
-    backgroundColor: colors.cardBorder,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
   },
   recenterWrapper: {
     position: 'absolute',
@@ -487,14 +633,14 @@ const styles = StyleSheet.create({
     zIndex: 25,
   },
   gpsButton: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: borderRadius.full,
     backgroundColor: colors.cardSurface,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.card,
+    ...shadows.floating,
   },
 });

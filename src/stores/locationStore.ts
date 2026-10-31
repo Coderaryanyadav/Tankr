@@ -121,6 +121,18 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   },
 
   setActiveLocation: (addressText: string, coords: GeoLocation, label = 'Delivery Point') => {
+    // Geo-Sanity Guard: Reject Null Island (0, 0) and out-of-bounds WGS-84 coordinates
+    if (
+      (Math.abs(coords.latitude) < 0.0001 && Math.abs(coords.longitude) < 0.0001) ||
+      coords.latitude < -90 ||
+      coords.latitude > 90 ||
+      coords.longitude < -180 ||
+      coords.longitude > 180
+    ) {
+      console.warn('[LocationStore] Rejected invalid geo-coordinates (Null Island / Out-of-bounds):', coords);
+      return;
+    }
+
     set({
       activeAddressText: addressText,
       activeCoordinates: coords,

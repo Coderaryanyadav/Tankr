@@ -47,6 +47,7 @@ interface AuthState {
   }) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (data: {
     fullName?: string;
+    phone?: string;
     city?: string;
     preferredAddress?: string;
     pincode?: string;
@@ -329,6 +330,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateProfile: async (data: {
     fullName?: string;
+    phone?: string;
     city?: string;
     preferredAddress?: string;
     pincode?: string;
@@ -347,6 +349,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         pincode: '400001',
       }),
       full_name: data.fullName !== undefined ? data.fullName : (profile?.full_name || null),
+      phone_number: data.phone !== undefined ? data.phone : (profile?.phone_number || user?.phone || '+91 91987 65432'),
       city: data.city !== undefined ? data.city : (profile?.city || 'Mumbai'),
       preferred_address:
         data.preferredAddress !== undefined
@@ -363,6 +366,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .from('profiles')
           .update({
             full_name: updatedProfile.full_name,
+            phone_number: updatedProfile.phone_number,
             city: updatedProfile.city,
             preferred_address: updatedProfile.preferred_address,
             pincode: updatedProfile.pincode,

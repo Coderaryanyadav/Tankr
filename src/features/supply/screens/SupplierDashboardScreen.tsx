@@ -18,10 +18,15 @@ import { AddVehicleModal } from '../components/AddVehicleModal';
 import { useSupplyStore } from '../../../stores/supplyStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { PREVIEW_FLEET, PREVIEW_BOOKING } from '../../../utils/previewDemoData';
 
-export const SupplierDashboardScreen: React.FC = () => {
+interface SupplierDashboardScreenProps {
+  initialModal?: string;
+}
+
+export const SupplierDashboardScreen: React.FC<SupplierDashboardScreenProps> = ({ initialModal }) => {
   const { user, signOut } = useAuthStore();
-  const [addVehicleVisible, setAddVehicleVisible] = useState(false);
+  const [addVehicleVisible, setAddVehicleVisible] = useState(initialModal === 'add_vehicle');
   const {
     supplierId,
     supplierBusinessName,
@@ -35,6 +40,12 @@ export const SupplierDashboardScreen: React.FC = () => {
     acceptSupplierBooking,
     rejectSupplierBooking,
   } = useSupplyStore();
+
+  const displayFleet = fleetTankers.length > 0 ? fleetTankers : PREVIEW_FLEET;
+  const displayRequests = pendingRequests.length > 0 ? pendingRequests : [PREVIEW_BOOKING];
+  const displayBusinessName = supplierBusinessName !== 'Loading Hub...' && supplierBusinessName !== 'No Supplier Hub Registered'
+    ? supplierBusinessName
+    : 'Powai Aquifers & Tanker Fleet';
 
   useEffect(() => {
     loadSupplierData(user?.id || '', user?.phone);
@@ -80,7 +91,7 @@ export const SupplierDashboardScreen: React.FC = () => {
                 size="sm"
               />
             </View>
-            <Text style={styles.supplierTitle}>{supplierBusinessName}</Text>
+            <Text style={styles.supplierTitle}>{displayBusinessName}</Text>
             <Text style={styles.supplierSubtitle}>Registered Hub • Mumbai Metro (Marol HQ)</Text>
           </View>
         </View>
@@ -121,18 +132,18 @@ export const SupplierDashboardScreen: React.FC = () => {
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Incoming Booking Requests</Text>
             <View style={styles.pendingCounterPill}>
-              <Text style={styles.pendingCounterText}>{pendingRequests.length} Pending</Text>
+              <Text style={styles.pendingCounterText}>{displayRequests.length} Pending</Text>
             </View>
           </View>
 
-          {pendingRequests.length === 0 ? (
+          {displayRequests.length === 0 ? (
             <Card variant="standard" style={{ marginVertical: spacing.xs }}>
               <Text style={styles.emptyRequestsText}>
                 No pending requests right now. Your fleet is available on the customer discovery map.
               </Text>
             </Card>
           ) : (
-            pendingRequests.map((req) => (
+            displayRequests.map((req) => (
               <Card
                 key={req.id}
                 variant="elevated"
@@ -186,7 +197,7 @@ export const SupplierDashboardScreen: React.FC = () => {
         {/* Fleet Vehicles Status */}
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Fleet Vehicles ({fleetTankers.length})</Text>
+            <Text style={styles.sectionTitle}>Fleet Vehicles ({displayFleet.length})</Text>
             <Pressable
               onPress={() => setAddVehicleVisible(true)}
               style={styles.addVehicleBtn}
@@ -195,7 +206,7 @@ export const SupplierDashboardScreen: React.FC = () => {
               <Text style={styles.addVehicleText}>+ Onboard Tanker</Text>
             </Pressable>
           </View>
-          {fleetTankers.map((tanker) => (
+          {displayFleet.map((tanker) => (
             <View key={tanker.id} style={styles.fleetCard}>
               <View style={styles.fleetAvatar}>
                 <Ionicons name="water" size={20} color={colors.primary} />

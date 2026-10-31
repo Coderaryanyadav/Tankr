@@ -177,7 +177,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   applyFiltersAndSort: () => {
     const { nearbyTankers, selectedCapacityFilter, sortOption } = get();
 
-    let list = [...nearbyTankers];
+    // Only genuinely available tankers are displayed for booking
+    let list = nearbyTankers.filter((t) => t.is_available !== false);
 
     // Filter by capacity
     if (selectedCapacityFilter !== null) {

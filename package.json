@@ -41,6 +41,8 @@
     "test": "jest",
     "test:ci": "jest --watchAll=false",
     "typecheck": "tsc --noEmit",
+    "screenshots": "./scripts/capture-all-screenshots.sh",
+    "screenshots:open": "./scripts/capture-all-screenshots.sh --open",
     "tree": "tree -L 3 -I 'node_modules|.expo|dist|.git'",
     "setup": "./scripts/setup.sh",
     "verify": "./scripts/verify-project.sh"

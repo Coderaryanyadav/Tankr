@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +15,7 @@ import { Button } from '../../../components/common/Button/Button';
 import { Card } from '../../../components/common/Card/Card';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { PriceDisplay } from '../../../components/common/Card/PriceDisplay';
 import { TankerCardSkeleton } from '../../../components/common/Feedback/Skeleton';
 import { WaterQualityBadge } from './WaterQualityBadge';
 import {
@@ -21,9 +24,18 @@ import {
   TankerCapacityLiters,
   TankerSortOption,
 } from '../../../types/discovery';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, colors, fontSizes, fontWeights, shadows, spacing } from '../../../theme';
 
-const SCREEN_HEIGHT = Dimensions.get('window').height;
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// 3 Snap Heights
+const SNAP_HEIGHTS = {
+  collapsed: 140,
+  intermediate: Math.min(420, SCREEN_HEIGHT * 0.52),
+  expanded: Math.min(680, SCREEN_HEIGHT * 0.85),
+};
+
+export type BottomSheetSnapState = 'collapsed' | 'intermediate' | 'expanded';
 
 interface DiscoveryBottomSheetProps {
   tankers: NearbyTanker[];
@@ -33,6 +45,8 @@ interface DiscoveryBottomSheetProps {
   isLoading: boolean;
   isRefreshing: boolean;
   deliveryAddress: string;
+  snapState?: BottomSheetSnapState;
+  onSnapStateChange?: (state: BottomSheetSnapState) => void;
   onChangeAddress: () => void;
   onRefresh: () => void;
   onSelectTanker: (tankerId: string) => void;
@@ -49,6 +63,8 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
   isLoading,
   isRefreshing,
   deliveryAddress,
+  snapState = 'intermediate',
+  onSnapStateChange,
   onChangeAddress,
   onRefresh,
   onSelectTanker,
@@ -56,6 +72,39 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
   onSelectSortOption,
   onBookSelectedTanker,
 }) => {
+  const [currentSnap, setCurrentSnap] = useState<BottomSheetSnapState>(snapState);
+  const heightAnim = useRef(new Animated.Value(SNAP_HEIGHTS[snapState])).current;
+
+  const animateToSnap = (nextSnap: BottomSheetSnapState) => {
+    setCurrentSnap(nextSnap);
+    onSnapStateChange?.(nextSnap);
+    Animated.spring(heightAnim, {
+      toValue: SNAP_HEIGHTS[nextSnap],
+      useNativeDriver: false,
+      tension: 200,
+      friction: 22,
+    }).start();
+  };
+
+  // PanResponder to handle drag gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 10,
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -50) {
+          // Dragged up
+          if (currentSnap === 'collapsed') animateToSnap('intermediate');
+          else if (currentSnap === 'intermediate') animateToSnap('expanded');
+        } else if (gestureState.dy > 50) {
+          // Dragged down
+          if (currentSnap === 'expanded') animateToSnap('intermediate');
+          else if (currentSnap === 'intermediate') animateToSnap('collapsed');
+        }
+      },
+    })
+  ).current;
+
   const selectedTanker = tankers.find((t) => t.tanker_id === selectedTankerId) || tankers[0];
 
   const getCapacityDisplay = (liters: number) => {
@@ -63,13 +112,37 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
   };
 
   return (
-    <View style={styles.sheetContainer}>
-      {/* Draggable Drag Handle Bar */}
-      <View style={styles.dragHandleWrapper}>
+    <Animated.View style={[styles.sheetContainer, { height: heightAnim }]}>
+      {/* Draggable Header Bar */}
+      <View {...panResponder.panHandlers} style={styles.dragHandleWrapper}>
         <View style={styles.dragBar} />
+        <View style={styles.dragHandleIndicators}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Snap state: ${currentSnap}`}
+            onPress={() => {
+              if (currentSnap === 'collapsed') animateToSnap('intermediate');
+              else if (currentSnap === 'intermediate') animateToSnap('expanded');
+              else animateToSnap('intermediate');
+            }}
+            style={styles.snapStateToggle}
+          >
+            <Ionicons
+              name={
+                currentSnap === 'expanded'
+                  ? 'chevron-down'
+                  : currentSnap === 'collapsed'
+                  ? 'chevron-up'
+                  : 'swap-vertical'
+              }
+              size={18}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        </View>
       </View>
 
-      {/* Delivery Destination Row */}
+      {/* 1. Delivering To Address Row (Visible in all states) */}
       <View style={styles.destinationBar}>
         <Pressable
           accessibilityRole="button"
@@ -92,7 +165,6 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
           </View>
         </Pressable>
 
-        {/* Refresh Availability */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Refresh nearby availability"
@@ -108,285 +180,308 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
         </Pressable>
       </View>
 
-      {/* Configurable Capacity Filter Chips */}
-      <View style={styles.filterSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
+      {/* STATE A: COLLAPSED VIEW */}
+      {currentSnap === 'collapsed' && selectedTanker && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Expand fleet options"
+          onPress={() => animateToSnap('intermediate')}
+          style={styles.collapsedSummaryCard}
         >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="All Capacities"
-            onPress={() => onSelectCapacityFilter(null)}
-            style={[
-              styles.filterChip,
-              selectedCapacityFilter === null && styles.filterChipActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.filterChipText,
-                selectedCapacityFilter === null && styles.filterChipTextActive,
-              ]}
-            >
-              All Capacities ({tankers.length})
+          <View style={styles.collapsedInfo}>
+            <View style={styles.collapsedBadgeRow}>
+              <View style={styles.capacityBadge}>
+                <Ionicons name="water" size={12} color={colors.primary} />
+                <Text style={styles.capacityBadgeText}>
+                  {getCapacityDisplay(selectedTanker.capacity_liters)}
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={styles.collapsedSupplierText}>
+                {selectedTanker.supplier_name}
+              </Text>
+            </View>
+            <Text style={styles.collapsedEtaText}>
+              Arriving in ~{selectedTanker.eta_minutes} mins • {selectedTanker.distance_km} km away
             </Text>
-          </Pressable>
+          </View>
 
-          {TANKER_CONFIGURABLE_CATEGORIES.map((cat) => {
-            const isSelected = selectedCapacityFilter === cat.capacity;
-            return (
+          <View style={styles.collapsedPriceCol}>
+            <Text style={styles.collapsedPriceText}>
+              ₹{selectedTanker.estimated_total_price}
+            </Text>
+            <Text style={styles.tapToViewText}>View Fleet ➔</Text>
+          </View>
+        </Pressable>
+      )}
+
+      {/* STATE B & C: INTERMEDIATE OR EXPANDED VIEW */}
+      {currentSnap !== 'collapsed' && (
+        <ScrollView
+          style={styles.scrollBody}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Capacity Filters */}
+          <View style={styles.filterSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScroll}
+            >
               <Pressable
-                key={cat.capacity}
                 accessibilityRole="button"
-                accessibilityLabel={`${cat.label} Filter`}
-                onPress={() => onSelectCapacityFilter(cat.capacity)}
+                accessibilityLabel="All Capacities"
+                onPress={() => onSelectCapacityFilter(null)}
                 style={[
                   styles.filterChip,
-                  isSelected && styles.filterChipActive,
+                  selectedCapacityFilter === null && styles.filterChipActive,
                 ]}
               >
                 <Text
                   style={[
                     styles.filterChipText,
-                    isSelected && styles.filterChipTextActive,
+                    selectedCapacityFilter === null && styles.filterChipTextActive,
                   ]}
                 >
-                  {cat.label}
+                  All ({tankers.length})
                 </Text>
               </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
 
-      {/* Sort Options Strip */}
-      <View style={styles.sortStrip}>
-        <Text style={styles.sortLabel}>Sort by:</Text>
-        {(
-          [
-            { id: 'distance', label: 'Nearest' },
-            { id: 'price', label: 'Lowest Price' },
-            { id: 'eta', label: 'Fastest ETA' },
-          ] as const
-        ).map((s) => {
-          const isSelected = sortOption === s.id;
-          return (
-            <Pressable
-              key={s.id}
-              onPress={() => onSelectSortOption(s.id)}
-              style={[styles.sortPill, isSelected && styles.sortPillActive]}
-            >
-              <Text
-                style={[
-                  styles.sortPillText,
-                  isSelected && styles.sortPillTextActive,
-                ]}
-              >
-                {s.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Tankers List */}
-      <ScrollView
-        style={styles.tankersScroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.tankersScrollContent}
-      >
-        {isLoading ? (
-          <View style={{ paddingVertical: spacing.sm }}>
-            <TankerCardSkeleton />
-            <TankerCardSkeleton />
-            <TankerCardSkeleton />
+              {TANKER_CONFIGURABLE_CATEGORIES.map((cat) => {
+                const isSelected = selectedCapacityFilter === cat.capacity;
+                return (
+                  <Pressable
+                    key={cat.capacity}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${cat.label} filter`}
+                    onPress={() => onSelectCapacityFilter(cat.capacity)}
+                    style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        isSelected && styles.filterChipTextActive,
+                      ]}
+                    >
+                      {cat.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
-        ) : tankers.length === 0 ? (
-          <EmptyState
-            title="No Tankers Available"
-            description="No active tankers found for this capacity filter in your delivery radius. Try selecting 'All Capacities'."
-            actionTitle="Reset Filters"
-            onAction={() => onSelectCapacityFilter(null)}
-          />
-        ) : (
-          tankers.map((tanker) => {
-            const isSelected = selectedTankerId === tanker.tanker_id;
 
-            return (
-              <Card
-                key={tanker.tanker_id}
-                selected={isSelected}
-                variant={isSelected ? 'elevated' : 'outlined'}
-                onPress={() => onSelectTanker(tanker.tanker_id)}
-                style={styles.tankerCardContainer}
-                contentStyle={styles.tankerCardContent}
-                accessibilityLabel={`${tanker.supplier_name}, ${tanker.capacity_liters} Liters, ₹${tanker.estimated_total_price}`}
-              >
-                <View style={styles.tankerMainRow}>
-                  {/* Left Vehicle Avatar */}
-                  <View
+          {/* Sorting Row */}
+          <View style={styles.sortBar}>
+            <Text style={styles.fleetCount}>
+              {tankers.length} Tanker{tankers.length === 1 ? '' : 's'} available
+            </Text>
+            <View style={styles.sortOptionsRow}>
+              {(['distance', 'price', 'eta'] as TankerSortOption[]).map((opt) => (
+                <Pressable
+                  key={opt}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sort by ${opt}`}
+                  onPress={() => onSelectSortOption(opt)}
+                  style={[
+                    styles.sortTab,
+                    sortOption === opt && styles.sortTabActive,
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.tankerAvatar,
-                      isSelected && styles.tankerAvatarSelected,
+                      styles.sortTabText,
+                      sortOption === opt && styles.sortTabTextActive,
                     ]}
                   >
-                    <Ionicons
-                      name="water"
-                      size={22}
-                      color={isSelected ? colors.primary : colors.secondary}
-                    />
-                    <Text style={styles.avatarCapacityText}>
-                      {(tanker.capacity_liters / 1000).toFixed(0)}kL
-                    </Text>
-                  </View>
-
-                  {/* Middle Info Column */}
-                  <View style={styles.tankerInfoCol}>
-                    <View style={styles.supplierTitleRow}>
-                      <Text numberOfLines={1} style={styles.supplierName}>
-                        {tanker.supplier_name}
-                      </Text>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={15}
-                        color={colors.primary}
-                      />
-                    </View>
-
-                    <Text style={styles.vehicleSubtitle}>
-                      {tanker.vehicle_number} {tanker.driver_name ? `• ${tanker.driver_name}` : ''}
-                    </Text>
-
-                    <View style={styles.metricsRow}>
-                      <StatusBadge
-                        label={`${tanker.eta_minutes} mins`}
-                        variant={tanker.eta_minutes <= 18 ? 'success' : 'primary'}
-                        size="sm"
-                      />
-                      <Text style={styles.distanceMetricText}>
-                        {tanker.distance_km} km away
-                      </Text>
-                      <View style={styles.verifiedGradePill}>
-                        <Text style={styles.verifiedGradeText}>
-                          {tanker.water_type.includes('Potable') ? 'Potable BIS-10500' : 'Filtered Utility'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Right Price Column */}
-                  <View style={styles.priceColumn}>
-                    <Text style={styles.priceValue}>
-                      ₹{tanker.estimated_total_price.toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={styles.priceSubtext}>all incl.</Text>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Book ${tanker.capacity_liters}L for ₹${tanker.estimated_total_price}`}
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        onBookSelectedTanker(tanker);
-                      }}
-                      style={({ pressed }) => [styles.cardBookBtn, pressed && { opacity: 0.85 }]}
-                    >
-                      <Text style={styles.cardBookBtnText}>Book</Text>
-                      <Ionicons name="arrow-forward" size={11} color={colors.white} />
-                    </Pressable>
-                  </View>
-                </View>
-
-                {isSelected && (
-                  <View style={{ marginTop: spacing.xs }}>
-                    <WaterQualityBadge
-                      sourceType={tanker.water_type}
-                      tdsPpm={tanker.water_type.includes('Potable') ? 165 : tanker.water_type.includes('Filtered') ? 280 : 450}
-                      phLevel={tanker.water_type.includes('Potable') ? 7.2 : tanker.water_type.includes('Filtered') ? 7.4 : 7.6}
-                    />
-                  </View>
-                )}
-              </Card>
-            );
-          })
-        )}
-      </ScrollView>
-
-      {/* Sleek Floating Booking Action Dock */}
-      {selectedTanker && (
-        <View style={styles.floatingDock}>
-          <View style={styles.dockDetailsCol}>
-            <View style={styles.dockTitleRow}>
-              <Ionicons name="water" size={14} color={colors.primary} />
-              <Text style={styles.dockCapacityText}>
-                {getCapacityDisplay(selectedTanker.capacity_liters)}
-              </Text>
+                    {opt === 'distance' ? 'Nearest' : opt === 'price' ? 'Price' : 'Fastest'}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-            <Text numberOfLines={1} style={styles.dockSubtext}>
-              {selectedTanker.supplier_name} • ~{selectedTanker.eta_minutes}m
-            </Text>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Confirm Book ${selectedTanker.capacity_liters} Liters for ₹${selectedTanker.estimated_total_price}`}
+          {/* Loading Skeleton */}
+          {isLoading && (
+            <View style={styles.listWrap}>
+              <TankerCardSkeleton />
+              <TankerCardSkeleton />
+            </View>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && tankers.length === 0 && (
+            <EmptyState
+              title="No Available Tankers Nearby"
+              description="No certified water logistics tankers currently match your capacity or area filter. Try expanding your search."
+              iconName="water-outline"
+              actionTitle="Show All Tankers"
+              onAction={() => onSelectCapacityFilter(null)}
+            />
+          )}
+
+          {/* List of Tankers */}
+          {!isLoading && tankers.length > 0 && (
+            <View style={styles.listWrap}>
+              {tankers.map((tanker) => {
+                const isSelected = selectedTanker?.tanker_id === tanker.tanker_id;
+                return (
+                  <Pressable
+                    key={tanker.tanker_id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${tanker.supplier_name}, ${tanker.capacity_liters} Litres, ₹${tanker.estimated_total_price}`}
+                    onPress={() => {
+                      onSelectTanker(tanker.tanker_id);
+                      if (currentSnap === 'intermediate') {
+                        // Keep selected and open detail preview
+                      }
+                    }}
+                    style={[
+                      styles.tankerCard,
+                      isSelected && styles.tankerCardSelected,
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.capacityBadge}>
+                        <Ionicons name="water" size={13} color={colors.primary} />
+                        <Text style={styles.capacityBadgeText}>
+                          {getCapacityDisplay(tanker.capacity_liters)}
+                        </Text>
+                      </View>
+                      <StatusBadge label={`${tanker.eta_minutes} mins ETA`} variant="info" size="sm" />
+                    </View>
+
+                    <View style={styles.cardBody}>
+                      <View style={styles.cardBodyText}>
+                        <Text numberOfLines={1} style={styles.supplierTitle}>
+                          {tanker.supplier_name}
+                        </Text>
+                        <Text style={styles.regNumber}>
+                          {tanker.vehicle_number} • {tanker.distance_km} km away
+                        </Text>
+                      </View>
+
+                      <View style={styles.cardPriceBox}>
+                        <Text style={styles.priceEstimate}>₹{tanker.estimated_total_price}</Text>
+                        <Text style={styles.priceSubtext}>incl. GST</Text>
+                      </View>
+                    </View>
+
+                    {isSelected && (
+                      <View style={styles.selectedIndicatorRow}>
+                        <Text style={styles.selectedIndicatorText}>Selected for Delivery</Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="View full specifications"
+                          onPress={() => animateToSnap('expanded')}
+                          style={styles.viewDetailsBtn}
+                        >
+                          <Text style={styles.viewDetailsBtnText}>Details ➔</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* STATE C: EXPANDED VIEW DETAILED BREAKDOWN */}
+          {currentSnap === 'expanded' && selectedTanker && (
+            <View style={styles.expandedDetailsSection}>
+              <View style={styles.detailsHeader}>
+                <Text style={styles.detailsTitle}>Booking Breakdown & Security</Text>
+                <WaterQualityBadge />
+              </View>
+
+              <PriceDisplay
+                finalAmount={selectedTanker.estimated_total_price}
+                basePrice={selectedTanker.base_price}
+                deliveryCharge={Math.round(selectedTanker.distance_km * selectedTanker.price_per_km * 100) / 100}
+                taxAmount={Math.round(selectedTanker.estimated_total_price * 0.05 * 100) / 100}
+                showBreakdown={true}
+                size="lg"
+                style={{ width: '100%', marginVertical: spacing.md }}
+              />
+
+              <View style={styles.pinSecurityNotice}>
+                <Ionicons name="shield-checkmark" size={18} color={colors.success} />
+                <Text style={styles.pinSecurityText}>
+                  Digital Metering Guarantee: Share your 4-digit PIN only when the driver is ready to pump into your sump.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Bottom Padding */}
+          <View style={{ height: 90 }} />
+        </ScrollView>
+      )}
+
+      {/* Sticky Bottom Booking Action Button (Visible in intermediate and expanded) */}
+      {currentSnap !== 'collapsed' && selectedTanker && (
+        <View style={styles.stickyFooter}>
+          <Button
+            title={`Proceed to Book (${getCapacityDisplay(selectedTanker.capacity_liters)} • ₹${selectedTanker.estimated_total_price})`}
             onPress={() => onBookSelectedTanker(selectedTanker)}
-            style={({ pressed }) => [
-              styles.dockCtaButton,
-              pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-            ]}
-          >
-            <Text style={styles.dockCtaPrice}>
-              ₹{selectedTanker.estimated_total_price.toLocaleString('en-IN')}
-            </Text>
-            <View style={styles.dockCtaDivider} />
-            <Text style={styles.dockCtaText}>Book Tanker</Text>
-            <Ionicons name="arrow-forward" size={15} color={colors.white} />
-          </Pressable>
+            variant="primary"
+            size="lg"
+            fullWidth
+          />
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   sheetContainer: {
-    flex: 1,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: colors.cardSurface,
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
     borderTopWidth: 1,
     borderTopColor: colors.cardBorder,
+    zIndex: 100,
     ...shadows.modal,
   },
   dragHandleWrapper: {
-    width: '100%',
-    height: 20,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: spacing.xs + 2,
+    position: 'relative',
   },
   dragBar: {
-    width: 42,
+    width: 44,
     height: 5,
     borderRadius: borderRadius.full,
     backgroundColor: colors.cardBorder,
   },
+  dragHandleIndicators: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 6,
+  },
+  snapStateToggle: {
+    padding: 4,
+  },
   destinationBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
   },
   destinationPressable: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.backgroundMuted,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
     borderRadius: borderRadius.xl,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    marginRight: spacing.xs,
   },
   destinationIconCircle: {
     width: 28,
@@ -395,7 +490,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.xs,
+    marginRight: spacing.sm,
   },
   destinationTextCol: {
     flex: 1,
@@ -407,46 +502,86 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   destinationAddress: {
-    fontSize: 12,
-    fontWeight: fontWeights.bold,
+    fontSize: fontSizes.xs,
+    fontWeight: fontWeights.semibold,
     color: colors.darkNavy,
   },
   changePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    gap: 2,
   },
   changePillText: {
-    fontSize: 11,
+    fontSize: fontSizes.xs - 1,
     fontWeight: fontWeights.bold,
     color: colors.primary,
-    marginRight: 2,
   },
   refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.backgroundMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.xs,
+  },
+  collapsedSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+  },
+  collapsedInfo: {
+    flex: 1,
+  },
+  collapsedBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  collapsedSupplierText: {
+    fontSize: fontSizes.sm,
+    fontWeight: fontWeights.bold,
+    color: colors.darkNavy,
+    flexShrink: 1,
+  },
+  collapsedEtaText: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  collapsedPriceCol: {
+    alignItems: 'flex-end',
+  },
+  collapsedPriceText: {
+    fontSize: fontSizes.xl,
+    fontWeight: fontWeights.heavy,
+    color: colors.primary,
+  },
+  tapToViewText: {
+    fontSize: fontSizes.xs - 1,
+    fontWeight: fontWeights.bold,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  scrollBody: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   filterSection: {
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    marginVertical: spacing.xs,
   },
   filterScroll: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     gap: spacing.xs,
   },
   filterChip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: spacing.xs + 2,
+    backgroundColor: colors.backgroundMuted,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
@@ -455,240 +590,187 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: fontSizes.xs,
     fontWeight: fontWeights.semibold,
-    color: colors.darkNavy,
+    color: colors.textPrimary,
   },
   filterChipTextActive: {
     color: colors.white,
   },
-  sortStrip: {
+  sortBar: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 6,
-    backgroundColor: colors.backgroundMuted,
-    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
   },
-  sortLabel: {
-    fontSize: 11,
-    fontWeight: fontWeights.semibold,
+  fleetCount: {
+    fontSize: fontSizes.xs,
+    fontWeight: fontWeights.bold,
     color: colors.textSecondary,
-    marginRight: 4,
   },
-  sortPill: {
-    paddingHorizontal: 8,
+  sortOptionsRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.backgroundMuted,
+    borderRadius: borderRadius.md,
+    padding: 2,
+  },
+  sortTab: {
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.xs,
   },
-  sortPillActive: {
+  sortTabActive: {
     backgroundColor: colors.white,
     ...shadows.subtle,
   },
-  sortPillText: {
-    fontSize: 11,
+  sortTabText: {
+    fontSize: fontSizes.xs - 1,
     color: colors.textSecondary,
     fontWeight: fontWeights.medium,
   },
-  sortPillTextActive: {
+  sortTabTextActive: {
     color: colors.primary,
     fontWeight: fontWeights.bold,
   },
-  tankersScroll: {
-    flex: 1,
-  },
-  tankersScrollContent: {
+  listWrap: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    paddingBottom: 48,
+    gap: spacing.xs,
   },
-  loadingWrapper: {
+  tankerCard: {
+    backgroundColor: colors.cardSurface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    ...shadows.subtle,
+  },
+  tankerCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+    ...shadows.card,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing['3xl'],
+    marginBottom: spacing.xs,
   },
-  loadingText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-  },
-  tankerCardContainer: {
-    marginVertical: 4,
-  },
-  tankerCardContent: {
-    padding: spacing.sm,
-  },
-  tankerMainRow: {
+  capacityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.md,
+    gap: 4,
   },
-  tankerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.background,
+  capacityBadgeText: {
+    fontSize: fontSizes.xs,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
+  },
+  cardBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  cardBodyText: {
+    flex: 1,
     marginRight: spacing.sm,
   },
-  tankerAvatarSelected: {
-    backgroundColor: colors.primaryLight,
-  },
-  avatarCapacityText: {
-    fontSize: 9,
-    fontWeight: fontWeights.heavy,
-    color: colors.primary,
-    marginTop: -2,
-  },
-  tankerInfoCol: {
-    flex: 1,
-  },
-  supplierTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  supplierName: {
-    fontSize: 15,
-    fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-    maxWidth: 160,
-  },
-  vehicleSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  distanceMetricText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: fontWeights.medium,
-  },
-  verifiedGradePill: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  verifiedGradeText: {
-    fontSize: 10,
-    fontWeight: fontWeights.semibold,
-    color: '#15803D',
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: colors.background,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  ratingText: {
-    fontSize: 10,
+  supplierTitle: {
+    fontSize: fontSizes.sm,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
   },
-  priceColumn: {
+  regNumber: {
+    fontSize: fontSizes.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  cardPriceBox: {
     alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingLeft: spacing.sm,
   },
-  priceValue: {
-    fontSize: 18,
+  priceEstimate: {
+    fontSize: fontSizes.lg,
     fontWeight: fontWeights.heavy,
     color: colors.darkNavy,
   },
   priceSubtext: {
-    fontSize: 10,
+    fontSize: 9,
     color: colors.textMuted,
-    marginTop: -2,
   },
-  cardBookBtn: {
+  selectedIndicatorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-    gap: 3,
-    marginTop: 4,
-  },
-  cardBookBtnText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: fontWeights.bold,
-  },
-  floatingDock: {
-    position: 'absolute',
-    bottom: 12,
-    left: spacing.md,
-    right: spacing.md,
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius['2xl'],
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 40,
-    ...shadows.floating,
-  },
-  dockDetailsCol: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  dockTitleRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(11, 100, 192, 0.15)',
   },
-  dockCapacityText: {
-    fontSize: 13,
+  selectedIndicatorText: {
+    fontSize: fontSizes.xs - 1,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
+  },
+  viewDetailsBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xs,
+  },
+  viewDetailsBtnText: {
+    fontSize: fontSizes.xs - 1,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
+  },
+  expandedDetailsSection: {
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    paddingTop: spacing.md,
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailsTitle: {
+    fontSize: fontSizes.sm,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
   },
-  dockSubtext: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  dockCtaButton: {
+  pinSecurityNotice: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.successLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  pinSecurityText: {
+    flex: 1,
+    fontSize: fontSizes.xs,
+    color: colors.darkNavy,
+    lineHeight: 16,
+  },
+  stickyFooter: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.cardSurface,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: borderRadius.xl,
-    gap: 6,
-    ...shadows.subtle,
-  },
-  dockCtaPrice: {
-    fontSize: 13,
-    fontWeight: fontWeights.bold,
-    color: colors.white,
-  },
-  dockCtaDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    marginHorizontal: 2,
-  },
-  dockCtaText: {
-    fontSize: 12,
-    fontWeight: fontWeights.bold,
-    color: colors.white,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+    ...shadows.floating,
   },
 });
-
