@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -7,6 +8,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +22,10 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 type AdminTab = 'overview' | 'verifications' | 'disputes' | 'zones' | 'audit_log';
 
 export const AdminDashboardScreen: React.FC = () => {
-  const { signOut } = useAuthStore();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 860;
+
+  const { user, signOut } = useAuthStore();
   const {
     metrics,
     pendingSuppliers,
@@ -86,504 +91,677 @@ export const AdminDashboardScreen: React.FC = () => {
     return `${(liters / 1000).toFixed(0)}kL`;
   };
 
+  const navItems: Array<{ id: AdminTab; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number }> = [
+    { id: 'overview', label: 'Dashboard Overview', icon: 'speedometer-outline' },
+    { id: 'verifications', label: 'KYC Approvals', icon: 'checkmark-circle-outline', badge: pendingSuppliers.length },
+    { id: 'disputes', label: 'Disputes & Refunds', icon: 'shield-outline', badge: disputes.filter((d) => d.status === 'open').length },
+    { id: 'zones', label: 'Service Zones & PostGIS', icon: 'map-outline', badge: serviceZones.length },
+    { id: 'audit_log', label: 'Audit Trail & Compliance', icon: 'receipt-outline', badge: auditLogs.length },
+  ];
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
 
-      {/* Admin Header */}
-      <View style={styles.header}>
-        <View>
-          <View style={styles.titleRow}>
-            <Text style={styles.headerTitle}>TANKR Ops Admin</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>COMMAND</Text>
+      <View style={[styles.mainLayout, isDesktop && styles.desktopLayout]}>
+        {/* ============================================================ */}
+        {/* 1. LEFT SIDEBAR (Desktop Enterprise Portal Nav)               */}
+        {/* ============================================================ */}
+        <View style={[styles.sidebar, !isDesktop && styles.mobileSidebar]}>
+          {/* Brand & Portal Title */}
+          <View style={styles.brandRow}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="water" size={20} color={colors.white} />
             </View>
-          </View>
-          <Text style={styles.headerSubtitle}>
-            Bengaluru Metropolitan Operations
-          </Text>
-        </View>
-
-        <Pressable
-          onPress={() => signOut()}
-          style={styles.switchModeBtn}
-        >
-          <Ionicons name="log-out-outline" size={16} color={colors.white} />
-          <Text style={styles.switchModeText}>Sign Out</Text>
-        </Pressable>
-      </View>
-
-      {/* Emergency Crisis Mode Bar */}
-      <View style={[styles.emergencyBar, emergencyMode && styles.emergencyActive]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <Ionicons
-            name={emergencyMode ? 'warning' : 'shield-checkmark'}
-            size={20}
-            color={emergencyMode ? colors.white : colors.primary}
-            style={{ marginRight: 8 }}
-          />
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                styles.emergencyTitle,
-                emergencyMode && { color: colors.white },
-              ]}
-            >
-              {emergencyMode ? 'CRISIS DROUGHT MODE ACTIVE' : 'Standard Grid Mode'}
-            </Text>
-            <Text
-              style={[
-                styles.emergencySub,
-                emergencyMode && { color: 'rgba(255,255,255,0.85)' },
-              ]}
-            >
-              {emergencyMode
-                ? 'Price caps enabled. Essential hospital priority routing ON.'
-                : 'Free market algorithmic pricing & automated dispatch.'}
-            </Text>
-          </View>
-        </View>
-        <Switch
-          value={emergencyMode}
-          onValueChange={toggleEmergencyMode}
-          trackColor={{ false: colors.cardBorder, true: colors.error }}
-          thumbColor={colors.white}
-        />
-      </View>
-
-      {/* Tab Navigation */}
-      <View style={styles.tabBar}>
-        <Pressable
-          onPress={() => setActiveTab('overview')}
-          style={[styles.tabItem, activeTab === 'overview' && styles.tabItemActive]}
-        >
-          <Ionicons
-            name="stats-chart"
-            size={16}
-            color={activeTab === 'overview' ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'overview' && styles.tabTextActive,
-            ]}
-          >
-            Overview
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTab('verifications')}
-          style={[
-            styles.tabItem,
-            activeTab === 'verifications' && styles.tabItemActive,
-          ]}
-        >
-          <Ionicons
-            name="checkmark-done-circle"
-            size={16}
-            color={
-              activeTab === 'verifications' ? colors.primary : colors.textMuted
-            }
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'verifications' && styles.tabTextActive,
-            ]}
-          >
-            KYC Approvals ({pendingSuppliers.length})
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTab('disputes')}
-          style={[styles.tabItem, activeTab === 'disputes' && styles.tabItemActive]}
-        >
-          <Ionicons
-            name="alert-circle"
-            size={16}
-            color={activeTab === 'disputes' ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'disputes' && styles.tabTextActive,
-            ]}
-          >
-            Disputes ({disputes.filter((d) => d.status === 'open').length})
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTab('zones')}
-          style={[styles.tabItem, activeTab === 'zones' && styles.tabItemActive]}
-        >
-          <Ionicons
-            name="map"
-            size={16}
-            color={activeTab === 'zones' ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'zones' && styles.tabTextActive,
-            ]}
-          >
-            Zones ({serviceZones.length})
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => setActiveTab('audit_log')}
-          style={[styles.tabItem, activeTab === 'audit_log' && styles.tabItemActive]}
-        >
-          <Ionicons
-            name="shield-checkmark"
-            size={16}
-            color={activeTab === 'audit_log' ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'audit_log' && styles.tabTextActive,
-            ]}
-          >
-            Audit Logs ({auditLogs.length})
-          </Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {activeTab === 'overview' && (
-          <View>
-            {/* KPI Metric Cards 2x2 */}
-            <View style={styles.metricGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>GROSS VOLUME (GMV)</Text>
-                <Text style={styles.metricValue}>
-                  ₹{(metrics.total_gmv).toLocaleString('en-IN')}
-                </Text>
-                <Text style={styles.metricSub}>All-time platform bookings</Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>PLATFORM REVENUE</Text>
-                <Text style={[styles.metricValue, { color: colors.success }]}>
-                  ₹{(metrics.platform_revenue).toLocaleString('en-IN')}
-                </Text>
-                <Text style={styles.metricSub}>10% commission take rate</Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>TOTAL DELIVERIES</Text>
-                <Text style={styles.metricValue}>
-                  {metrics.completed_bookings} / {metrics.total_bookings}
-                </Text>
-                <Text style={styles.metricSub}>
-                  {((metrics.completed_bookings / (metrics.total_bookings || 1)) * 100).toFixed(1)}% success rate
-                </Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>WATER DISPATCHED</Text>
-                <Text style={[styles.metricValue, { color: colors.primary }]}>
-                  {formatLiters(metrics.total_liters_delivered)}
-                </Text>
-                <Text style={styles.metricSub}>Clean potable water</Text>
-              </View>
-            </View>
-
-            {/* Live Fleet Utilization Card */}
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View>
-                  <Text style={styles.sectionTitle}>Fleet Online & Ready</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Active tankers broadcasting GPS coordinates
-                  </Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.brandTitle}>TANKR</Text>
+                <View style={styles.opsBadge}>
+                  <Text style={styles.opsBadgeText}>OPS CONSOLE</Text>
                 </View>
-                <StatusBadge label="28 ONLINE" variant="success" size="sm" />
               </View>
-
-              <View style={styles.fleetBarContainer}>
-                <View style={[styles.fleetBarFill, { width: '74%' }]} />
-              </View>
-              <View style={styles.fleetStatsRow}>
-                <Text style={styles.fleetStatText}>28 Online (74%)</Text>
-                <Text style={styles.fleetStatText}>10 Off-duty (26%)</Text>
-              </View>
-            </View>
-
-            {/* Dynamic Surge Pricing Multiplier Controller */}
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View>
-                  <Text style={styles.sectionTitle}>Network Surge Multiplier</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Current rate: {metrics.surge_multiplier.toFixed(2)}x base fare
-                  </Text>
-                </View>
-                <Ionicons name="flash" size={20} color={colors.warning} />
-              </View>
-
-              <View style={styles.surgeBtnRow}>
-                {[1.0, 1.25, 1.5, 2.0].map((rate) => {
-                  const isActive = metrics.surge_multiplier === rate;
-                  return (
-                    <Pressable
-                      key={rate}
-                      onPress={() => setSurgeMultiplier(rate)}
-                      style={[
-                        styles.surgeBtn,
-                        isActive && styles.surgeBtnActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.surgeBtnText,
-                          isActive && styles.surgeBtnTextActive,
-                        ]}
-                      >
-                        {rate.toFixed(2)}x
-                      </Text>
-                      <Text
-                        style={[
-                          styles.surgeBtnSub,
-                          isActive && styles.surgeBtnTextActive,
-                        ]}
-                      >
-                        {rate === 1.0
-                          ? 'Base'
-                          : rate === 1.25
-                          ? 'Peak'
-                          : rate === 1.5
-                          ? 'High'
-                          : 'Crisis'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              <Text style={styles.brandSub}>Bengaluru Operations</Text>
             </View>
           </View>
-        )}
 
-        {/* Verifications Tab */}
-        {activeTab === 'verifications' && (
-          <View>
-            <Text style={styles.groupHeading}>
-              PENDING SUPPLIER ONBOARDING ({pendingSuppliers.length})
-            </Text>
-
-            {pendingSuppliers.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons
-                  name="shield-checkmark"
-                  size={40}
-                  color={colors.success}
-                />
-                <Text style={styles.emptyTitle}>All Suppliers Verified</Text>
-                <Text style={styles.emptySub}>
-                  No pending compliance reviews in queue.
-                </Text>
-              </View>
-            ) : (
-              pendingSuppliers.map((supplier) => (
-                <View key={supplier.id} style={styles.kycCard}>
-                  <View style={styles.kycTopRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.kycBusinessName}>
-                        {supplier.business_name}
-                      </Text>
-                      <Text style={styles.kycContact}>
-                        {supplier.contact_person} • {supplier.phone_number}
-                      </Text>
-                    </View>
-                    <StatusBadge label="KYC PENDING" variant="warning" size="sm" />
-                  </View>
-
-                  <View style={styles.kycDetailGrid}>
-                    <View style={styles.kycDetailItem}>
-                      <Text style={styles.kycDetailLabel}>GSTIN</Text>
-                      <Text style={styles.kycDetailValue}>{supplier.gstin}</Text>
-                    </View>
-                    <View style={styles.kycDetailItem}>
-                      <Text style={styles.kycDetailLabel}>FLEET SIZE</Text>
-                      <Text style={styles.kycDetailValue}>
-                        {supplier.fleet_size} Tankers
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.kycSourceBox}>
-                    <Ionicons
-                      name="water-outline"
-                      size={15}
-                      color={colors.primary}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={styles.kycSourceText}>
-                      Source: {supplier.water_source}
-                    </Text>
-                  </View>
-
-                  <View style={styles.kycActionRow}>
-                    <View style={{ flex: 1, marginRight: spacing.sm }}>
-                      <Button
-                        title="Reject"
-                        variant="secondary"
-                        size="sm"
-                        fullWidth
-                        onPress={() => handleReject(supplier.id, supplier.business_name)}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Button
-                        title="Approve KYC"
-                        variant="primary"
-                        size="sm"
-                        fullWidth
-                        onPress={() => handleApprove(supplier.id, supplier.business_name)}
-                      />
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
+          {/* System Status Pill */}
+          <View style={styles.systemStatusPill}>
+            <View style={styles.statusDotGreen} />
+            <Text style={styles.systemStatusText}>Cluster: BLR-1 (Production)</Text>
           </View>
-        )}
 
-        {/* Disputes Tab */}
-        {activeTab === 'disputes' && (
-          <View>
-            <Text style={styles.groupHeading}>CUSTOMER DISPUTES & REFUNDS</Text>
-
-            {disputes.map((d) => (
-              <View key={d.id} style={styles.disputeCard}>
-                <View style={styles.disputeTopRow}>
-                  <Text style={styles.disputeRef}>{d.booking_reference}</Text>
-                  <StatusBadge
-                    label={d.status.toUpperCase()}
-                    variant={d.status === 'open' ? 'error' : 'success'}
-                    size="sm"
+          {/* Navigation Links */}
+          <View style={styles.navMenu}>
+            {navItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  onPress={() => setActiveTab(item.id)}
+                  style={[styles.navItem, isActive && styles.navItemActive]}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={18}
+                    color={isActive ? colors.white : '#94A3B8'}
+                    style={{ marginRight: 10 }}
                   />
-                </View>
-
-                <Text style={styles.disputeParties}>
-                  Customer: {d.customer_name} • Supplier: {d.supplier_name}
-                </Text>
-
-                <View style={styles.disputeReasonBox}>
-                  <Text style={styles.disputeReason}>{d.reason}</Text>
-                </View>
-
-                <View style={styles.disputeFooterRow}>
-                  <Text style={styles.disputeAmount}>
-                    Dispute Value: ₹{d.amount}
+                  <Text style={[styles.navItemText, isActive && styles.navItemTextActive]}>
+                    {item.label}
                   </Text>
-
-                  {d.status === 'open' && (
-                    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                      <Button
-                        title="Dismiss"
-                        variant="secondary"
-                        size="sm"
-                        onPress={() => resolveDispute(d.id, false)}
-                      />
-                      <Button
-                        title="Refund Customer"
-                        variant="primary"
-                        size="sm"
-                        onPress={() => resolveDispute(d.id, true)}
-                      />
+                  {typeof item.badge === 'number' && item.badge > 0 && (
+                    <View style={[styles.navBadge, isActive && styles.navBadgeActive]}>
+                      <Text style={[styles.navBadgeText, isActive && styles.navBadgeTextActive]}>
+                        {item.badge}
+                      </Text>
                     </View>
                   )}
-                </View>
-              </View>
-            ))}
+                </Pressable>
+              );
+            })}
           </View>
-        )}
 
-        {activeTab === 'zones' && (
-          <View>
-            <Text style={styles.groupHeading}>BENGALURU SERVICE ZONES & FLEET LIQUIDITY</Text>
-            {serviceZones.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="map-outline" size={48} color={colors.textMuted} />
-                <Text style={styles.emptyTitle}>Loading Service Zones</Text>
-                <Text style={styles.emptyText}>
-                  Computing real-time PostGIS polygon fleet density across metropolitan Bengaluru.
+          {/* Sidebar Bottom: Admin Persona & Sign Out */}
+          <View style={styles.sidebarFooter}>
+            <View style={styles.adminUserRow}>
+              <View style={styles.adminAvatar}>
+                <Text style={styles.adminAvatarText}>A</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.adminName}>Super Admin</Text>
+                <Text style={styles.adminRole}>{user?.phone || 'admin@tankr.in'}</Text>
+              </View>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign out of Admin Ops"
+              onPress={() => signOut()}
+              style={styles.signOutBtn}
+            >
+              <Ionicons name="log-out-outline" size={16} color="#EF4444" />
+              <Text style={styles.signOutBtnText}>Sign Out</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* ============================================================ */}
+        {/* 2. MAIN CONTENT AREA                                         */}
+        {/* ============================================================ */}
+        <View style={styles.contentArea}>
+          {/* Top Command Bar */}
+          <View style={styles.topBar}>
+            <View>
+              <View style={styles.breadcrumbRow}>
+                <Text style={styles.breadcrumbMuted}>Operations</Text>
+                <Ionicons name="chevron-forward" size={12} color="#64748B" />
+                <Text style={styles.breadcrumbActive}>
+                  {navItems.find((n) => n.id === activeTab)?.label}
                 </Text>
               </View>
-            ) : (
-              serviceZones.map((zone) => (
-                <View key={zone.zone_name} style={styles.disputeCard}>
-                  <View style={styles.disputeTopRow}>
-                    <Text style={styles.disputeRef}>{zone.zone_name}</Text>
-                    <StatusBadge
-                      label={zone.liquidity_status}
-                      variant={
-                        zone.liquidity_status === 'OPTIMAL'
-                          ? 'success'
-                          : zone.liquidity_status === 'LIMITED_SUPPLY'
-                          ? 'warning'
-                          : 'error'
-                      }
-                      size="sm"
-                    />
-                  </View>
-                  <Text style={styles.disputeParties}>
-                    Available Tankers: {zone.available_fleet_count} • Online: {zone.online_fleet_count} • Active Trips: {zone.active_deliveries}
-                  </Text>
-                  <View style={styles.disputeReasonBox}>
-                    <Text style={styles.disputeReason}>
-                      Estimated ETA: ~{zone.avg_eta_minutes} mins • Traffic Multiplier: {zone.traffic_factor}x
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        )}
-
-        {activeTab === 'audit_log' && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Administrative Audit Trail</Text>
-              <Text style={styles.sectionSub}>
-                Cryptographic audit log of KYC approvals, surge pricing overrides and dispute resolutions.
+              <Text style={styles.pageTitle}>
+                {activeTab === 'overview'
+                  ? 'Real-Time Dispatch Command Desk'
+                  : activeTab === 'verifications'
+                  ? 'Supplier KYC & Compliance Review'
+                  : activeTab === 'disputes'
+                  ? 'Customer Disputes & SLA Mediation'
+                  : activeTab === 'zones'
+                  ? 'Bengaluru PostGIS Liquidity Zones'
+                  : 'Immutable System Audit Trail'}
               </Text>
             </View>
 
-            {auditLogs.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="document-text-outline" size={32} color={colors.textSecondary} />
-                <Text style={styles.emptyText}>No administrative events recorded yet.</Text>
+            {/* Top Right Actions */}
+            <View style={styles.topRightActions}>
+              {/* Emergency Mode Switch */}
+              <View style={[styles.crisisToggleBox, emergencyMode && styles.crisisToggleBoxActive]}>
+                <Ionicons
+                  name={emergencyMode ? 'warning' : 'shield-checkmark-outline'}
+                  size={16}
+                  color={emergencyMode ? '#FFFFFF' : '#0F172A'}
+                />
+                <Text style={[styles.crisisToggleText, emergencyMode && { color: '#FFFFFF' }]}>
+                  {emergencyMode ? 'CRISIS MODE' : 'Standard Grid'}
+                </Text>
+                <Switch
+                  value={emergencyMode}
+                  onValueChange={toggleEmergencyMode}
+                  trackColor={{ false: '#CBD5E1', true: '#DC2626' }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
-            ) : (
-              auditLogs.map((log) => (
-                <View key={log.id} style={styles.auditCard}>
-                  <View style={styles.auditHeader}>
-                    <View style={styles.auditActionTag}>
-                      <Text style={styles.auditActionText}>{log.action.toUpperCase()}</Text>
+
+              {/* Refresh Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Refresh Admin Data"
+                onPress={() => {
+                  fetchDashboardMetrics();
+                  fetchServiceZones();
+                }}
+                style={styles.refreshBtn}
+              >
+                <Ionicons name="refresh" size={16} color="#0F172A" />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Scrollable Dashboard Body */}
+          <ScrollView
+            style={styles.bodyScroll}
+            contentContainerStyle={styles.bodyScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* TAB 1: OVERVIEW DASHBOARD */}
+            {activeTab === 'overview' && (
+              <View style={styles.overviewContainer}>
+                {/* 4 KPI Metrics Row */}
+                <View style={styles.kpiRow}>
+                  {/* KPI 1: Gross Volume */}
+                  <View style={styles.kpiCard}>
+                    <View style={styles.kpiTop}>
+                      <Text style={styles.kpiLabel}>GROSS VOLUME (GMV)</Text>
+                      <View style={[styles.kpiIconWrap, { backgroundColor: '#E0F2FE' }]}>
+                        <Ionicons name="cash-outline" size={18} color="#0284C7" />
+                      </View>
                     </View>
-                    <Text style={styles.auditTime}>
-                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(log.created_at).toLocaleDateString()}
+                    <Text style={styles.kpiValue}>
+                      ₹{metrics.total_gmv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                    <View style={styles.kpiFooter}>
+                      <Ionicons name="trending-up" size={13} color="#16A34A" />
+                      <Text style={styles.kpiTrend}>Live Supabase RPC</Text>
+                      <Text style={styles.kpiSub}>• All-time bookings</Text>
+                    </View>
+                  </View>
+
+                  {/* KPI 2: Platform Revenue */}
+                  <View style={styles.kpiCard}>
+                    <View style={styles.kpiTop}>
+                      <Text style={styles.kpiLabel}>PLATFORM REVENUE</Text>
+                      <View style={[styles.kpiIconWrap, { backgroundColor: '#DCFCE7' }]}>
+                        <Ionicons name="wallet-outline" size={18} color="#16A34A" />
+                      </View>
+                    </View>
+                    <Text style={[styles.kpiValue, { color: '#16A34A' }]}>
+                      ₹{metrics.platform_revenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </Text>
+                    <View style={styles.kpiFooter}>
+                      <View style={styles.marginPill}>
+                        <Text style={styles.marginPillText}>10% TAKE RATE</Text>
+                      </View>
+                      <Text style={styles.kpiSub}>Commission captured</Text>
+                    </View>
+                  </View>
+
+                  {/* KPI 3: Fulfillment Rate */}
+                  <View style={styles.kpiCard}>
+                    <View style={styles.kpiTop}>
+                      <Text style={styles.kpiLabel}>TOTAL DELIVERIES</Text>
+                      <View style={[styles.kpiIconWrap, { backgroundColor: '#EDE9FE' }]}>
+                        <Ionicons name="checkmark-done" size={18} color="#7C3AED" />
+                      </View>
+                    </View>
+                    <Text style={styles.kpiValue}>
+                      {metrics.completed_bookings} / {metrics.total_bookings}
+                    </Text>
+                    <View style={styles.kpiFooter}>
+                      <Text style={styles.kpiSuccessText}>
+                        {((metrics.completed_bookings / (metrics.total_bookings || 1)) * 100).toFixed(1)}% fulfillment rate
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* KPI 4: Water Volume */}
+                  <View style={styles.kpiCard}>
+                    <View style={styles.kpiTop}>
+                      <Text style={styles.kpiLabel}>WATER DISPATCHED</Text>
+                      <View style={[styles.kpiIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                        <Ionicons name="water" size={18} color="#D97706" />
+                      </View>
+                    </View>
+                    <Text style={[styles.kpiValue, { color: colors.primary }]}>
+                      {formatLiters(metrics.total_liters_delivered)}
+                    </Text>
+                    <View style={styles.kpiFooter}>
+                      <Ionicons name="shield-checkmark" size={13} color="#0284C7" />
+                      <Text style={styles.kpiSub}>BWSSB / Certified Purity</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 2-Column Ops Desk Section */}
+                <View style={[styles.opsDeskGrid, isDesktop && styles.opsDeskGridDesktop]}>
+                  {/* Left Ops Desk: Fleet Liquidity & Dynamic Surge Controller */}
+                  <View style={styles.opsDeskColumn}>
+                    {/* Fleet Liquidity Card */}
+                    <View style={styles.portalCard}>
+                      <View style={styles.portalCardHeader}>
+                        <View>
+                          <Text style={styles.portalCardTitle}>Fleet Online & Liquidity</Text>
+                          <Text style={styles.portalCardSubtitle}>
+                            Active tankers streaming telemetry in Bengaluru
+                          </Text>
+                        </View>
+                        <StatusBadge label="FLEET ACTIVE" variant="success" size="sm" />
+                      </View>
+
+                      {/* Progress Bar */}
+                      <View style={styles.progressBarTrack}>
+                        <View style={[styles.progressBarFill, { width: '74%' }]} />
+                      </View>
+
+                      <View style={styles.fleetMetricRow}>
+                        <View style={styles.fleetStatItem}>
+                          <View style={[styles.statDot, { backgroundColor: '#16A34A' }]} />
+                          <Text style={styles.fleetStatTitle}>28 Online Tankers (74%)</Text>
+                        </View>
+                        <View style={styles.fleetStatItem}>
+                          <View style={[styles.statDot, { backgroundColor: '#94A3B8' }]} />
+                          <Text style={styles.fleetStatTitle}>10 Off-Duty (26%)</Text>
+                        </View>
+                      </View>
+
+                      {/* Distribution Badges */}
+                      <View style={styles.capacityDistributionRow}>
+                        <View style={styles.capChip}>
+                          <Text style={styles.capChipText}>1kL: 6 units</Text>
+                        </View>
+                        <View style={styles.capChip}>
+                          <Text style={styles.capChipText}>2kL: 8 units</Text>
+                        </View>
+                        <View style={styles.capChip}>
+                          <Text style={styles.capChipText}>5kL: 9 units</Text>
+                        </View>
+                        <View style={styles.capChip}>
+                          <Text style={styles.capChipText}>10kL+: 5 units</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Surge Multiplier Controller Card */}
+                    <View style={styles.portalCard}>
+                      <View style={styles.portalCardHeader}>
+                        <View>
+                          <Text style={styles.portalCardTitle}>Dynamic Surge Pricing Engine</Text>
+                          <Text style={styles.portalCardSubtitle}>
+                            Current Base Multiplier: {metrics.surge_multiplier.toFixed(2)}x
+                          </Text>
+                        </View>
+                        <View style={styles.surgeActiveTag}>
+                          <Ionicons name="flash" size={13} color="#D97706" />
+                          <Text style={styles.surgeActiveTagText}>
+                            {metrics.surge_multiplier > 1.0 ? 'SURGE ACTIVE' : 'BASE PRICING'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.surgeButtonsGrid}>
+                        {[
+                          { rate: 1.0, title: '1.00x', sub: 'Standard Base' },
+                          { rate: 1.25, title: '1.25x', sub: 'Peak Morning' },
+                          { rate: 1.5, title: '1.50x', sub: 'High Demand' },
+                          { rate: 2.0, title: '2.00x', sub: 'Crisis Cap' },
+                        ].map(({ rate, title, sub }) => {
+                          const isSelected = metrics.surge_multiplier === rate;
+                          return (
+                            <Pressable
+                              key={rate}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Set Surge to ${title}`}
+                              onPress={() => setSurgeMultiplier(rate)}
+                              style={[
+                                styles.surgeSelectorCard,
+                                isSelected && styles.surgeSelectorCardActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.surgeRateNumber,
+                                  isSelected && styles.surgeTextActive,
+                                ]}
+                              >
+                                {title}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.surgeRateSub,
+                                  isSelected && styles.surgeTextActive,
+                                ]}
+                              >
+                                {sub}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Right Ops Desk: Action Feed & Alerts */}
+                  <View style={styles.opsDeskColumn}>
+                    {/* Pending KYC Desk */}
+                    <View style={styles.portalCard}>
+                      <View style={styles.portalCardHeader}>
+                        <View>
+                          <Text style={styles.portalCardTitle}>Supplier KYC Verification Queue</Text>
+                          <Text style={styles.portalCardSubtitle}>
+                            {pendingSuppliers.length} applications awaiting compliance approval
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => setActiveTab('verifications')}>
+                          <Text style={styles.cardHeaderLink}>View All ➔</Text>
+                        </Pressable>
+                      </View>
+
+                      {pendingSuppliers.length === 0 ? (
+                        <View style={styles.cleanQueueBox}>
+                          <Ionicons name="checkmark-circle" size={32} color="#16A34A" />
+                          <Text style={styles.cleanQueueTitle}>KYC Queue Is Clear</Text>
+                          <Text style={styles.cleanQueueSub}>
+                            All active suppliers in Bengaluru are fully compliant and BWSSB certified.
+                          </Text>
+                        </View>
+                      ) : (
+                        pendingSuppliers.slice(0, 2).map((s) => (
+                          <View key={s.id} style={styles.queueItemRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.queueItemName}>{s.business_name}</Text>
+                              <Text style={styles.queueItemDetails}>
+                                {s.contact_person} • GSTIN: {s.gstin}
+                              </Text>
+                            </View>
+                            <Button
+                              title="Approve"
+                              variant="primary"
+                              size="sm"
+                              onPress={() => handleApprove(s.id, s.business_name)}
+                            />
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Disputes & SLA Health Card */}
+                    <View style={styles.portalCard}>
+                      <View style={styles.portalCardHeader}>
+                        <View>
+                          <Text style={styles.portalCardTitle}>Active Customer Disputes</Text>
+                          <Text style={styles.portalCardSubtitle}>
+                            Flow-meter variances and delivery delay reports
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => setActiveTab('disputes')}>
+                          <Text style={styles.cardHeaderLink}>View Desk ➔</Text>
+                        </Pressable>
+                      </View>
+
+                      {disputes.filter((d) => d.status === 'open').length === 0 ? (
+                        <View style={styles.cleanQueueBox}>
+                          <Ionicons name="shield-checkmark" size={32} color="#0284C7" />
+                          <Text style={styles.cleanQueueTitle}>Zero Open Disputes</Text>
+                          <Text style={styles.cleanQueueSub}>
+                            100% of deliveries verified via customer PIN and meter telemetry.
+                          </Text>
+                        </View>
+                      ) : (
+                        disputes.filter((d) => d.status === 'open').slice(0, 2).map((d) => (
+                          <View key={d.id} style={styles.queueItemRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.queueItemName}>{d.booking_reference}</Text>
+                              <Text style={styles.queueItemDetails}>
+                                {d.customer_name} • ₹{d.amount}
+                              </Text>
+                            </View>
+                            <Button
+                              title="Resolve"
+                              variant="outline"
+                              size="sm"
+                              onPress={() => setActiveTab('disputes')}
+                            />
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* TAB 2: KYC APPROVALS DESK */}
+            {activeTab === 'verifications' && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.tableHeaderBar}>
+                  <Text style={styles.tableHeaderTitle}>
+                    Pending Supplier Applications ({pendingSuppliers.length})
+                  </Text>
+                  <Text style={styles.tableHeaderSub}>
+                    Requires valid GSTIN, BWSSB water source certificate, and driver license verification.
+                  </Text>
+                </View>
+
+                {pendingSuppliers.length === 0 ? (
+                  <View style={styles.cleanQueueBox}>
+                    <Ionicons name="shield-checkmark" size={48} color="#16A34A" />
+                    <Text style={styles.cleanQueueTitle}>All Suppliers Verified</Text>
+                    <Text style={styles.cleanQueueSub}>No applications pending review in the queue.</Text>
+                  </View>
+                ) : (
+                  pendingSuppliers.map((supplier) => (
+                    <View key={supplier.id} style={styles.enterpriseTableRow}>
+                      <View style={{ flex: 1.5 }}>
+                        <Text style={styles.tableEntityName}>{supplier.business_name}</Text>
+                        <Text style={styles.tableEntitySub}>
+                          {supplier.contact_person} • {supplier.phone_number}
+                        </Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>GSTIN</Text>
+                        <Text style={styles.tableColVal}>{supplier.gstin}</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>FLEET SIZE</Text>
+                        <Text style={styles.tableColVal}>{supplier.fleet_size} Tankers</Text>
+                      </View>
+
+                      <View style={{ flex: 1.5 }}>
+                        <Text style={styles.tableColLabel}>WATER SOURCE</Text>
+                        <Text style={styles.tableColVal}>{supplier.water_source}</Text>
+                      </View>
+
+                      <View style={styles.tableActionGroup}>
+                        <Button
+                          title="Reject"
+                          variant="secondary"
+                          size="sm"
+                          onPress={() => handleReject(supplier.id, supplier.business_name)}
+                        />
+                        <Button
+                          title="Approve KYC"
+                          variant="primary"
+                          size="sm"
+                          onPress={() => handleApprove(supplier.id, supplier.business_name)}
+                        />
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {/* TAB 3: DISPUTES & REFUNDS */}
+            {activeTab === 'disputes' && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.tableHeaderBar}>
+                  <Text style={styles.tableHeaderTitle}>Customer Disputes & SLA Mediation</Text>
+                  <Text style={styles.tableHeaderSub}>
+                    Review water volume discrepancy claims, flow-meter audit logs, and trigger direct refunds.
+                  </Text>
+                </View>
+
+                {disputes.length === 0 ? (
+                  <View style={styles.cleanQueueBox}>
+                    <Ionicons name="checkmark-circle" size={48} color="#16A34A" />
+                    <Text style={styles.cleanQueueTitle}>Zero Open Disputes</Text>
+                    <Text style={styles.cleanQueueSub}>No contested orders on record.</Text>
+                  </View>
+                ) : (
+                  disputes.map((d) => (
+                    <View key={d.id} style={styles.enterpriseTableRow}>
+                      <View style={{ flex: 1.2 }}>
+                        <Text style={styles.tableEntityName}>{d.booking_reference}</Text>
+                        <Text style={styles.tableEntitySub}>
+                          Customer: {d.customer_name} • Supplier: {d.supplier_name}
+                        </Text>
+                      </View>
+
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.tableColLabel}>REASON</Text>
+                        <Text style={styles.tableColVal}>{d.reason}</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>DISPUTE VALUE</Text>
+                        <Text style={[styles.tableColVal, { fontWeight: '700' }]}>₹{d.amount}</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <StatusBadge
+                          label={d.status.toUpperCase()}
+                          variant={d.status === 'open' ? 'error' : 'success'}
+                          size="sm"
+                        />
+                      </View>
+
+                      {d.status === 'open' && (
+                        <View style={styles.tableActionGroup}>
+                          <Button
+                            title="Dismiss"
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => resolveDispute(d.id, false)}
+                          />
+                          <Button
+                            title="Refund Customer"
+                            variant="primary"
+                            size="sm"
+                            onPress={() => resolveDispute(d.id, true)}
+                          />
+                        </View>
+                      )}
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {/* TAB 4: SERVICE ZONES */}
+            {activeTab === 'zones' && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.tableHeaderBar}>
+                  <Text style={styles.tableHeaderTitle}>
+                    Metropolitan Bengaluru Service Zones ({serviceZones.length})
+                  </Text>
+                  <Text style={styles.tableHeaderSub}>
+                    PostGIS polygon geographic service partitions with automated liquidity balancing.
+                  </Text>
+                </View>
+
+                {serviceZones.length === 0 ? (
+                  <View style={styles.cleanQueueBox}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.cleanQueueTitle}>Loading PostGIS Zones...</Text>
+                  </View>
+                ) : (
+                  serviceZones.map((zone) => (
+                    <View key={zone.zone_name} style={styles.enterpriseTableRow}>
+                      <View style={{ flex: 1.5 }}>
+                        <Text style={styles.tableEntityName}>{zone.zone_name}</Text>
+                        <Text style={styles.tableEntitySub}>Bengaluru Urban District</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>LIQUIDITY STATUS</Text>
+                        <StatusBadge
+                          label={zone.liquidity_status}
+                          variant={
+                            zone.liquidity_status === 'OPTIMAL'
+                              ? 'success'
+                              : zone.liquidity_status === 'LIMITED_SUPPLY'
+                              ? 'warning'
+                              : 'error'
+                          }
+                          size="sm"
+                        />
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>AVAILABLE FLEET</Text>
+                        <Text style={styles.tableColVal}>{zone.available_fleet_count} Tankers</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>AVG ETA</Text>
+                        <Text style={styles.tableColVal}>~{zone.avg_eta_minutes} mins</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.tableColLabel}>TRAFFIC MULTIPLIER</Text>
+                        <Text style={styles.tableColVal}>{zone.traffic_factor}x</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {/* TAB 5: AUDIT LOGS */}
+            {activeTab === 'audit_log' && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.tableHeaderBar}>
+                  <Text style={styles.tableHeaderTitle}>Cryptographic System Audit Trail</Text>
+                  <Text style={styles.tableHeaderSub}>
+                    Immutable log of administrative authorizations, surge price changes, and KYC reviews.
+                  </Text>
+                </View>
+
+                {auditLogs.length === 0 ? (
+                  <View style={styles.cleanQueueBox}>
+                    <Ionicons name="document-text-outline" size={48} color="#94A3B8" />
+                    <Text style={styles.cleanQueueTitle}>No Audit Events Yet</Text>
+                    <Text style={styles.cleanQueueSub}>
+                      All privileged actions performed by operators are recorded here in real-time.
                     </Text>
                   </View>
-                  <Text style={styles.auditTarget}>Target: {log.target_type} ({log.target_id})</Text>
-                  {log.notes && <Text style={styles.auditNotes}>Notes: {log.notes}</Text>}
-                </View>
-              ))
+                ) : (
+                  auditLogs.map((log) => (
+                    <View key={log.id} style={styles.auditLogItem}>
+                      <View style={styles.auditActionPill}>
+                        <Text style={styles.auditActionText}>{log.action.toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.auditTargetText}>
+                          Target: {log.target_type} ({log.target_id || 'Global'})
+                        </Text>
+                        {log.notes && <Text style={styles.auditNotesText}>{log.notes}</Text>}
+                      </View>
+                      <Text style={styles.auditTimestamp}>
+                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} •{' '}
+                        {new Date(log.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
             )}
-          </View>
-        )}
-      </ScrollView>
+          </ScrollView>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -591,417 +769,604 @@ export const AdminDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.darkNavy,
+    backgroundColor: '#0F172A',
   },
-  header: {
+  mainLayout: {
+    flex: 1,
+    flexDirection: 'column',
+    backgroundColor: '#F8FAFC',
+  },
+  desktopLayout: {
     flexDirection: 'row',
+  },
+  // ==========================================
+  // SIDEBAR STYLING
+  // ==========================================
+  sidebar: {
+    width: 260,
+    backgroundColor: '#0F172A',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderRightWidth: 1,
+    borderRightColor: '#1E293B',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.darkNavy,
   },
-  titleRow: {
+  mobileSidebar: {
+    width: '100%',
+    paddingVertical: spacing.sm,
+  },
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 10,
+    marginBottom: spacing.md,
+    paddingHorizontal: 4,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: fontWeights.bold,
-    color: colors.white,
+  logoCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  badge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  badgeText: {
-    fontSize: 9,
+  brandTitle: {
+    fontSize: 18,
     fontWeight: fontWeights.heavy,
-    color: colors.white,
+    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
+  opsBadge: {
+    backgroundColor: '#0369A1',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  switchModeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: borderRadius.full,
-    gap: 4,
+  opsBadgeText: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
-  switchModeText: {
+  brandSub: {
     fontSize: 11,
-    fontWeight: fontWeights.bold,
-    color: colors.white,
-  },
-  emergencyBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.cardSurface,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
-  },
-  emergencyActive: {
-    backgroundColor: colors.error,
-  },
-  emergencyTitle: {
-    fontSize: 12,
-    fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-  },
-  emergencySub: {
-    fontSize: 10,
-    color: colors.textSecondary,
+    color: '#94A3B8',
     marginTop: 1,
   },
-  tabBar: {
+  systemStatusPill: {
     flexDirection: 'row',
-    backgroundColor: colors.cardSurface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+    gap: 8,
   },
-  tabItem: {
+  statusDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22C55E',
+  },
+  systemStatusText: {
+    fontSize: 11,
+    color: '#CBD5E1',
+    fontWeight: fontWeights.medium,
+  },
+  navMenu: {
     flex: 1,
+    gap: 4,
+  },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  navItemActive: {
+    backgroundColor: '#1E293B',
+  },
+  navItemText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: fontWeights.medium,
+  },
+  navItemTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeights.bold,
+  },
+  navBadge: {
+    backgroundColor: '#334155',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  navBadgeActive: {
+    backgroundColor: '#0284C7',
+  },
+  navBadgeText: {
+    fontSize: 11,
+    color: '#CBD5E1',
+    fontWeight: fontWeights.bold,
+  },
+  navBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  sidebarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  adminUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  adminAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: fontWeights.bold,
+    fontSize: 14,
+  },
+  adminName: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: fontWeights.bold,
+  },
+  adminRole: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    gap: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingVertical: 8,
+    borderRadius: 6,
   },
-  tabItemActive: {
-    borderBottomColor: colors.primary,
-  },
-  tabText: {
+  signOutBtnText: {
     fontSize: 12,
-    fontWeight: fontWeights.semibold,
-    color: colors.textMuted,
-  },
-  tabTextActive: {
-    color: colors.primary,
+    color: '#EF4444',
     fontWeight: fontWeights.bold,
   },
-  scroll: {
+  // ==========================================
+  // MAIN CONTENT STYLING
+  // ==========================================
+  contentArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
-  scrollContent: {
-    padding: spacing.md,
-    paddingBottom: spacing['4xl'],
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  metricGrid: {
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  breadcrumbMuted: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  breadcrumbActive: {
+    fontSize: 11,
+    color: '#0F172A',
+    fontWeight: fontWeights.bold,
+  },
+  pageTitle: {
+    fontSize: 18,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  topRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  crisisToggleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  crisisToggleBoxActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#B91C1C',
+  },
+  crisisToggleText: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bodyScroll: {
+    flex: 1,
+  },
+  bodyScrollContent: {
+    padding: spacing.xl,
+    maxWidth: 1400,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  // ==========================================
+  // KPI METRIC CARDS
+  // ==========================================
+  overviewContainer: {
+    gap: spacing.xl,
+  },
+  kpiRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    gap: spacing.md,
   },
-  metricCard: {
-    width: '48%',
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.subtle,
-  },
-  metricLabel: {
-    fontSize: 10,
-    fontWeight: fontWeights.heavy,
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontSize: 19,
-    fontWeight: fontWeights.heavy,
-    color: colors.darkNavy,
-  },
-  metricSub: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  sectionCard: {
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.subtle,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-  },
-  sectionSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  fleetBarContainer: {
-    height: 8,
-    backgroundColor: colors.backgroundMuted,
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-    marginTop: spacing.xs,
-  },
-  fleetBarFill: {
-    height: '100%',
-    backgroundColor: colors.success,
-  },
-  fleetStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  fleetStatText: {
-    fontSize: 11,
-    fontWeight: fontWeights.semibold,
-    color: colors.textSecondary,
-  },
-  surgeBtnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-    gap: spacing.xs,
-  },
-  surgeBtn: {
+  kpiCard: {
     flex: 1,
-    backgroundColor: colors.backgroundMuted,
+    minWidth: 220,
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.xl,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.cardBorder,
-  },
-  surgeBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  surgeBtnText: {
-    fontSize: 15,
-    fontWeight: fontWeights.heavy,
-    color: colors.darkNavy,
-  },
-  surgeBtnSub: {
-    fontSize: 10,
-    fontWeight: fontWeights.medium,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  surgeBtnTextActive: {
-    color: colors.white,
-  },
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: fontWeights.heavy,
-    color: colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
-  },
-  kycCard: {
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.subtle,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
   },
-  kycTopRow: {
+  kpiTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  kpiLabel: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  kpiIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kpiValue: {
+    fontSize: 24,
+    fontWeight: fontWeights.heavy,
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  kpiFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  kpiTrend: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: '#16A34A',
+  },
+  kpiSub: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  kpiSuccessText: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: '#16A34A',
+  },
+  marginPill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  marginPillText: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#16A34A',
+  },
+  // ==========================================
+  // OPS DESK 2-COLUMN GRID
+  // ==========================================
+  opsDeskGrid: {
+    flexDirection: 'column',
+    gap: spacing.lg,
+  },
+  opsDeskGridDesktop: {
+    flexDirection: 'row',
+  },
+  opsDeskColumn: {
+    flex: 1,
+    gap: spacing.lg,
+  },
+  portalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
+  },
+  portalCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-  },
-  kycBusinessName: {
-    fontSize: 15,
-    fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-  },
-  kycContact: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  kycDetailGrid: {
-    flexDirection: 'row',
-    backgroundColor: colors.backgroundMuted,
-    padding: spacing.sm,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.sm,
-  },
-  kycDetailItem: {
-    flex: 1,
-  },
-  kycDetailLabel: {
-    fontSize: 9,
-    fontWeight: fontWeights.bold,
-    color: colors.textMuted,
-  },
-  kycDetailValue: {
-    fontSize: 12,
-    fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-    marginTop: 1,
-  },
-  kycSourceBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: spacing.md,
   },
-  kycSourceText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  kycActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  emptyCard: {
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing['2xl'],
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  emptyTitle: {
+  portalCardTitle: {
     fontSize: 15,
     fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-    marginTop: spacing.sm,
+    color: '#0F172A',
   },
-  emptySub: {
+  portalCardSubtitle: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: '#64748B',
     marginTop: 2,
   },
-  disputeCard: {
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    ...shadows.subtle,
-  },
-  disputeTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  disputeRef: {
-    fontSize: 14,
-    fontWeight: fontWeights.bold,
-    color: colors.darkNavy,
-  },
-  disputeParties: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  disputeReasonBox: {
-    backgroundColor: colors.backgroundMuted,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginVertical: spacing.xs,
-  },
-  disputeReason: {
+  cardHeaderLink: {
     fontSize: 12,
-    color: colors.darkNavy,
-    lineHeight: 16,
-  },
-  disputeFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  disputeAmount: {
-    fontSize: 13,
-    fontWeight: fontWeights.bold,
-    color: colors.error,
-  },
-  auditCard: {
-    backgroundColor: colors.cardSurface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  auditHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  auditActionTag: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  auditActionText: {
-    fontSize: 10,
     fontWeight: fontWeights.bold,
     color: colors.primary,
   },
-  auditTime: {
-    fontSize: 11,
-    color: colors.textSecondary,
+  progressBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+    marginBottom: spacing.sm,
   },
-  auditTarget: {
-    fontSize: 13,
-    fontWeight: fontWeights.semibold,
-    color: colors.darkNavy,
-    marginBottom: 2,
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#22C55E',
+    borderRadius: 4,
   },
-  auditNotes: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 16,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
+  fleetMetricRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
-  sectionSub: {
+  fleetStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  fleetStatTitle: {
     fontSize: 12,
-    color: colors.textSecondary,
+    fontWeight: fontWeights.semibold,
+    color: '#334155',
+  },
+  capacityDistributionRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  capChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  capChipText: {
+    fontSize: 11,
+    fontWeight: fontWeights.medium,
+    color: '#475569',
+  },
+  // Surge Controller
+  surgeActiveTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+  },
+  surgeActiveTagText: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    color: '#D97706',
+  },
+  surgeButtonsGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  surgeSelectorCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  surgeSelectorCardActive: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0369A1',
+  },
+  surgeRateNumber: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  surgeRateSub: {
+    fontSize: 10,
+    color: '#64748B',
     marginTop: 2,
   },
-  emptyText: {
+  surgeTextActive: {
+    color: '#FFFFFF',
+  },
+  // Queues and Lists
+  cleanQueueBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: 6,
+  },
+  cleanQueueTitle: {
+    fontSize: 14,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  cleanQueueSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    maxWidth: 320,
+  },
+  queueItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: spacing.sm,
+  },
+  queueItemName: {
     fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  queueItemDetails: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  // ==========================================
+  // ENTERPRISE DATA TABLES
+  // ==========================================
+  sectionContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
+  },
+  tableHeaderBar: {
+    marginBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingBottom: spacing.md,
+  },
+  tableHeaderTitle: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  tableHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  enterpriseTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: spacing.md,
+  },
+  tableEntityName: {
+    fontSize: 14,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  tableEntitySub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  tableColLabel: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  tableColVal: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  tableActionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  auditLogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: spacing.md,
+  },
+  auditActionPill: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  auditActionText: {
+    fontSize: 10,
+    fontWeight: fontWeights.heavy,
+    color: '#0369A1',
+  },
+  auditTargetText: {
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  auditNotesText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  auditTimestamp: {
+    fontSize: 11,
+    color: '#94A3B8',
   },
 });
-
