@@ -1,0 +1,12 @@
+{
+  "powershell.startAutomatically": false,
+  "powershell.promptToUpdatePowerShell": false,
+  "powershell.integratedConsole.showOnStartup": false,
+  "powershell.suppressStartupBanner": true,
+  "terminal.integrated.defaultProfile.osx": "zsh",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.expo": true,
+    "**/dist": true
+  }
+}
