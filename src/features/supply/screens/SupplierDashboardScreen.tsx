@@ -87,7 +87,7 @@ export const SupplierDashboardScreen: React.FC = () => {
             <Text style={styles.metricValue}>
               ₹{supplierMetrics.todayRevenue.toLocaleString('en-IN')}
             </Text>
-            <Text style={styles.metricGrowth}>+18% vs yesterday</Text>
+            <Text style={styles.metricGrowth}>{supplierMetrics.activeDeliveriesCount} active deliveries</Text>
           </View>
 
           <View style={styles.metricCard}>
@@ -95,7 +95,7 @@ export const SupplierDashboardScreen: React.FC = () => {
             <Text style={styles.metricValue}>
               {(supplierMetrics.todayLiters / 1000).toFixed(0)}k Litres
             </Text>
-            <Text style={styles.metricGrowth}>6 completed sumps</Text>
+            <Text style={styles.metricGrowth}>{supplierMetrics.completedCount} completed deliveries</Text>
           </View>
         </View>
 

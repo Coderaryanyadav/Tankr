@@ -73,39 +73,24 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
       if (!error && data && data.length > 0) {
         const q = data[0] as BookingQuote;
-        set({ activeQuote: q, isLoadingQuote: false });
+        set({ activeQuote: q, isLoadingQuote: false, bookingError: null });
         return q;
       }
 
-      // Authoritative fallback matching server formula
-      const distKm = tanker.distance_km;
-      const base = tanker.base_price;
-      const deliveryCharge = Math.round(distKm * tanker.price_per_km);
-      const surcharge = 0; // standard hours
-      const tax = Math.round((base + deliveryCharge + surcharge) * 0.05);
-      const total = base + deliveryCharge + surcharge + tax;
-
-      const fallbackQuote: BookingQuote = {
-        tanker_id: tanker.tanker_id,
-        supplier_name: tanker.supplier_name,
-        vehicle_number: tanker.vehicle_number,
-        driver_name: tanker.driver_name,
-        capacity_liters: tanker.capacity_liters,
-        water_type: tanker.water_type,
-        distance_km: distKm,
-        eta_minutes: tanker.eta_minutes,
-        base_price: base,
-        delivery_charge: deliveryCharge,
-        surcharge,
-        tax_amount: tax,
-        final_payable_amount: total,
-      };
-
-      set({ activeQuote: fallbackQuote, isLoadingQuote: false });
-      return fallbackQuote;
+      console.warn('[BookingStore] RPC calculation returned no quote or error:', error);
+      set({
+        activeQuote: null,
+        isLoadingQuote: false,
+        bookingError: error?.message || 'Unable to retrieve live quote from pricing engine.',
+      });
+      return null;
     } catch (err: any) {
       console.warn('[BookingStore] Quote calculation error:', err);
-      set({ isLoadingQuote: false });
+      set({
+        activeQuote: null,
+        isLoadingQuote: false,
+        bookingError: err?.message || 'Network error while contacting pricing engine.',
+      });
       return null;
     }
   },

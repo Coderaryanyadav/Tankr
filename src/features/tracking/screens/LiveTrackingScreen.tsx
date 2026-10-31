@@ -17,6 +17,7 @@ import { Button } from '../../../components/common/Button/Button';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { LiveTrackingState, TrackingService } from '../../../services/tracking/trackingService';
+import { supabase } from '../../../services/supabase/client';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
@@ -74,8 +75,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   const tankerCoords = useMemo(() => {
     if (!activeBooking) return { left: SCREEN_WIDTH / 2 - 50, top: 100 };
     const centerProj = projectToTileCoords(centerLat, centerLng, zoom);
-    const tLat = trackingState?.currentLat ?? (centerLat + 0.008);
-    const tLng = trackingState?.currentLng ?? (centerLng + 0.007);
+    const tLat = trackingState?.currentLat ?? centerLat;
+    const tLng = trackingState?.currentLng ?? centerLng;
     const tProj = projectToTileCoords(tLat, tLng, zoom);
 
     const left = Math.max(20, Math.min(SCREEN_WIDTH - 60, (tProj.x - centerProj.x) * 256 + SCREEN_WIDTH / 2 - 20));
@@ -87,31 +88,101 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   useEffect(() => {
     if (!activeBooking) return;
 
-    // Initial position slightly offset to demonstrate approaching vector
-    const initialLat = activeBooking.delivery_latitude + 0.015;
-    const initialLng = activeBooking.delivery_longitude + 0.012;
+    let isMounted = true;
 
-    setTrackingState({
-      currentLat: initialLat,
-      currentLng: initialLng,
-      heading: 220,
-      speedKmh: 24,
-      lastUpdated: new Date(),
-      isStale: false,
-      distanceRemainingKm: activeBooking.delivery_distance_km || 2.4,
-      etaMinutes: activeBooking.estimated_arrival_minutes || 14,
-    });
+    // Fetch initial authentic breadcrumb from database
+    const fetchLatestPosition = async () => {
+      try {
+        const { data: breadcrumb } = await supabase
+          .from('tracking_breadcrumbs')
+          .select('latitude, longitude, heading, speed_kmh, recorded_at')
+          .eq('booking_id', activeBooking.id)
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (breadcrumb && isMounted) {
+          const lat = Number(breadcrumb.latitude);
+          const lng = Number(breadcrumb.longitude);
+          const R = 6371;
+          const dLat = ((activeBooking.delivery_latitude - lat) * Math.PI) / 180;
+          const dLon = ((activeBooking.delivery_longitude - lng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((lat * Math.PI) / 180) *
+              Math.cos((activeBooking.delivery_latitude * Math.PI) / 180) *
+              Math.sin(dLon / 2) *
+              Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distKm = Math.round(R * c * 10) / 10;
+          const eta = Math.max(2, Math.round((distKm / 20) * 60));
+
+          setTrackingState({
+            currentLat: lat,
+            currentLng: lng,
+            heading: Number(breadcrumb.heading || 0),
+            speedKmh: Number(breadcrumb.speed_kmh || 0),
+            lastUpdated: new Date(breadcrumb.recorded_at),
+            isStale: false,
+            distanceRemainingKm: distKm,
+            etaMinutes: eta,
+          });
+        } else if (activeBooking.tanker_id && isMounted) {
+          // Check last known position of assigned tanker
+          const { data: tanker } = await supabase
+            .from('tankers')
+            .select('latitude, longitude, heading_degrees')
+            .eq('id', activeBooking.tanker_id)
+            .maybeSingle();
+
+          if (tanker && isMounted && tanker.latitude && tanker.longitude) {
+            const lat = Number(tanker.latitude);
+            const lng = Number(tanker.longitude);
+            const R = 6371;
+            const dLat = ((activeBooking.delivery_latitude - lat) * Math.PI) / 180;
+            const dLon = ((activeBooking.delivery_longitude - lng) * Math.PI) / 180;
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos((lat * Math.PI) / 180) *
+                Math.cos((activeBooking.delivery_latitude * Math.PI) / 180) *
+                Math.sin(dLon / 2) *
+                Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distKm = Math.round(R * c * 10) / 10;
+            const eta = Math.max(2, Math.round((distKm / 20) * 60));
+
+            setTrackingState({
+              currentLat: lat,
+              currentLng: lng,
+              heading: Number(tanker.heading_degrees || 0),
+              speedKmh: 0,
+              lastUpdated: new Date(),
+              isStale: false,
+              distanceRemainingKm: distKm,
+              etaMinutes: eta,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[LiveTracking] Error fetching initial coordinates:', e);
+      }
+    };
+
+    fetchLatestPosition();
 
     const unsubscribe = TrackingService.subscribeToLiveTracking(
       activeBooking.id,
       activeBooking.delivery_latitude,
       activeBooking.delivery_longitude,
       (newState: LiveTrackingState) => {
-        setTrackingState(newState);
+        if (isMounted) {
+          setTrackingState(newState);
+        }
       }
     );
 
     return () => {
+      isMounted = false;
       unsubscribe();
     };
   }, [activeBooking]);

@@ -23,6 +23,7 @@ interface SupplyState {
   verificationStatus: string;
   driverId: string | null;
   driverName: string;
+  driverAssignedVehicle: { vehicle_number: string; capacity_liters: number } | null;
 
   // Supplier Dashboard State
   pendingRequests: BookingRecord[];
@@ -66,6 +67,7 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   verificationStatus: 'pending_review',
   driverId: null,
   driverName: '',
+  driverAssignedVehicle: null,
 
   pendingRequests: [],
   fleetTankers: [],
@@ -177,7 +179,48 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   loadDriverData: async (userId: string, userPhone?: string) => {
     set({ isLoadingDriver: true });
     try {
-      // Fetch Active Delivery assigned to driver's phone or profile
+      // 1. Fetch driver profile & vehicle information
+      let resolvedDriverName = '';
+      let resolvedAssignedVehicle: { vehicle_number: string; capacity_liters: number } | null = null;
+
+      if (userId) {
+        const { data: driverProf } = await supabase
+          .from('driver_profiles')
+          .select('full_name, assigned_tanker_id, tankers(vehicle_number, capacity_liters)')
+          .eq('profile_id', userId)
+          .maybeSingle();
+
+        if (driverProf) {
+          resolvedDriverName = driverProf.full_name || '';
+          if (driverProf.tankers) {
+            resolvedAssignedVehicle = {
+              vehicle_number: (driverProf.tankers as any).vehicle_number,
+              capacity_liters: Number((driverProf.tankers as any).capacity_liters),
+            };
+          }
+        }
+      }
+
+      if (!resolvedDriverName && userPhone) {
+        const raw = userPhone.replace(/\D/g, '');
+        const last10 = raw.slice(-10);
+        const { data: tankerRec } = await supabase
+          .from('tankers')
+          .select('driver_name, vehicle_number, capacity_liters')
+          .or(`driver_phone.eq.+91${last10},driver_phone.eq.91${last10},driver_phone.eq.${last10}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (tankerRec) {
+          resolvedDriverName = tankerRec.driver_name || '';
+          resolvedAssignedVehicle = {
+            vehicle_number: tankerRec.vehicle_number,
+            capacity_liters: Number(tankerRec.capacity_liters),
+          };
+        }
+      }
+
+      // 2. Fetch Active Delivery assigned to driver's phone or profile
       let query = supabase
         .from('bookings')
         .select('*')
@@ -196,9 +239,30 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       const { data, error } = await query.maybeSingle();
 
       if (!error && data) {
-        set({ assignedDelivery: data as BookingRecord, isLoadingDriver: false });
+        const booking = data as BookingRecord;
+        if (!resolvedAssignedVehicle && booking.vehicle_number) {
+          resolvedAssignedVehicle = {
+            vehicle_number: booking.vehicle_number,
+            capacity_liters: booking.capacity_liters,
+          };
+        }
+        if (!resolvedDriverName && booking.driver_name) {
+          resolvedDriverName = booking.driver_name;
+        }
+
+        set({
+          assignedDelivery: booking,
+          driverName: resolvedDriverName,
+          driverAssignedVehicle: resolvedAssignedVehicle,
+          isLoadingDriver: false,
+        });
       } else {
-        set({ assignedDelivery: null, isLoadingDriver: false });
+        set({
+          assignedDelivery: null,
+          driverName: resolvedDriverName,
+          driverAssignedVehicle: resolvedAssignedVehicle,
+          isLoadingDriver: false,
+        });
       }
     } catch {
       set({ isLoadingDriver: false });

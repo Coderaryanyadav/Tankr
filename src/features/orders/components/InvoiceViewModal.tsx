@@ -49,22 +49,22 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
       });
 
   const supplierName =
-    invoice?.supplier_name || booking?.supplier_name || 'Sri Cauvery Water Supplies';
-  const supplierGstin = invoice?.supplier_gstin || '29AABCS1429B1Z8';
+    invoice?.supplier_name || booking?.supplier_name || 'TANKR Network Partner';
+  const supplierGstin = invoice?.supplier_gstin || '—';
   const vehicleNo =
-    invoice?.vehicle_number || booking?.vehicle_number || 'KA-04-TC-5001';
-  const customerName = invoice?.customer_name || 'Valued Customer';
-  const customerPhone = invoice?.customer_phone || '+91 98765 43210';
+    invoice?.vehicle_number || booking?.vehicle_number || 'Pending Assignment';
+  const customerName = invoice?.customer_name || 'Customer';
+  const customerPhone = invoice?.customer_phone || '—';
   const deliveryAddress =
-    invoice?.delivery_address || booking?.delivery_address || 'Bengaluru, Karnataka';
+    invoice?.delivery_address || booking?.delivery_address || '—';
 
-  const basePrice = invoice?.base_amount ?? (booking?.base_price || 750);
+  const basePrice = invoice?.base_amount ?? (booking?.base_price ?? 0);
   const deliveryCharge =
-    invoice?.delivery_charge ?? (booking?.delivery_charge || 85);
-  const surcharge = invoice?.surcharge ?? (booking?.surcharge || 0);
-  const taxAmount = invoice?.tax_amount ?? (booking?.tax_amount || 42);
+    invoice?.delivery_charge ?? (booking?.delivery_charge ?? 0);
+  const surcharge = invoice?.surcharge ?? (booking?.surcharge ?? 0);
+  const taxAmount = invoice?.tax_amount ?? (booking?.tax_amount ?? 0);
   const totalAmount =
-    invoice?.total_amount ?? (booking?.final_payable_amount || 877);
+    invoice?.total_amount ?? (booking?.final_payable_amount ?? 0);
   const paymentMethod = (
     invoice?.payment_method || booking?.payment_preference || 'UPI'
   ).toUpperCase();

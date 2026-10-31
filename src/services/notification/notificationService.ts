@@ -35,12 +35,12 @@ class NotificationService {
         .limit(30);
 
       if (error || !data) {
-        return this.getFallbackNotifications(userId);
+        return [];
       }
 
       return data as TankrNotification[];
     } catch {
-      return this.getFallbackNotifications(userId);
+      return [];
     }
   }
 
@@ -94,44 +94,6 @@ class NotificationService {
     } catch {
       // Ignored
     }
-  }
-
-  /**
-   * Fallback sample notifications when table is empty or offline.
-   */
-  private getFallbackNotifications(userId: string): TankrNotification[] {
-    return [
-      {
-        id: 'notif-1',
-        user_id: userId,
-        title: 'Water Delivery Completed! 💧',
-        body: 'Your 5,000L Potable tanker has completed delivery at Villa 14, Sobha Palm Meadows. Tax invoice is ready.',
-        booking_id: 'req-101',
-        type: 'delivery_completed',
-        is_read: false,
-        created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-      },
-      {
-        id: 'notif-2',
-        user_id: userId,
-        title: 'Driver Arrived at Location 📍',
-        body: 'Driver Basavaraj Patil has arrived. Please share your 4-digit PIN (4829) with the driver to start delivery.',
-        booking_id: 'req-101',
-        type: 'tanker_arrived',
-        is_read: true,
-        created_at: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-      },
-      {
-        id: 'notif-3',
-        user_id: userId,
-        title: 'Order Confirmed & Tanker Dispatched 🚛',
-        body: 'Sri Cauvery Water Supplies has assigned tanker KA-04-TC-5001. ETA is 18 minutes.',
-        booking_id: 'req-101',
-        type: 'tanker_started',
-        is_read: true,
-        created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-      },
-    ];
   }
 }
 

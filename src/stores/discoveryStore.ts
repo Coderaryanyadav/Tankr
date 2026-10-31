@@ -103,8 +103,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
               longitude: t.longitude,
               heading_degrees: t.heading_degrees || 0,
               is_available: t.is_available,
-              rating: Number(t.suppliers?.rating || 4.8),
-              total_deliveries: Number(t.suppliers?.total_deliveries || 100),
+              rating: Number(t.suppliers?.rating ?? 0),
+              total_deliveries: Number(t.suppliers?.total_deliveries ?? 0),
             };
           });
         }

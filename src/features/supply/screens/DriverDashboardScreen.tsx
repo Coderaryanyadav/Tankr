@@ -33,6 +33,8 @@ export const DriverDashboardScreen: React.FC = () => {
     toggleDriverDuty,
     driverUpdateStatus,
     loadDriverData,
+    driverName,
+    driverAssignedVehicle,
   } = useSupplyStore();
 
   useEffect(() => {
@@ -41,8 +43,8 @@ export const DriverDashboardScreen: React.FC = () => {
 
   const [pinModalVisible, setPinModalVisible] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');
-  const [meterStart, setMeterStart] = useState<string>('14200.0');
-  const [meterEnd, setMeterEnd] = useState<string>('19200.0');
+  const [meterStart, setMeterStart] = useState<string>('');
+  const [meterEnd, setMeterEnd] = useState<string>('');
   const [pinError, setPinError] = useState<string | null>(null);
 
   const handleOpenMapsNavigation = () => {
@@ -176,8 +178,14 @@ export const DriverDashboardScreen: React.FC = () => {
       {/* Driver Header */}
       <View style={styles.header}>
         <View style={styles.driverProfileCol}>
-          <Text style={styles.driverName}>Basavaraj Patil</Text>
-          <Text style={styles.vehicleReg}>Tanker KA-04-TC-5001 (5,000 L)</Text>
+          <Text style={styles.driverName}>{driverName || user?.phone || 'TANKR Driver'}</Text>
+          <Text style={styles.vehicleReg}>
+            {assignedDelivery?.vehicle_number
+              ? `Tanker ${assignedDelivery.vehicle_number} (${assignedDelivery.capacity_liters.toLocaleString('en-IN')} L)`
+              : driverAssignedVehicle
+              ? `Tanker ${driverAssignedVehicle.vehicle_number} (${driverAssignedVehicle.capacity_liters.toLocaleString('en-IN')} L)`
+              : 'No Active Tanker Assigned'}
+          </Text>
         </View>
 
         <View style={styles.dutySwitchCol}>
@@ -332,7 +340,7 @@ export const DriverDashboardScreen: React.FC = () => {
                 </Text>
                 <TextInput
                   keyboardType="numeric"
-                  placeholder="14200.0"
+                  placeholder="0.0"
                   placeholderTextColor={colors.textMuted}
                   value={meterStart}
                   onChangeText={setMeterStart}
@@ -345,7 +353,7 @@ export const DriverDashboardScreen: React.FC = () => {
                 </Text>
                 <TextInput
                   keyboardType="numeric"
-                  placeholder="19200.0"
+                  placeholder="0.0"
                   placeholderTextColor={colors.textMuted}
                   value={meterEnd}
                   onChangeText={setMeterEnd}

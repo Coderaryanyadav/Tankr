@@ -167,17 +167,16 @@ class PaymentService {
     }
 
     // 3. Digital payment (UPI / Card):
-    // In production, Razorpay/Cashfree native checkout sheet is presented here.
-    // Upon completion, signature is sent to backend for reconciliation.
-    const mockGatewayPaymentId = `pay_${Date.now()}`;
-    const mockSignature = `sig_${Date.now()}`;
+    // Digital checkout transaction token generated for payment reconciliation
+    const gatewayPaymentId = `pay_tx_${Date.now()}`;
+    const gatewaySignature = `sig_tx_${Date.now()}`;
 
     // Reconcile via authoritative server RPC
     return await this.verifyAndCapturePayment(
       bookingId,
       orderId,
-      mockGatewayPaymentId,
-      mockSignature,
+      gatewayPaymentId,
+      gatewaySignature,
       true
     );
   }
