@@ -2,8 +2,8 @@
 .SYNOPSIS
     TANKR Windows Developer Setup Automation (PowerShell)
 .DESCRIPTION
-    Automates environment verification, dependency installation, .env configuration,
-    and quality verification for TANKR on Windows.
+    Automates environment verification, auto-installation of missing tools (Git, Node.js),
+    dependency installation, .env configuration, and quality verification.
 #>
 
 [CmdletBinding()]
@@ -29,9 +29,9 @@ function Write-Warning {
     Write-Host "  [WARN] $Message" -ForegroundColor Yellow
 }
 
-function Write-Fail {
+function Write-AutoInstall {
     param([string]$Message)
-    Write-Host "  [FAIL] $Message" -ForegroundColor Red
+    Write-Host "  [AUTO-INSTALL] $Message" -ForegroundColor Magenta
 }
 
 Write-Host "================================================================" -ForegroundColor Cyan
@@ -45,42 +45,115 @@ Set-Location $ProjectRoot
 # 1. Verify Project Root
 Write-Step "Verifying Repository Root..." "1/6"
 if (-not (Test-Path "package.json")) {
-    Write-Fail "package.json not found in $ProjectRoot"
+    Write-Host "[ERROR] package.json not found in $ProjectRoot" -ForegroundColor Red
     exit 1
 }
 Write-Success "Repository root verified at $ProjectRoot"
 
-# 2. Check Prerequisites
-Write-Step "Checking Prerequisites..." "2/6"
+# Helper to refresh current process PATH environment
+function Refresh-ProcessPath {
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $extraPaths = @("C:\Program Files\nodejs", "C:\Program Files\Git\cmd", "C:\Program Files\Git\bin")
+    $env:Path = "$machinePath;$userPath;" + ($extraPaths -join ";")
+}
 
-# Check Node.js
+# 2. Check & Auto-Install Prerequisites
+Write-Step "Checking & Auto-Installing Prerequisites..." "2/6"
+
+# Check & Install Git if missing
+$gitAvailable = $false
 try {
-    $nodeVersion = & node -v
-    Write-Success "Node.js detected: $nodeVersion"
-    $major = [int]($nodeVersion -replace 'v','' -split '\.')[0]
-    if ($major -lt 18) {
-        Write-Warning "TANKR recommends Node.js v20+ LTS. You are running $nodeVersion."
+    & git --version | Out-Null
+    $gitAvailable = $true
+} catch {
+    $gitAvailable = $false
+}
+
+if (-not $gitAvailable) {
+    Write-AutoInstall "Git is missing. Attempting automated installation..."
+    $installedGit = $false
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "    Installing Git via winget..." -ForegroundColor Gray
+        & winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements --silent
+        $installedGit = $true
+    } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Host "    Installing Git via Chocolatey..." -ForegroundColor Gray
+        & choco install git -y
+        $installedGit = $true
+    } elseif (Get-Command scoop -ErrorAction SilentlyContinue) {
+        Write-Host "    Installing Git via Scoop..." -ForegroundColor Gray
+        & scoop install git
+        $installedGit = $true
+    } else {
+        Write-Host "    Downloading Git standalone installer..." -ForegroundColor Gray
+        $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe"
+        $gitInstaller = Join-Path $env:TEMP "git-installer.exe"
+        try {
+            Invoke-WebRequest -Uri $gitUrl -OutFile $gitInstaller -UseBasicParsing
+            Start-Process -FilePath $gitInstaller -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-" -Wait
+            $installedGit = $true
+        } catch {
+            Write-Warning "Could not download Git installer automatically: $_"
+        }
     }
-} catch {
-    Write-Fail "Node.js is not installed or not in PATH. Download from https://nodejs.org"
-    exit 1
+    Refresh-ProcessPath
 }
 
-# Check npm
-try {
-    $npmVersion = & npm -v
-    Write-Success "npm detected: v$npmVersion"
-} catch {
-    Write-Fail "npm is not installed."
-    exit 1
-}
-
-# Check Git
 try {
     $gitVersion = & git --version
-    Write-Success "Git detected: $gitVersion"
+    Write-Success "Git available: $gitVersion"
 } catch {
-    Write-Warning "Git was not found in PATH."
+    Write-Warning "Git was installed; terminal restart may be required for full CLI detection."
+}
+
+# Check & Install Node.js if missing or < v18
+$needNode = $false
+try {
+    $nodeVersion = & node -v
+    $major = [int]($nodeVersion -replace 'v','' -split '\.')[0]
+    if ($major -lt 18) {
+        Write-Warning "Node.js $nodeVersion is older than required v18.0.0."
+        $needNode = $true
+    } else {
+        Write-Success "Node.js installed: $nodeVersion"
+    }
+} catch {
+    $needNode = $true
+}
+
+if ($needNode) {
+    Write-AutoInstall "Node.js v20 LTS is missing or outdated. Installing automatically..."
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "    Installing Node.js v20 LTS via winget..." -ForegroundColor Gray
+        & winget install --id OpenJS.NodeJS.LTS -e --source winget --accept-source-agreements --accept-package-agreements --silent
+    } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+        Write-Host "    Installing Node.js via Chocolatey..." -ForegroundColor Gray
+        & choco install nodejs-lts -y
+    } elseif (Get-Command scoop -ErrorAction SilentlyContinue) {
+        Write-Host "    Installing Node.js via Scoop..." -ForegroundColor Gray
+        & scoop install nodejs-lts
+    } else {
+        Write-Host "    Downloading official Node.js v20 LTS MSI..." -ForegroundColor Gray
+        $nodeUrl = "https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi"
+        $nodeMsi = Join-Path $env:TEMP "node-v20-lts.msi"
+        try {
+            Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeMsi -UseBasicParsing
+            Start-Process msiexec.exe -ArgumentList "/i", "`"$nodeMsi`"", "/passive", "/norestart" -Wait
+        } catch {
+            Write-Host "    [ERROR] Automatic Node.js download failed: $_" -ForegroundColor Red
+        }
+    }
+    Refresh-ProcessPath
+}
+
+# Verify npm
+try {
+    $npmVersion = & npm -v
+    Write-Success "npm installed: v$npmVersion"
+} catch {
+    Write-Warning "npm not in immediate process path. Using updated environment..."
+    Refresh-ProcessPath
 }
 
 # 3. Environment Configuration
@@ -104,7 +177,7 @@ if ($SkipInstall) {
     Write-Host "  Running npm install (this may take 1-2 minutes)..." -ForegroundColor Gray
     & npm install
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "npm install failed."
+        Write-Host "  [FAIL] npm install encountered an issue." -ForegroundColor Red
         exit 1
     }
     Write-Success "Dependencies installed successfully."
@@ -118,7 +191,7 @@ if ($SkipTests) {
     Write-Host "  Checking TypeScript types (tsc --noEmit)..." -ForegroundColor Gray
     & npx tsc --noEmit
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "TypeScript compilation failed."
+        Write-Host "  [FAIL] TypeScript compilation failed." -ForegroundColor Red
         exit 1
     }
     Write-Success "TypeScript compilation passed with 0 errors."
@@ -126,7 +199,7 @@ if ($SkipTests) {
     Write-Host "  Running Jest unit test suite..." -ForegroundColor Gray
     & npm test -- --watchAll=false
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "Jest unit tests failed."
+        Write-Host "  [FAIL] Jest unit tests failed." -ForegroundColor Red
         exit 1
     }
     Write-Success "All Jest test suites passed."

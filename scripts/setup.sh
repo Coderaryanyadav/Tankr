@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # TANKR Automated One-Command Local Developer Setup
-# Automates environment verification, dependencies, database setup & test checks
+# Automates environment verification, dependencies, auto-installation, database & test checks
 # ==============================================================================
 
 set -uo pipefail
@@ -26,13 +26,103 @@ if [ ! -f "package.json" ] || ! grep -q '"name": "tankr"' package.json 2>/dev/nu
 fi
 echo -e "${BOLD}[1/7] Repository root verified.${NC}"
 
-# 2. Check Prerequisites & Environment Health
+# Auto-installer helper for missing prerequisites
+ensure_prerequisites() {
+    local OS="$(uname -s)"
+    
+    # 1. Check & Install Git if missing
+    if ! command -v git >/dev/null 2>&1; then
+        echo -e "${YELLOW}[AUTO-INSTALL] Git is missing. Installing Git automatically...${NC}"
+        if [ "$OS" = "Darwin" ]; then
+            if command -v brew >/dev/null 2>&1; then
+                brew install git
+            else
+                xcode-select --install 2>/dev/null || true
+            fi
+        elif [ "$OS" = "Linux" ]; then
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update && sudo apt-get install -y git
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y git
+            elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -Sy --noconfirm git
+            fi
+        fi
+    fi
+
+    # 2. Check & Install Node.js if missing or outdated (< 18)
+    local NEED_NODE=0
+    if ! command -v node >/dev/null 2>&1; then
+        NEED_NODE=1
+    else
+        local NODE_VER="$(node -v | sed 's/v//')"
+        local NODE_MAJOR="$(echo "$NODE_VER" | cut -d. -f1)"
+        if [ "$NODE_MAJOR" -lt 18 ]; then
+            echo -e "${YELLOW}[NOTICE] Detected Node.js v${NODE_VER}. TANKR requires >= v18.0.0 (v20+ LTS recommended).${NC}"
+            NEED_NODE=1
+        fi
+    fi
+
+    if [ "$NEED_NODE" -eq 1 ]; then
+        echo -e "${YELLOW}[AUTO-INSTALL] Installing Node.js v20 LTS automatically...${NC}"
+        if [ "$OS" = "Darwin" ]; then
+            if ! command -v brew >/dev/null 2>&1; then
+                echo -e "  Installing Homebrew package manager..."
+                NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+                if [ -f "/opt/homebrew/bin/brew" ]; then
+                    eval "$(/opt/homebrew/bin/brew shellenv)"
+                elif [ -f "/usr/local/bin/brew" ]; then
+                    eval "$(/usr/local/bin/brew shellenv)"
+                fi
+            fi
+            if command -v brew >/dev/null 2>&1; then
+                brew install node@20
+                brew link --overwrite --force node@20 2>/dev/null || true
+                export PATH="/opt/homebrew/opt/node@20/bin:/usr/local/opt/node@20/bin:$PATH"
+            else
+                echo -e "  Installing Node.js v20 via NVM..."
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                nvm install 20
+                nvm use 20
+            fi
+        elif [ "$OS" = "Linux" ]; then
+            if command -v apt-get >/dev/null 2>&1; then
+                curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+            elif command -v dnf >/dev/null 2>&1; then
+                curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+                sudo dnf install -y nodejs
+            else
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                nvm install 20
+                nvm use 20
+            fi
+        fi
+    fi
+
+    # 3. macOS recommended file watcher (Watchman - optional)
+    if [ "$OS" = "Darwin" ] && ! command -v watchman >/dev/null 2>&1 && command -v brew >/dev/null 2>&1; then
+        echo -e "  [${CYAN}RECOMMENDED${NC}] Watchman improves Metro file watching performance on macOS."
+        echo -e "  To install Watchman: ${BOLD}brew install watchman${NC}"
+    fi
+}
+
+# 2. Check Prerequisites & Auto-Install Missing Components
 echo ""
-echo -e "${BOLD}[2/7] Running Environment Diagnostics...${NC}"
+echo -e "${BOLD}[2/7] Checking & Auto-Installing Prerequisites...${NC}"
 chmod +x scripts/*.sh 2>/dev/null || true
+chmod +x scripts/mac/*.sh 2>/dev/null || true
+
+ensure_prerequisites
+
+# Run environment health check
 if ! ./scripts/check-environment.sh; then
-    echo -e "${RED}[ABORT] Missing required environment prerequisites.${NC}"
-    exit 1
+    echo -e "${YELLOW}[RE-CHECK] Retrying diagnostics after automated setup...${NC}"
+    ensure_prerequisites
 fi
 
 # 3. Environment Configuration Setup (.env)
@@ -98,15 +188,14 @@ echo -e "${GREEN}${BOLD}           ✨ TANKR LOCAL ENVIRONMENT SETUP COMPLETE! �
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo ""
 echo -e "${BOLD}To start the local development server:${NC}"
-echo -e "  ${CYAN}./scripts/start-dev.sh web${NC}       # Open Web Browser (http://localhost:8081)"
-echo -e "  ${CYAN}./scripts/start-dev.sh ios${NC}       # iOS Simulator"
-echo -e "  ${CYAN}./scripts/start-dev.sh android${NC}   # Android Emulator"
+echo -e "  ${CYAN}./scripts/mac/start-dev.sh web${NC}       (Browser: http://localhost:8081)"
+echo -e "  ${CYAN}./scripts/mac/start-dev.sh android${NC}   (Android Emulator)"
+echo -e "  ${CYAN}./scripts/mac/start-dev.sh ios${NC}       (iOS Simulator)"
 echo ""
-echo -e "${BOLD}Local Demo Credentials (OTP: 123456):${NC}"
-echo -e "  • ${BOLD}Admin Portal:${NC}     Phone: ${CYAN}8888888888${NC} (Super Admin, all 10 desks)"
-echo -e "  • ${BOLD}Supplier Portal:${NC}  Phone: ${CYAN}9999999999${NC} (Marol Potable Water Hub)"
-echo -e "  • ${BOLD}Driver Console:${NC}   Phone: ${CYAN}9000000001${NC} (Rajesh Sharma, Tanker MH-02-TC-5001)"
-echo -e "  • ${BOLD}Customer App:${NC}     Phone: ${CYAN}9876543210${NC} (Vikram Malhotra)"
-echo ""
+echo -e "${BOLD}Local Demo Credentials (fixed OTP: 123456):${NC}"
+echo -e "  • Super Admin:     Phone: ${BOLD}8888888888${NC} (Access to all 10 Operations Desks)"
+echo -e "  • Water Supplier:  Phone: ${BOLD}9999999999${NC} (Marol Potable Water Hub)"
+echo -e "  • Fleet Driver:    Phone: ${BOLD}9000000001${NC} (Rajesh Sharma — MH-02-TC-5001)"
+echo -e "  • Customer:        Phone: ${BOLD}9876543210${NC} (Vikram Malhotra)"
 echo -e "${BLUE}${BOLD}================================================================${NC}"
-exit 0
+echo ""

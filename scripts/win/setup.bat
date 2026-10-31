@@ -3,6 +3,7 @@ setlocal enabledelayedexpansion
 
 REM ==============================================================================
 REM TANKR Windows Developer Setup Automation (CMD)
+REM Auto-installs missing prerequisites (Node.js LTS, Git) rather than exiting.
 REM ==============================================================================
 
 echo ================================================================
@@ -22,31 +23,50 @@ if not exist "package.json" (
 echo [1/6] Repository root verified.
 echo.
 
-REM 2. Check Prerequisites
-echo [2/6] Checking Prerequisites...
-where node >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo [FAIL] Node.js is not installed. Please install Node.js v20+ LTS from https://nodejs.org
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%v in ('node -v') do set NODE_VER=%%v
-echo   [PASS] Node.js installed: %NODE_VER%
+REM 2. Check & Auto-Install Prerequisites
+echo [2/6] Checking ^& Auto-Installing Prerequisites...
 
-where npm >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo [FAIL] npm is not installed.
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%v in ('npm -v') do set NPM_VER=%%v
-echo   [PASS] npm installed: v%NPM_VER%
-
+REM Check Git
 where git >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [WARN] Git is not found in PATH.
+    echo   [AUTO-INSTALL] Git is missing. Installing Git automatically...
+    where winget >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements --silent
+    ) else (
+        echo   Downloading Git for Windows installer...
+        powershell -Command "Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe' -OutFile '$env:TEMP\git-setup.exe' -UseBasicParsing; Start-Process '$env:TEMP\git-setup.exe' -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-' -Wait"
+    )
+    set "PATH=C:\Program Files\Git\cmd;C:\Program Files\Git\bin;!PATH!"
+)
+echo   [PASS] Git verification complete.
+
+REM Check Node.js
+where node >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo   [AUTO-INSTALL] Node.js is missing. Installing Node.js v20 LTS automatically...
+    where winget >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        winget install --id OpenJS.NodeJS.LTS -e --source winget --accept-source-agreements --accept-package-agreements --silent
+    ) else (
+        echo   Downloading official Node.js LTS MSI package...
+        powershell -Command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi' -OutFile '$env:TEMP\node-lts.msi' -UseBasicParsing; Start-Process msiexec.exe -ArgumentList '/i', '$env:TEMP\node-lts.msi', '/passive', '/norestart' -Wait"
+    )
+    set "PATH=C:\Program Files\nodejs;!PATH!"
+)
+
+where node >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    for /f "tokens=*" %%v in ('node -v') do set NODE_VER=%%v
+    echo   [PASS] Node.js active: !NODE_VER!
 ) else (
-    echo   [PASS] Git is available.
+    echo   [WARN] Node installed; if not detected immediately in this window, please restart command prompt.
+)
+
+where npm >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    for /f "tokens=*" %%v in ('npm -v') do set NPM_VER=%%v
+    echo   [PASS] npm active: v!NPM_VER!
 )
 echo.
 
