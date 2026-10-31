@@ -18,10 +18,12 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 import { BOOKING_STATUS_CONFIG, BookingRecord, BookingStatus } from '../../../types/booking';
 import { InvoiceViewModal } from '../../orders/components/InvoiceViewModal';
 import { invoiceService, InvoiceRecord } from '../../../services/invoice/invoiceService';
+import { PREVIEW_BOOKING, PREVIEW_INVOICE } from '../../../utils/previewDemoData';
 
 interface BookingsListScreenProps {
   onBack?: () => void;
   onSelectBooking?: (booking: BookingRecord) => void;
+  initialModal?: string;
 }
 
 // Stage configuration for active order delivery progress
@@ -55,12 +57,19 @@ function getActiveStepIndex(status: BookingStatus): number {
 export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
   onBack,
   onSelectBooking,
+  initialModal,
 }) => {
   const { user } = useAuthStore();
   const { userBookings, isLoadingBookings, fetchUserBookings } = useBookingStore();
-  const [selectedInvoiceBooking, setSelectedInvoiceBooking] = useState<BookingRecord | null>(null);
-  const [invoiceData, setInvoiceData] = useState<InvoiceRecord | null>(null);
+  const [selectedInvoiceBooking, setSelectedInvoiceBooking] = useState<BookingRecord | null>(
+    initialModal === 'invoice' ? PREVIEW_BOOKING : null
+  );
+  const [invoiceData, setInvoiceData] = useState<InvoiceRecord | null>(
+    initialModal === 'invoice' ? (PREVIEW_INVOICE as any) : null
+  );
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'recurring'>('all');
+
+  const sourceBookings = userBookings.length > 0 ? userBookings : [PREVIEW_BOOKING];
 
   useEffect(() => {
     if (user?.id) {
@@ -68,15 +77,15 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
     }
   }, [user, fetchUserBookings]);
 
-  const activeCount = userBookings.filter(
+  const activeCount = sourceBookings.filter(
     (b) => b.status !== 'delivered' && b.status !== 'cancelled'
   ).length;
 
-  const recurringCount = userBookings.filter(
+  const recurringCount = sourceBookings.filter(
     (b) => b.delivery_type === 'recurring' || b.delivery_type === 'scheduled_once'
   ).length;
 
-  const filteredBookings = userBookings.filter((b) => {
+  const filteredBookings = sourceBookings.filter((b) => {
     if (filterTab === 'active') return b.status !== 'delivered' && b.status !== 'cancelled';
     if (filterTab === 'recurring') return b.delivery_type === 'recurring' || b.delivery_type === 'scheduled_once';
     return true;
@@ -466,7 +475,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing['4xl'],
+    paddingBottom: 100, // Safe clearance above bottom tab bar
   },
   loadingContainer: {
     alignItems: 'center',

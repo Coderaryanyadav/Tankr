@@ -25,19 +25,20 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 
 interface AccountScreenProps {
   onNavigateToBookings?: () => void;
+  initialModal?: string;
 }
 
-export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookings }) => {
+export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookings, initialModal }) => {
   const { user, profile, signOut } = useAuthStore();
   const { savedAddresses } = useLocationStore();
   const { userBookings } = useBookingStore();
 
-  const [addressSheetVisible, setAddressSheetVisible] = useState(false);
-  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
-  const [supportModalVisible, setSupportModalVisible] = useState(false);
-  const [qualityModalVisible, setQualityModalVisible] = useState(false);
-  const [meteringModalVisible, setMeteringModalVisible] = useState(false);
-  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [addressSheetVisible, setAddressSheetVisible] = useState(initialModal === 'saved_addresses');
+  const [signOutModalVisible, setSignOutModalVisible] = useState(initialModal === 'sign_out');
+  const [supportModalVisible, setSupportModalVisible] = useState(initialModal === 'support');
+  const [qualityModalVisible, setQualityModalVisible] = useState(initialModal === 'water_quality');
+  const [meteringModalVisible, setMeteringModalVisible] = useState(initialModal === 'fair_metering');
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(initialModal === 'privacy');
 
   const displayName = profile?.full_name || (user?.phone ? `Customer (${user.phone.slice(-4)})` : 'Valued Customer');
   const displayPhone = user?.phone || profile?.phone_number || 'Phone verified';
@@ -324,7 +325,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing['4xl'],
+    paddingBottom: 100, // Safe clearance above bottom tab bar
   },
   profileCard: {
     flexDirection: 'row',

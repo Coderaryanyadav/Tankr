@@ -24,7 +24,7 @@ import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 function projectToTileCoords(lat: number, lng: number, zoom: number) {
   const n = Math.pow(2, zoom);
@@ -268,7 +268,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
   if (isLoadingBookings && !activeBooking) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.emptyContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -282,7 +282,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
   if (!activeBooking) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.emptyContainer}>
           <EmptyState
@@ -314,7 +314,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar barStyle="dark-content" />
 
       {/* Top Floating Trip Bar */}
@@ -449,7 +449,10 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
       {/* Bottom Ride-Hailing Trip Sheet */}
       <View style={styles.bottomTripSheet}>
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.bottomTripScrollContent}
+        >
           {/* ETA & Distance Header */}
           <View style={styles.etaHeaderRow}>
             <View>
@@ -655,6 +658,7 @@ const styles = StyleSheet.create({
   },
   mapCanvas: {
     flex: 1,
+    minHeight: 200,
     backgroundColor: '#E4EFF9',
     position: 'relative',
     overflow: 'hidden',
@@ -781,12 +785,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardSurface,
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
-    padding: spacing.lg,
-    paddingBottom: 28,
     borderTopWidth: 1,
     borderTopColor: colors.cardBorder,
-    maxHeight: 280,
+    maxHeight: Math.min(SCREEN_HEIGHT * 0.54, 460),
     ...shadows.modal,
+  },
+  bottomTripScrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing['2xl'],
   },
   etaHeaderRow: {
     flexDirection: 'row',
@@ -957,6 +964,8 @@ const styles = StyleSheet.create({
   footerButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: spacing.xs,
+    paddingBottom: spacing.sm,
   },
   meterStatusCard: {
     backgroundColor: '#F0F9FF',
