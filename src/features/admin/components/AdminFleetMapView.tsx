@@ -68,6 +68,7 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     fetchDeficitZones,
     fetchFleetTankers,
     subscribeToLiveFleetAndHeatmap,
+    rebalanceTanker,
   } = useAdminStore();
 
   const [zoom, setZoom] = useState<number>(14);
@@ -701,7 +702,15 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Confirm Dispatch',
-                        onPress: () => Alert.alert('Success', 'Dispatch order transmitted to driver mobile unit.'),
+                        onPress: async () => {
+                          const ok = await rebalanceTanker(selectedTanker.id, 'Marol / MIDC Andheri East');
+                          if (ok) {
+                            Alert.alert('Dispatch Transmitted', `Tanker ${selectedTanker.vehicle_number} rebalanced to Marol high-deficit zone.`);
+                            setSelectedTanker(null);
+                          } else {
+                            Alert.alert('Dispatch Error', 'Failed to dispatch tanker rebalance.');
+                          }
+                        },
                       },
                     ]
                   )

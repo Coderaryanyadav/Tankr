@@ -207,6 +207,7 @@ interface AdminState {
   setSurgeMultiplier: (multiplier: number) => Promise<void>;
   toggleEmergencyMode: () => void;
   resolveDispute: (disputeId: string, refund: boolean) => Promise<void>;
+  rebalanceTanker: (tankerId: string, zoneName?: string) => Promise<boolean>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -252,15 +253,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         const row = data[0];
         set({
           metrics: {
-            total_gmv: Number(row.total_gmv || 0),
-            platform_revenue: Number(row.platform_revenue || 0),
-            total_bookings: Number(row.total_bookings || 0),
-            completed_bookings: Number(row.completed_bookings || 0),
-            active_tankers_online: Number(row.active_tankers_online || 0),
-            total_suppliers: Number(row.total_suppliers || 0),
-            pending_kyc_suppliers: Number(row.pending_kyc_suppliers || 0),
-            total_liters_delivered: Number(row.total_liters_delivered || 0),
-            surge_multiplier: Number(row.surge_multiplier || 1.0),
+            total_gmv: Number(row.gross_volume_gmv ?? row.total_gmv ?? 0),
+            platform_revenue: Number(row.platform_revenue ?? 0),
+            total_bookings: Number(row.total_bookings ?? 0),
+            completed_bookings: Number(row.completed_deliveries ?? row.completed_bookings ?? 0),
+            active_tankers_online: Number(row.active_tankers_online ?? 0),
+            total_suppliers: Number(row.total_suppliers ?? 0),
+            pending_kyc_suppliers: Number(row.pending_kyc_count ?? row.pending_kyc_suppliers ?? 0),
+            total_liters_delivered: Number(row.total_liters_delivered ?? 0),
+            surge_multiplier: Number(row.network_surge_multiplier ?? row.surge_multiplier ?? 1.0),
           },
         });
       }
@@ -839,6 +840,27 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       get().fetchAuditLogs();
     } catch {
       // Ignored
+    }
+  },
+
+  rebalanceTanker: async (tankerId: string, zoneName = 'Marol / MIDC Andheri East') => {
+    try {
+      const { data, error } = await supabase.rpc('admin_rebalance_tanker', {
+        p_tanker_id: tankerId,
+        p_zone_name: zoneName,
+      });
+
+      if (!error && data?.success) {
+        await Promise.all([
+          get().fetchFleetTankers(),
+          get().fetchDeficitZones(),
+          get().fetchAuditLogs(),
+        ]);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
     }
   },
 }));
