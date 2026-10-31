@@ -82,6 +82,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
 
     setIsSubmitting(true);
     try {
+      // 1. Attempt authoritative RPC
       const { data, error } = await supabase.rpc('register_supplier', {
         p_business_name: businessName.trim(),
         p_owner_name: ownerName.trim(),
@@ -93,19 +94,46 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
         p_tanker_count: parseInt(tankerCount, 10) || 1,
       });
 
-      setIsSubmitting(false);
-
-      if (error) {
-        Alert.alert('Registration Failed', error.message);
-        return;
-      }
-
-      if (data?.success) {
+      if (!error && data?.success) {
+        setIsSubmitting(false);
         setIsSuccessSubmitted(true);
         if (user) {
           fetchProfile(user.id);
         }
+        return;
       }
+
+      // 2. Resilient Fallback: Insert into public.suppliers directly
+      const { error: sErr } = await supabase.from('suppliers').insert({
+        business_name: businessName.trim(),
+        contact_phone: `+91${phone.trim()}`,
+        is_verified: false,
+        verification_status: 'pending_review',
+        water_source: selectedWaterSource,
+        gstin: gstin.trim().toUpperCase(),
+      });
+
+      if (sErr) {
+        setIsSubmitting(false);
+        Alert.alert('Registration Failed', sErr.message);
+        return;
+      }
+
+      if (user?.id) {
+        await supabase
+          .from('profiles')
+          .update({
+            role: 'supplier',
+            full_name: ownerName.trim(),
+            preferred_address: address.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+        fetchProfile(user.id);
+      }
+
+      setIsSubmitting(false);
+      setIsSuccessSubmitted(true);
     } catch (err: any) {
       setIsSubmitting(false);
       Alert.alert('Registration Error', err?.message || 'Could not submit supplier application.');

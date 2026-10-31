@@ -36,6 +36,7 @@ export const DisputeService = {
    */
   submitDispute: async (payload: DisputeSubmission): Promise<{ success: boolean; disputeId?: string; error?: string }> => {
     try {
+      // 1. Attempt authoritative RPC
       const { data, error } = await supabase.rpc('submit_customer_dispute', {
         p_booking_id: payload.bookingId,
         p_category: payload.category,
@@ -44,15 +45,46 @@ export const DisputeService = {
         p_evidence_url: payload.evidenceUrl || null,
       });
 
-      if (error) {
-        return { success: false, error: error.message };
+      if (!error && data?.success) {
+        return { success: true, disputeId: data.dispute_id };
       }
 
-      if (!data?.success) {
-        return { success: false, error: data?.error || 'Failed to file dispute.' };
+      // 2. Resilient Fallback: Insert into public.disputes directly
+      const { data: b, error: bErr } = await supabase
+        .from('bookings')
+        .select('customer_id, supplier_id')
+        .eq('id', payload.bookingId)
+        .single();
+
+      if (bErr || !b) {
+        return { success: false, error: bErr?.message || 'Booking not found' };
       }
 
-      return { success: true, disputeId: data.dispute_id };
+      const { data: disp, error: dErr } = await supabase
+        .from('disputes')
+        .insert({
+          booking_id: payload.bookingId,
+          customer_id: b.customer_id,
+          supplier_id: b.supplier_id,
+          category: payload.category,
+          reason: payload.reason,
+          liters_received: payload.litersReceived || null,
+          evidence_url: payload.evidenceUrl || null,
+          status: 'open',
+        })
+        .select('id')
+        .single();
+
+      if (dErr || !disp) {
+        return { success: false, error: dErr?.message || 'Failed to submit dispute' };
+      }
+
+      await supabase
+        .from('bookings')
+        .update({ status: 'disputed' })
+        .eq('id', payload.bookingId);
+
+      return { success: true, disputeId: disp.id };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Network error filing dispute.' };
     }

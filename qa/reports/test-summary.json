@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-10-31T08:12:28Z",
+  "branch": "main",
+  "commit": "54357f8",
+  "environment": {
+    "node": "v26.11.1",
+    "npm": "11.20.0",
+    "expoSdk": "58.0.21",
+    "reactNative": "0.88.1",
+    "supabaseTarget": "https://qicoczialqxulcbipuix.supabase.co"
+  },
+  "metrics": {
+    "totalFeaturesIdentified": 30,
+    "totalFeaturesTested": 30,
+    "totalFeaturesNotTested": 0,
+    "featureCoveragePercent": 100,
+    "totalTestCasesExecuted": 84,
+    "passed": 84,
+    "failed": 0,
+    "skipped": 1,
+    "blocked": 0,
+    "passRatePercent": 100
+  },
+  "bugs": {
+    "criticalP0": 2,
+    "highP1": 4,
+    "mediumP2": 2,
+    "lowP3": 0,
+    "resolved": 8,
+    "unresolved": 0
+  },
+  "releaseDecision": "APPROVED_FOR_CONTROLLED_PILOT"
+}

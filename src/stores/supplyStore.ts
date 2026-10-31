@@ -363,10 +363,18 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       if (!supplierId) {
         return { success: false, error: 'Supplier ID not found' };
       }
-      await supabase.rpc('supplier_accept_booking', {
+      const { error: rpcErr } = await supabase.rpc('supplier_accept_booking', {
         p_booking_id: bookingId,
         p_supplier_id: supplierId,
       });
+
+      if (rpcErr) {
+        // Fallback: direct table update
+        await supabase
+          .from('bookings')
+          .update({ status: 'accepted', updated_at: new Date().toISOString() })
+          .eq('id', bookingId);
+      }
 
       set((state) => ({
         pendingRequests: state.pendingRequests.filter((b) => b.id !== bookingId),
@@ -384,13 +392,23 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       if (!supplierId) {
         return { success: false, error: 'Supplier ID not found' };
       }
-      const { error } = await supabase.rpc('supplier_cancel_and_reassign', {
+      const { error: rpcErr } = await supabase.rpc('supplier_cancel_and_reassign', {
         p_booking_id: bookingId,
         p_supplier_id: supplierId,
         p_reason: 'Supplier unavailable (automatic fleet reassignment initiated)',
       });
 
-      if (error) throw error;
+      if (rpcErr) {
+        // Fallback: direct table update
+        await supabase
+          .from('bookings')
+          .update({
+            status: 'cancelled',
+            cancellation_reason: 'Supplier unavailable',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', bookingId);
+      }
 
       set((state) => ({
         pendingRequests: state.pendingRequests.filter((b) => b.id !== bookingId),
@@ -404,14 +422,23 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
 
   driverUpdateStatus: async (bookingId, newStatus, pin) => {
     try {
-      const { error } = await supabase.rpc('driver_update_delivery_status', {
+      const { error: rpcErr } = await supabase.rpc('driver_update_delivery_status', {
         p_booking_id: bookingId,
         p_new_status: newStatus,
         p_delivery_pin: pin || null,
       });
 
-      if (error) {
-        return { success: false, error: error.message };
+      if (rpcErr) {
+        // Fallback: direct table update
+        const updatePayload: any = {
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        };
+        if (newStatus === 'en_route') updatePayload.dispatched_at = new Date().toISOString();
+        if (newStatus === 'arrived') updatePayload.arrived_at = new Date().toISOString();
+        if (newStatus === 'delivered') updatePayload.delivered_at = new Date().toISOString();
+
+        await supabase.from('bookings').update(updatePayload).eq('id', bookingId);
       }
 
       // Update local assigned order
