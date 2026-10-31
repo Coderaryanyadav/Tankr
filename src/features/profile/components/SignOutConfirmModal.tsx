@@ -33,6 +33,15 @@ export const SignOutConfirmModal: React.FC<SignOutConfirmModalProps> = ({
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={styles.card}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close modal"
+            onPress={onClose}
+            style={styles.closeBtn}
+          >
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
+          </Pressable>
+
           <View style={styles.iconCircle}>
             <Ionicons name="log-out-outline" size={32} color={colors.error} />
           </View>
@@ -80,6 +89,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   card: {
+    position: 'relative',
     width: '100%',
     maxWidth: 380,
     backgroundColor: colors.cardSurface,
@@ -89,6 +99,18 @@ const styles = StyleSheet.create({
     ...shadows.modal,
     borderWidth: 1,
     borderColor: colors.cardBorder,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   iconCircle: {
     width: 60,

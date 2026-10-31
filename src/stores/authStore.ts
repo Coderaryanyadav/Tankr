@@ -45,6 +45,12 @@ interface AuthState {
     city: string;
     pincode: string;
   }) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (data: {
+    fullName?: string;
+    city?: string;
+    preferredAddress?: string;
+    pincode?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -319,6 +325,56 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: false, authError: message });
       return { success: false, error: message };
     }
+  },
+
+  updateProfile: async (data: {
+    fullName?: string;
+    city?: string;
+    preferredAddress?: string;
+    pincode?: string;
+  }) => {
+    const { user, profile } = get();
+
+    const updatedProfile: UserProfile = {
+      ...(profile || {
+        id: user?.id || 'demo-user',
+        phone_number: user?.phone || '+91 91987 65432',
+        role: 'customer',
+        is_onboarding_completed: true,
+        profile_photo_url: null,
+        preferred_address: null,
+        city: 'Mumbai',
+        pincode: '400001',
+      }),
+      full_name: data.fullName !== undefined ? data.fullName : (profile?.full_name || null),
+      city: data.city !== undefined ? data.city : (profile?.city || 'Mumbai'),
+      preferred_address:
+        data.preferredAddress !== undefined
+          ? data.preferredAddress
+          : (profile?.preferred_address || null),
+      pincode: data.pincode !== undefined ? data.pincode : (profile?.pincode || null),
+    };
+
+    set({ profile: updatedProfile });
+
+    if (user?.id) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            full_name: updatedProfile.full_name,
+            city: updatedProfile.city,
+            preferred_address: updatedProfile.preferred_address,
+            pincode: updatedProfile.pincode,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+      } catch (err) {
+        console.warn('[authStore] Profile update network sync failed:', err);
+      }
+    }
+
+    return { success: true };
   },
 
   signOut: async () => {

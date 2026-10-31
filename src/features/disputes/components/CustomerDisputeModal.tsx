@@ -107,7 +107,12 @@ export const CustomerDisputeModal: React.FC<CustomerDisputeModalProps> = ({
               <Text style={styles.title}>Report Delivery Issue</Text>
               <Text style={styles.subtitle}>Order {bookingReference} • {capacityLiters.toLocaleString('en-IN')} L</Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close dispute modal"
+              onPress={onClose}
+              style={styles.closeBtn}
+            >
               <Ionicons name="close" size={24} color={colors.textSecondary} />
             </Pressable>
           </View>

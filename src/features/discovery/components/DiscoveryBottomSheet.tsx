@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   tankersScrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    paddingBottom: 110, // Avoid overlap with sticky footer
+    paddingBottom: 48,
   },
   loadingWrapper: {
     alignItems: 'center',

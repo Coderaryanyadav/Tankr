@@ -53,6 +53,15 @@ export const Modal: React.FC<ModalProps> = ({
         <Pressable style={styles.pressableBackdrop} onPress={onClose} />
 
         <View style={styles.dialogCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close dialog"
+            onPress={onClose}
+            style={styles.closeBtn}
+          >
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
+          </Pressable>
+
           {/* Icon Badge */}
           <View style={[styles.iconCircle, { backgroundColor: colors.background }]}>
             <Ionicons name={iconName} size={36} color={iconColor} />
@@ -104,6 +113,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   dialogCard: {
+    position: 'relative',
     width: '100%',
     maxWidth: 380,
     backgroundColor: colors.cardSurface,
@@ -111,6 +121,18 @@ const styles = StyleSheet.create({
     padding: spacing['2xl'],
     alignItems: 'center',
     ...shadows.modal,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   iconCircle: {
     width: 68,

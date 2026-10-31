@@ -23,6 +23,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -280,7 +281,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     );
   }
 
-  if (!activeBooking) {
+  if (!activeBooking || activeBooking.status === 'cancelled') {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar barStyle="dark-content" />
@@ -581,7 +582,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                   if (activeBooking.driver_phone) {
                     Linking.openURL(`tel:${activeBooking.driver_phone}`);
                   } else {
-                    Alert.alert('Driver Contact', 'Calling driver: +91 98451 10001');
+                    notify('Driver Contact', 'Calling driver: +91 98451 10001');
                   }
                 }}
                 rightIcon={<Ionicons name="call-outline" size={16} color={colors.primary} />}
@@ -594,14 +595,20 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                 variant="outline"
                 size="md"
                 onPress={() => {
-                  Alert.alert('Cancel Trip?', 'Do you want to cancel this delivery?', [
-                    { text: 'Keep', style: 'cancel' },
-                    {
-                      text: 'Cancel',
-                      style: 'destructive',
-                      onPress: () => cancelBooking(activeBooking.id),
+                  confirmAction(
+                    'Cancel Delivery?',
+                    'Are you sure you want to cancel this water delivery?',
+                    async () => {
+                      const res = await cancelBooking(activeBooking.id, 'Customer cancelled trip');
+                      if (res && !res.success) {
+                        notify('Cancellation Notice', res.error || 'Could not cancel delivery.');
+                      } else {
+                        notify('Trip Cancelled', 'Your water tanker delivery has been cancelled.');
+                        if (onBack) onBack();
+                      }
                     },
-                  ]);
+                    'Cancel Delivery'
+                  );
                 }}
               />
             </View>

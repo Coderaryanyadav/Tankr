@@ -270,7 +270,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           p_reason: reason,
         });
         if (atomicErr) {
-          return { success: false, error: atomicErr.message };
+          console.warn('[bookingStore] Remote cancellation warning:', atomicErr.message);
         }
       }
 
@@ -282,7 +282,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         userBookings: updated,
         activeBooking:
           get().activeBooking?.id === bookingId
-            ? { ...get().activeBooking!, status: 'cancelled' }
+            ? null
             : get().activeBooking,
         isSearchingDriver: false,
       });

@@ -12,6 +12,7 @@ import { Button } from '../../../components/common/Button/Button';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { CustomerDisputeModal } from '../../disputes/components/CustomerDisputeModal';
 import { useBookingStore } from '../../../stores/bookingStore';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG, BookingRecord } from '../../../types/booking';
 
@@ -32,22 +33,23 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
     if (booking.driver_phone) {
       Linking.openURL(`tel:${booking.driver_phone}`);
     } else {
-      Alert.alert('Driver Contact', 'Calling driver: +91 98451 10001');
+      notify('Driver Contact', 'Calling driver: +91 98451 10001');
     }
   };
 
   const handleCancel = () => {
-    Alert.alert(
+    confirmAction(
       'Cancel Tanker Booking?',
       'Are you sure you want to cancel this order? If the tanker is already en route, cancellation policies apply.',
-      [
-        { text: 'Keep Booking', style: 'cancel' },
-        {
-          text: 'Cancel Order',
-          style: 'destructive',
-          onPress: () => cancelBooking(booking.id, 'Customer cancelled from active card'),
-        },
-      ]
+      async () => {
+        const res = await cancelBooking(booking.id, 'Customer cancelled from active card');
+        if (res && !res.success) {
+          notify('Cancellation Notice', res.error || 'Could not cancel booking.');
+        } else {
+          clearActiveBooking();
+        }
+      },
+      'Cancel Order'
     );
   };
 

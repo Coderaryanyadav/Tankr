@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -83,6 +84,15 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.dialogCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close dispatch searching"
+            onPress={onCancel}
+            style={styles.closeBtn}
+          >
+            <Ionicons name="close" size={20} color={colors.textSecondary} />
+          </Pressable>
+
           {/* Radar Animation Area */}
           <View style={styles.radarArea}>
             <Animated.View
@@ -166,6 +176,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   dialogCard: {
+    position: 'relative',
     width: '100%',
     maxWidth: 360,
     backgroundColor: colors.cardSurface,
@@ -173,6 +184,18 @@ const styles = StyleSheet.create({
     padding: spacing['2xl'],
     alignItems: 'center',
     ...shadows.modal,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   radarArea: {
     width: 140,

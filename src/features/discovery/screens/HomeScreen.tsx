@@ -19,6 +19,8 @@ import { BookingSearchingOverlay } from '../../booking/components/BookingSearchi
 import { ActiveBookingCard } from '../../booking/components/ActiveBookingCard';
 import { NotificationsModal } from '../../notifications/screens/NotificationsModal';
 import { CommunityPoolModal } from '../../community/components/CommunityPoolModal';
+import { CustomerDisputeModal } from '../../disputes/components/CustomerDisputeModal';
+import { PREVIEW_TANKER } from '../../../utils/previewDemoData';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
@@ -32,12 +34,14 @@ interface HomeScreenProps {
   onNavigateToBookings?: () => void;
   onNavigateToProfile?: () => void;
   onNavigateToTracking?: () => void;
+  initialModal?: string;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToBookings,
   onNavigateToProfile,
   onNavigateToTracking,
+  initialModal,
 }) => {
   const { user, profile, signOut } = useAuthStore();
   const {
@@ -73,11 +77,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   } = useDiscoveryStore();
 
   // Overlay states
-  const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(false);
-  const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(false);
-  const [notificationsModalVisible, setNotificationsModalVisible] = useState<boolean>(false);
-  const [communityPoolModalVisible, setCommunityPoolModalVisible] = useState<boolean>(false);
-  const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(null);
+  const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(initialModal === 'saved_addresses');
+  const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(initialModal === 'booking_review');
+  const [notificationsModalVisible, setNotificationsModalVisible] = useState<boolean>(initialModal === 'notifications');
+  const [communityPoolModalVisible, setCommunityPoolModalVisible] = useState<boolean>(initialModal === 'community_pool');
+  const [disputeModalVisible, setDisputeModalVisible] = useState<boolean>(initialModal === 'dispute');
+  const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(
+    initialModal === 'booking_review' ? PREVIEW_TANKER : null
+  );
+
+  useEffect(() => {
+    if (initialModal === 'searching') {
+      useBookingStore.setState({ isSearchingDriver: true });
+    }
+  }, [initialModal]);
 
   const { notifications, unreadCount, fetchNotifications, subscribeToNotifications } = useNotificationStore();
   const { pools, fetchCommunityPools, subscribeToLivePools } = useCommunityPoolStore();
@@ -149,18 +162,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onAddressPress={() => setAddressSheetVisible(true)}
         onNotificationsPress={() => setNotificationsModalVisible(true)}
         onProfilePress={() => {
-          Alert.alert(
-            'My Account',
-            `Phone: ${user?.phone || 'Verified'}\nAccount Role: ${(profile?.role || 'Customer').toUpperCase()}\nCity: ${profile?.city || 'Mumbai'}`,
-            [
-              {
-                text: 'Sign Out',
-                style: 'destructive',
-                onPress: () => signOut(),
-              },
-              { text: 'Close', style: 'cancel' },
-            ]
-          );
+          if (onNavigateToProfile) {
+            onNavigateToProfile();
+          }
         }}
         unreadNotificationsCount={unreadCount}
       />
@@ -286,6 +290,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         defaultLat={activeCoordinates.latitude}
         defaultLng={activeCoordinates.longitude}
       />
+
+      {/* Customer Dispute Modal */}
+      <CustomerDisputeModal
+        visible={disputeModalVisible}
+        bookingId="preview-booking-01"
+        bookingReference="TNK-94821"
+        capacityLiters={10000}
+        onClose={() => setDisputeModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -296,7 +309,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   mapSection: {
-    height: 280,
+    flex: 1,
+    minHeight: 250,
     width: '100%',
     position: 'relative',
   },

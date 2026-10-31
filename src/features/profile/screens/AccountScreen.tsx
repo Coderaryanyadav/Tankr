@@ -18,6 +18,7 @@ import { SupportDeskModal } from '../components/SupportDeskModal';
 import { WaterQualityModal } from '../components/WaterQualityModal';
 import { FairMeteringModal } from '../components/FairMeteringModal';
 import { PrivacyTermsModal } from '../components/PrivacyTermsModal';
+import { EditProfileModal } from '../components/EditProfileModal';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useLocationStore } from '../../../stores/locationStore';
@@ -39,6 +40,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
   const [qualityModalVisible, setQualityModalVisible] = useState(initialModal === 'water_quality');
   const [meteringModalVisible, setMeteringModalVisible] = useState(initialModal === 'fair_metering');
   const [privacyModalVisible, setPrivacyModalVisible] = useState(initialModal === 'privacy');
+  const [editProfileModalVisible, setEditProfileModalVisible] = useState(initialModal === 'edit_profile');
 
   const displayName = profile?.full_name || (user?.phone ? `Customer (${user.phone.slice(-4)})` : 'Valued Customer');
   const displayPhone = user?.phone || profile?.phone_number || 'Phone verified';
@@ -80,8 +82,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Compact Profile Header Card */}
-        <View style={styles.profileCard}>
+        {/* Interactive Profile Header Card */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile details"
+          onPress={() => setEditProfileModalVisible(true)}
+          style={({ pressed }) => [styles.profileCard, pressed && { opacity: 0.9 }]}
+        >
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {displayName.charAt(0).toUpperCase()}
@@ -98,7 +105,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
               <Text style={styles.profileCity}>{displayCity}, Maharashtra</Text>
             </View>
           </View>
-        </View>
+
+          {/* Edit Profile Pill */}
+          <View style={styles.editProfilePill}>
+            <Ionicons name="pencil" size={12} color={colors.primary} />
+            <Text style={styles.editProfilePillText}>Edit</Text>
+          </View>
+        </Pressable>
 
         {/* Section 1: Preferences and Addresses */}
         <Text style={styles.sectionHeader}>PREFERENCES & ADDRESSES</Text>
@@ -286,6 +299,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
         onClose={() => setPrivacyModalVisible(false)}
       />
 
+      {/* Edit Profile Details Modal */}
+      <EditProfileModal
+        visible={editProfileModalVisible}
+        onClose={() => setEditProfileModalVisible(false)}
+      />
+
       {/* In-App Sign Out Confirmation Modal */}
       <SignOutConfirmModal
         visible={signOutModalVisible}
@@ -325,7 +344,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: 100, // Safe clearance above bottom tab bar
+    paddingBottom: spacing['2xl'],
   },
   profileCard: {
     flexDirection: 'row',
@@ -335,8 +354,25 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     ...shadows.subtle,
+  },
+  editProfilePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginLeft: spacing.xs,
+  },
+  editProfilePillText: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
   },
   avatar: {
     width: 52,
