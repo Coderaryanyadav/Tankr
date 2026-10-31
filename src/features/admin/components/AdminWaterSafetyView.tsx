@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,22 +16,72 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
-  const { waterCertificates, suspendWaterCertificate } = useAdminStore();
-  const [suspendingId, setSuspendingId] = useState<string | null>(null);
+  const {
+    waterCertificates,
+    suspendWaterCertificate,
+    reinstateWaterCertificate,
+    createWaterCertificate,
+    deleteWaterCertificate,
+  } = useAdminStore();
+
+  const [operatingId, setOperatingId] = useState<string | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // New Certificate Form
+  const [waterSource, setWaterSource] = useState('Bhandup Complex Aquifer Borewell #2');
+  const [sourceType, setSourceType] = useState('Deep Aquifer Borewell');
+  const [labName, setLabName] = useState('SGS India Analytical Laboratories, Andheri East');
+  const [reportNo, setReportNo] = useState(`SGS-WTR-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [tdsPpm, setTdsPpm] = useState<number>(145);
+  const [phLevel, setPhLevel] = useState<number>(7.2);
+  const [turbidityNtu, setTurbidityNtu] = useState<number>(1.2);
 
   const handleSuspend = (cert: WaterCertificateItem) => {
     confirmAction(
       'Emergency Water Quality Action',
       `Suspend certificate ${cert.test_report_number} issued by ${cert.lab_name}? Tankers linked to this water source will be immediately taken offline.`,
       async () => {
-        setSuspendingId(cert.id);
+        setOperatingId(cert.id);
         const success = await suspendWaterCertificate(cert.id, 'TDS threshold or potability audit violation');
-        setSuspendingId(null);
+        setOperatingId(null);
         if (success) {
           notify('Source Suspended', 'The water source certificate has been marked non-potable and suspended.');
         }
       },
       'Suspend Source'
+    );
+  };
+
+  const handleReinstate = (cert: WaterCertificateItem) => {
+    confirmAction(
+      'Reinstate Water Source Certificate',
+      `Re-certify and reinstate source "${cert.water_source}" (Report #${cert.test_report_number}) as POTABLE compliance?`,
+      async () => {
+        setOperatingId(cert.id);
+        const success = await reinstateWaterCertificate(cert.id);
+        setOperatingId(null);
+        if (success) {
+          notify('Source Reinstated', 'Water source marked Certified Potable (BIS-10500 compliant).');
+        }
+      },
+      'Reinstate Source'
+    );
+  };
+
+  const handleDelete = (cert: WaterCertificateItem) => {
+    confirmAction(
+      'Delete Water Certificate',
+      `Permanently archive test report #${cert.test_report_number} from audit registry?`,
+      async () => {
+        setOperatingId(cert.id);
+        const success = await deleteWaterCertificate(cert.id);
+        setOperatingId(null);
+        if (success) {
+          notify('Certificate Deleted', 'Record removed from active audit register.');
+        }
+      },
+      'Delete Certificate'
     );
   };
 
@@ -85,8 +138,22 @@ export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesk
       {/* Water Quality Certificates Grid */}
       <View style={styles.certsContainer}>
         <View style={styles.certsHeader}>
-          <Text style={styles.certsTitle}>Active Source Certificates & Lab Reports</Text>
-          <Text style={styles.certsSub}>{waterCertificates.length} verified water source nodes</Text>
+          <View>
+            <Text style={styles.certsTitle}>Active Source Certificates & Lab Reports</Text>
+            <Text style={styles.certsSub}>{waterCertificates.length} verified water source nodes</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add Water Certificate"
+            onPress={() => {
+              setReportNo(`SGS-WTR-${Math.floor(1000 + Math.random() * 9000)}`);
+              setIsAddModalOpen(true);
+            }}
+            style={styles.addCertBtn}
+          >
+            <Ionicons name="add" size={16} color="#FFFFFF" />
+            <Text style={styles.addCertBtnText}>+ Add Lab Report</Text>
+          </Pressable>
         </View>
 
         {waterCertificates.length === 0 ? (
@@ -99,7 +166,7 @@ export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesk
           <View style={styles.certsGrid}>
             {waterCertificates.map((cert) => {
               const tds = getTdsStatus(cert.tds_ppm);
-              const isSuspending = suspendingId === cert.id;
+              const isOperating = operatingId === cert.id;
 
               return (
                 <View key={cert.id} style={styles.certCard}>
@@ -181,24 +248,52 @@ export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesk
                       </Text>
                     </View>
 
-                    {cert.is_potable && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {cert.is_potable ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Suspend Certificate"
+                          disabled={isOperating}
+                          onPress={() => handleSuspend(cert)}
+                          style={[styles.suspendBtn, isOperating && { opacity: 0.6 }]}
+                        >
+                          {isOperating ? (
+                            <ActivityIndicator size="small" color="#DC2626" />
+                          ) : (
+                            <>
+                              <Ionicons name="alert-circle-outline" size={14} color="#DC2626" />
+                              <Text style={styles.suspendBtnText}>SUSPEND SOURCE</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Reinstate Certificate"
+                          disabled={isOperating}
+                          onPress={() => handleReinstate(cert)}
+                          style={[styles.reinstateBtn, isOperating && { opacity: 0.6 }]}
+                        >
+                          {isOperating ? (
+                            <ActivityIndicator size="small" color="#16A34A" />
+                          ) : (
+                            <>
+                              <Ionicons name="checkmark-circle-outline" size={14} color="#16A34A" />
+                              <Text style={styles.reinstateBtnText}>REINSTATE / CERTIFY</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      )}
+
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Suspend Certificate"
-                        disabled={isSuspending}
-                        onPress={() => handleSuspend(cert)}
-                        style={[styles.suspendBtn, isSuspending && { opacity: 0.6 }]}
+                        accessibilityLabel="Delete Certificate"
+                        onPress={() => handleDelete(cert)}
+                        style={styles.deleteBtn}
                       >
-                        {isSuspending ? (
-                          <ActivityIndicator size="small" color="#DC2626" />
-                        ) : (
-                          <>
-                            <Ionicons name="alert-circle-outline" size={14} color="#DC2626" />
-                            <Text style={styles.suspendBtnText}>SUSPEND SOURCE</Text>
-                          </>
-                        )}
+                        <Ionicons name="trash-outline" size={14} color="#64748B" />
                       </Pressable>
-                    )}
+                    </View>
                   </View>
                 </View>
               );
@@ -206,6 +301,158 @@ export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesk
           </View>
         )}
       </View>
+
+      {/* CRUD MODAL: ADD WATER PURITY TEST CERTIFICATE */}
+      <Modal visible={isAddModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="flask" size={20} color="#0284C7" />
+                <Text style={styles.modalTitle}>New Water Quality Lab Report</Text>
+              </View>
+              <Pressable onPress={() => setIsAddModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Water Source Name</Text>
+              <TextInput
+                value={waterSource}
+                onChangeText={setWaterSource}
+                placeholder="e.g. Powai Sub-surface Water Borewell"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Source Type</Text>
+              <TextInput
+                value={sourceType}
+                onChangeText={setSourceType}
+                placeholder="e.g. Deep Aquifer Borewell"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>NABL Accredited Testing Lab</Text>
+              <TextInput
+                value={labName}
+                onChangeText={setLabName}
+                placeholder="e.g. SGS India Analytical Laboratories"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Test Report Certificate Number</Text>
+              <TextInput
+                value={reportNo}
+                onChangeText={setReportNo}
+                placeholder="e.g. SGS-WTR-2026-908"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>TDS (ppm)</Text>
+                  <TextInput
+                    value={String(tdsPpm)}
+                    onChangeText={(t) => setTdsPpm(parseInt(t, 10) || 120)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>pH Level</Text>
+                  <TextInput
+                    value={String(phLevel)}
+                    onChangeText={(t) => setPhLevel(parseFloat(t) || 7.0)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Turbidity (NTU)</Text>
+                  <TextInput
+                    value={String(turbidityNtu)}
+                    onChangeText={(t) => setTurbidityNtu(parseFloat(t) || 1.0)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.inputLabel}>Quick Purity Presets</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <Pressable
+                    onPress={() => { setTdsPpm(110); setPhLevel(7.2); setTurbidityNtu(0.8); }}
+                    style={styles.presetChip}
+                  >
+                    <Text style={styles.presetChipText}>Optimal (110 ppm)</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { setTdsPpm(220); setPhLevel(7.0); setTurbidityNtu(1.8); }}
+                    style={styles.presetChip}
+                  >
+                    <Text style={styles.presetChipText}>Acceptable (220 ppm)</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { setTdsPpm(480); setPhLevel(6.4); setTurbidityNtu(4.2); }}
+                    style={styles.presetChip}
+                  >
+                    <Text style={styles.presetChipText}>Critical (480 ppm)</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setIsAddModalOpen(false)}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isSaving}
+                onPress={async () => {
+                  if (!waterSource.trim() || !reportNo.trim()) {
+                    notify('Missing Information', 'Please provide source name and report number.');
+                    return;
+                  }
+                  setIsSaving(true);
+                  const ok = await createWaterCertificate({
+                    water_source: waterSource.trim(),
+                    source_type: sourceType.trim(),
+                    lab_name: labName.trim(),
+                    test_report_number: reportNo.trim(),
+                    tds_ppm: tdsPpm,
+                    ph_level: phLevel,
+                    turbidity_ntu: turbidityNtu,
+                  });
+                  setIsSaving(false);
+                  if (ok) {
+                    notify('Certificate Added', `Lab report ${reportNo} registered.`);
+                    setIsAddModalOpen(false);
+                  } else {
+                    notify('Error', 'Failed to register report.');
+                  }
+                }}
+                style={styles.modalSubmitBtn}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Register Certificate</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -449,5 +696,139 @@ const styles = StyleSheet.create({
   emptySub: {
     fontSize: 12,
     color: '#94A3B8',
+  },
+
+  // CRUD Actions & Modal Styles
+  addCertBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    ...shadows.subtle,
+  },
+  addCertBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+  },
+  reinstateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.sm,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  reinstateBtnText: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    color: '#16A34A',
+  },
+  deleteBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  presetChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  presetChipText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: fontWeights.semibold,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '90%',
+    overflow: 'hidden',
+    ...shadows.modal,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: '#475569',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  modalCancelBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: fontWeights.semibold,
+  },
+  modalSubmitBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#0284C7',
+  },
+  modalSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
   },
 });

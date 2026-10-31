@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
   LayoutChangeEvent,
   Linking,
+  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -12,6 +14,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,12 +72,17 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     fetchFleetTankers,
     subscribeToLiveFleetAndHeatmap,
     rebalanceTanker,
+    createTanker,
+    updateTanker,
+    deleteTanker,
   } = useAdminStore();
 
   const [zoom, setZoom] = useState<number>(14);
   const [centerLat, setCenterLat] = useState<number>(MAROL_HQ_LAT);
   const [centerLng, setCenterLng] = useState<number>(MAROL_HQ_LNG);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
+  const [showZoneLabels, setShowZoneLabels] = useState<boolean>(true);
+  const [showPlates, setShowPlates] = useState<boolean>(false);
   const [mapTheme, setMapTheme] = useState<'dark' | 'street'>('dark');
   const [selectedCapacity, setSelectedCapacity] = useState<number | null>(null);
   const [selectedTanker, setSelectedTanker] = useState<FleetTankerItem | null>(null);
@@ -84,6 +92,25 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     width: 1000,
     height: isDesktop ? 640 : 480,
   });
+
+  // CRUD Modal States
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // New Tanker Form Fields
+  const [newPlate, setNewPlate] = useState('');
+  const [newDriver, setNewDriver] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newCap, setNewCap] = useState(5000);
+  const [newWaterType, setNewWaterType] = useState('Potable (Drinking)');
+  const [newPrice, setNewPrice] = useState(650);
+
+  // Edit Tanker Form Fields
+  const [editDriver, setEditDriver] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCap, setEditCap] = useState(5000);
+  const [editPrice, setEditPrice] = useState(650);
 
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -183,21 +210,38 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     });
   }, [deficitZones, centerProj, containerSize, panOffset, zoom]);
 
-  // Calculate pixel coordinates for Tanker Fleet Markers
+  // Calculate pixel coordinates for Tanker Fleet Markers with Golden-Angle Dispersion
   const placedTankers = useMemo(() => {
     const { width, height } = containerSize;
-    return filteredTankers.map((tanker) => {
+    const placed: Array<any> = [];
+    const seenPositions: Array<{ x: number; y: number }> = [];
+
+    filteredTankers.forEach((tanker) => {
       const tProj = projectToTileCoords(tanker.latitude, tanker.longitude, zoom);
-      const x = (tProj.x - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
-      const y = (tProj.y - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
+      let rawX = (tProj.x - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
+      let rawY = (tProj.y - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
+
+      // Anti-collision: Stagger tankers clustered within 36px so they never occlude
+      const closeCount = seenPositions.filter(
+        (p) => Math.hypot(p.x - rawX, p.y - rawY) < 36
+      ).length;
+      if (closeCount > 0) {
+        const angle = closeCount * 2.39996; // Golden angle in radians
+        const dist = 32 * Math.sqrt(closeCount);
+        rawX += Math.cos(angle) * dist;
+        rawY += Math.sin(angle) * dist;
+      }
+      seenPositions.push({ x: rawX, y: rawY });
+
       const capText = tanker.capacity_liters >= 1000 ? `${tanker.capacity_liters / 1000}k` : `${tanker.capacity_liters}L`;
-      return {
+      placed.push({
         ...tanker,
-        x,
-        y,
+        x: rawX,
+        y: rawY,
         capText,
-      };
+      });
     });
+    return placed;
   }, [filteredTankers, centerProj, containerSize, panOffset, zoom]);
 
   // Navigation: Jump to specific hotspot zone
@@ -367,6 +411,49 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
               );
             })}
           </View>
+
+          {/* Unclutter Toggles: Zone Labels & Plate Numbers */}
+          <View style={styles.toggleRowSmall}>
+            <View style={styles.heatmapToggleWrap}>
+              <Ionicons name="pricetag-outline" size={13} color={showZoneLabels ? '#0284C7' : '#94A3B8'} />
+              <Text style={styles.toggleLabelSmall}>Zone Tags</Text>
+              <Switch
+                value={showZoneLabels}
+                onValueChange={setShowZoneLabels}
+                trackColor={{ false: '#CBD5E1', true: '#0284C7' }}
+                thumbColor="#FFFFFF"
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              />
+            </View>
+
+            <View style={styles.heatmapToggleWrap}>
+              <Ionicons name="card-outline" size={13} color={showPlates ? '#0284C7' : '#94A3B8'} />
+              <Text style={styles.toggleLabelSmall}>Plates</Text>
+              <Switch
+                value={showPlates}
+                onValueChange={setShowPlates}
+                trackColor={{ false: '#CBD5E1', true: '#0284C7' }}
+                thumbColor="#FFFFFF"
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              />
+            </View>
+          </View>
+
+          {/* + Add Tanker CRUD Action */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Onboard New Tanker"
+            onPress={() => {
+              setNewPlate(`MH-02-TC-${Math.floor(1000 + Math.random() * 9000)}`);
+              setNewDriver('Ramesh Gaikwad');
+              setNewPhone('+9198200' + Math.floor(10000 + Math.random() * 90000));
+              setIsAddModalOpen(true);
+            }}
+            style={styles.addTankerBtn}
+          >
+            <Ionicons name="add" size={15} color="#FFFFFF" />
+            <Text style={styles.addTankerBtnText}>+ Add Tanker</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -469,34 +556,37 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
                       opacity: 0.24,
                     }}
                   />
-                  {/* Floating Uber Surge Pill Badge */}
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: radius - 75,
-                      top: radius - 16,
-                      width: 150,
-                      height: 32,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Pressable
-                      onPress={() => handleFlyTo(zone.center_lat, zone.center_lng, 15)}
-                      style={[styles.uberSurgePill, shadows.subtle]}
+                  {/* Sleek Floating Surge Badge - Anchored at the TOP arc of the circle (Zero Center Occlusion!) */}
+                  {showZoneLabels && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: radius - 60,
+                        top: 6,
+                        width: 120,
+                        height: 24,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        pointerEvents: 'box-none',
+                      }}
                     >
-                      <View style={[styles.surgeMultBadge, { backgroundColor: zone.surge.color }]}>
-                        <Text style={styles.surgeMultText}>{zone.surge.multiplier}</Text>
-                      </View>
-                      <Text style={styles.surgeZoneName}>{zone.shortName}</Text>
-                      <Text style={[styles.surgeDeficitTag, { color: zone.surge.color }]}>{zone.pct}%</Text>
-                    </Pressable>
-                  </View>
+                      <Pressable
+                        onPress={() => handleFlyTo(zone.center_lat, zone.center_lng, 15)}
+                        style={[styles.uberSurgePillCompact, shadows.subtle]}
+                      >
+                        <View style={[styles.surgeMultBadgeSmall, { backgroundColor: zone.surge.color }]}>
+                          <Text style={styles.surgeMultTextSmall}>{zone.surge.multiplier}</Text>
+                        </View>
+                        <Text style={styles.surgeZoneNameSmall}>{zone.shortName}</Text>
+                        <Text style={[styles.surgeDeficitTagSmall, { color: zone.surge.color }]}>{zone.pct}%</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
               );
             })}
 
-          {/* C. LIVE POSTGIS TANKER FLEET PINS */}
+          {/* C. LIVE POSTGIS TANKER FLEET PINS (UNCLUTTERED HIGH-DEF TOKENS) */}
           {placedTankers.map((tanker) => {
             const isSelected = selectedTanker?.id === tanker.id;
             return (
@@ -504,32 +594,43 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
                 key={`tanker-${tanker.id}`}
                 style={{
                   position: 'absolute',
-                  left: tanker.x - 45,
-                  top: tanker.y - 24,
-                  width: 90,
-                  height: 52,
+                  left: tanker.x - 22,
+                  top: tanker.y - 22,
+                  width: 44,
+                  height: showPlates || isSelected ? 62 : 44,
                   zIndex: isSelected ? 300 : 200,
+                  alignItems: 'center',
                 }}
               >
                 <Pressable
-                  onPress={() => setSelectedTanker(isSelected ? null : tanker)}
-                  style={styles.tankerPinWrap}
+                  onPress={() => {
+                    setSelectedTanker(isSelected ? null : tanker);
+                    setEditDriver(tanker.driver_name);
+                    setEditPhone(tanker.driver_phone);
+                    setEditCap(tanker.capacity_liters);
+                    setEditPrice(tanker.base_price || 650);
+                  }}
+                  style={[
+                    styles.tankerPinCompact,
+                    tanker.is_available ? styles.pinAvailable : styles.pinBusy,
+                    isSelected && styles.pinSelected,
+                  ]}
                 >
+                  <Ionicons name="water" size={13} color="#FFFFFF" />
+                  <Text style={styles.pinCapText}>{tanker.capText}</Text>
                   <View
                     style={[
-                      styles.tankerBubble,
-                      tanker.is_available ? styles.bubbleAvailable : styles.bubbleBusy,
-                      isSelected && styles.bubbleSelected,
+                      styles.pinStatusDot,
+                      { backgroundColor: tanker.is_available ? '#10B981' : '#F59E0B' },
                     ]}
-                  >
-                    <View style={styles.radarPulseDot} />
-                    <Ionicons name="water" size={11} color="#FFFFFF" />
-                    <Text style={styles.tankerCapText}>{tanker.capText}</Text>
-                  </View>
-                  <View style={styles.plateChip}>
-                    <Text style={styles.plateChipText}>{tanker.vehicle_number}</Text>
-                  </View>
+                  />
                 </Pressable>
+
+                {(showPlates || isSelected) && (
+                  <View style={[styles.compactPlateWrap, isSelected && styles.compactPlateWrapSelected]}>
+                    <Text style={styles.compactPlateText}>{tanker.vehicle_number}</Text>
+                  </View>
+                )}
               </View>
             );
           })}
@@ -720,8 +821,99 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
               </View>
             </View>
 
-            <View style={styles.actionButtonsRow}>
+            {/* Telemetry Drawer CRUD Controls */}
+            <View style={styles.actionButtonsCol}>
+              {/* Row 1: Real-time Status Toggles */}
+              <View style={styles.drawerCrudRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle Online Status"
+                  onPress={async () => {
+                    const nextOnline = !selectedTanker.is_online;
+                    const ok = await updateTanker(selectedTanker.id, { is_online: nextOnline });
+                    if (ok) {
+                      notify('Fleet Status Updated', `Tanker marked ${nextOnline ? 'ONLINE' : 'OFFLINE'}.`);
+                      setSelectedTanker((prev) => (prev ? { ...prev, is_online: nextOnline } : null));
+                    }
+                  }}
+                  style={[styles.crudActionBtn, { backgroundColor: selectedTanker.is_online ? '#EF4444' : '#10B981' }]}
+                >
+                  <Ionicons name={selectedTanker.is_online ? 'power' : 'radio'} size={13} color="#FFFFFF" />
+                  <Text style={styles.crudActionBtnText}>
+                    {selectedTanker.is_online ? 'Take Offline' : 'Bring Online'}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle Availability"
+                  onPress={async () => {
+                    const nextAvail = !selectedTanker.is_available;
+                    const ok = await updateTanker(selectedTanker.id, { is_available: nextAvail });
+                    if (ok) {
+                      notify('Availability Changed', `Tanker marked ${nextAvail ? 'READY' : 'EN ROUTE'}.`);
+                      setSelectedTanker((prev) => (prev ? { ...prev, is_available: nextAvail } : null));
+                    }
+                  }}
+                  style={[styles.crudActionBtn, { backgroundColor: '#0284C7' }]}
+                >
+                  <Ionicons
+                    name={selectedTanker.is_available ? 'navigate-outline' : 'checkmark-circle-outline'}
+                    size={13}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.crudActionBtnText}>
+                    {selectedTanker.is_available ? 'Mark En Route' : 'Mark Ready'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Row 2: Edit & Retire CRUD Actions */}
+              <View style={styles.drawerCrudRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit Tanker"
+                  onPress={() => {
+                    setEditDriver(selectedTanker.driver_name);
+                    setEditPhone(selectedTanker.driver_phone);
+                    setEditCap(selectedTanker.capacity_liters);
+                    setEditPrice(selectedTanker.base_price || 650);
+                    setIsEditModalOpen(true);
+                  }}
+                  style={[styles.crudActionBtn, { backgroundColor: '#475569' }]}
+                >
+                  <Ionicons name="pencil" size={13} color="#FFFFFF" />
+                  <Text style={styles.crudActionBtnText}>Edit Tanker</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Retire Tanker"
+                  onPress={() =>
+                    confirmAction(
+                      'Retire Tanker from Fleet',
+                      `Permanently decommission tanker ${selectedTanker.vehicle_number} from operations?`,
+                      async () => {
+                        const ok = await deleteTanker(selectedTanker.id);
+                        if (ok) {
+                          notify('Tanker Decommissioned', `Tanker ${selectedTanker.vehicle_number} removed.`);
+                          setSelectedTanker(null);
+                        }
+                      },
+                      'Retire Tanker'
+                    )
+                  }
+                  style={[styles.crudActionBtn, { backgroundColor: '#991B1B' }]}
+                >
+                  <Ionicons name="trash-outline" size={13} color="#FFFFFF" />
+                  <Text style={styles.crudActionBtnText}>Retire Fleet</Text>
+                </Pressable>
+              </View>
+
+              {/* Rebalance Dispatch */}
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Rebalance to Deficit Hotspot"
                 onPress={() =>
                   confirmAction(
                     'Rebalance Dispatch',
@@ -747,6 +939,230 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
           </View>
         )}
       </View>
+
+      {/* CRUD MODAL 1: ADD NEW TANKER */}
+      <Modal visible={isAddModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="bus" size={20} color="#0284C7" />
+                <Text style={styles.modalTitle}>Onboard New Tanker to Fleet</Text>
+              </View>
+              <Pressable onPress={() => setIsAddModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Vehicle Number (HSRP)</Text>
+              <TextInput
+                value={newPlate}
+                onChangeText={setNewPlate}
+                placeholder="e.g. MH-02-TC-9021"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Driver Full Name</Text>
+              <TextInput
+                value={newDriver}
+                onChangeText={setNewDriver}
+                placeholder="e.g. Anand Kulkarni"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Driver Phone (+91)</Text>
+              <TextInput
+                value={newPhone}
+                onChangeText={setNewPhone}
+                placeholder="+919820011223"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Capacity (Liters)</Text>
+                  <TextInput
+                    value={String(newCap)}
+                    onChangeText={(t) => setNewCap(parseInt(t, 10) || 5000)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Base Fare (₹)</Text>
+                  <TextInput
+                    value={String(newPrice)}
+                    onChangeText={(t) => setNewPrice(parseInt(t, 10) || 650)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Water Grade</Text>
+              <TextInput
+                value={newWaterType}
+                onChangeText={setNewWaterType}
+                placeholder="e.g. Potable (Drinking)"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setIsAddModalOpen(false)}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isSaving}
+                onPress={async () => {
+                  if (!newPlate.trim() || !newDriver.trim() || !newPhone.trim()) {
+                    notify('Missing Information', 'Please fill in all tanker details.');
+                    return;
+                  }
+                  setIsSaving(true);
+                  const ok = await createTanker({
+                    vehicle_number: newPlate.trim(),
+                    driver_name: newDriver.trim(),
+                    driver_phone: newPhone.trim(),
+                    capacity_liters: newCap,
+                    water_type: newWaterType,
+                    base_price: newPrice,
+                    latitude: 19.1171 + (Math.random() - 0.5) * 0.02,
+                    longitude: 72.8809 + (Math.random() - 0.5) * 0.02,
+                  });
+                  setIsSaving(false);
+                  if (ok) {
+                    notify('Tanker Onboarded', `Vehicle ${newPlate} successfully registered to live fleet.`);
+                    setIsAddModalOpen(false);
+                  } else {
+                    notify('Save Error', 'Failed to save tanker.');
+                  }
+                }}
+                style={styles.modalSubmitBtn}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Create Tanker</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* CRUD MODAL 2: EDIT TANKER DETAILS */}
+      <Modal visible={isEditModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="create" size={20} color="#0284C7" />
+                <Text style={styles.modalTitle}>
+                  Edit Tanker: {selectedTanker?.vehicle_number}
+                </Text>
+              </View>
+              <Pressable onPress={() => setIsEditModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Driver Full Name</Text>
+              <TextInput
+                value={editDriver}
+                onChangeText={setEditDriver}
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Driver Phone</Text>
+              <TextInput
+                value={editPhone}
+                onChangeText={setEditPhone}
+                style={styles.textInput}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Capacity (Liters)</Text>
+                  <TextInput
+                    value={String(editCap)}
+                    onChangeText={(t) => setEditCap(parseInt(t, 10) || 5000)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Base Fare (₹)</Text>
+                  <TextInput
+                    value={String(editPrice)}
+                    onChangeText={(t) => setEditPrice(parseInt(t, 10) || 650)}
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setIsEditModalOpen(false)}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isSaving}
+                onPress={async () => {
+                  if (!selectedTanker) return;
+                  setIsSaving(true);
+                  const ok = await updateTanker(selectedTanker.id, {
+                    driver_name: editDriver.trim(),
+                    driver_phone: editPhone.trim(),
+                    capacity_liters: editCap,
+                    base_price: editPrice,
+                  });
+                  setIsSaving(false);
+                  if (ok) {
+                    notify('Tanker Updated', `Vehicle ${selectedTanker.vehicle_number} details refreshed.`);
+                    setSelectedTanker((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            driver_name: editDriver.trim(),
+                            driver_phone: editPhone.trim(),
+                            capacity_liters: editCap,
+                            base_price: editPrice,
+                          }
+                        : null
+                    );
+                    setIsEditModalOpen(false);
+                  } else {
+                    notify('Update Error', 'Failed to update tanker details.');
+                  }
+                }}
+                style={styles.modalSubmitBtn}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Save Changes</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1376,6 +1792,29 @@ const styles = StyleSheet.create({
   actionButtonsRow: {
     marginTop: 'auto',
   },
+  actionButtonsCol: {
+    marginTop: 'auto',
+    gap: 8,
+  },
+  drawerCrudRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  crudActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  crudActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+  },
   rebalanceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1387,6 +1826,209 @@ const styles = StyleSheet.create({
     ...shadows.subtle,
   },
   rebalanceBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+  },
+
+  // Unclutter & Marker Styles
+  toggleRowSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toggleLabelSmall: {
+    fontSize: 11,
+    fontWeight: fontWeights.semibold,
+    color: '#475569',
+  },
+  addTankerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    ...shadows.subtle,
+  },
+  addTankerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+  },
+  uberSurgePillCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  surgeMultBadgeSmall: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  surgeMultTextSmall: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+  },
+  surgeZoneNameSmall: {
+    color: '#F8FAFC',
+    fontSize: 10,
+    fontWeight: fontWeights.semibold,
+  },
+  surgeDeficitTagSmall: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+  },
+
+  // Compact Modern Circular Tanker Pin
+  tankerPinCompact: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    ...shadows.card,
+  },
+  pinAvailable: {
+    backgroundColor: '#0F172A',
+    borderColor: '#10B981',
+  },
+  pinBusy: {
+    backgroundColor: '#0F172A',
+    borderColor: '#F59E0B',
+  },
+  pinSelected: {
+    borderColor: '#38BDF8',
+    borderWidth: 3,
+    transform: [{ scale: 1.15 }],
+  },
+  pinCapText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    marginLeft: 2,
+  },
+  pinStatusDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  compactPlateWrap: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 3,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  compactPlateWrapSelected: {
+    borderColor: '#38BDF8',
+    backgroundColor: '#0284C7',
+  },
+  compactPlateText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    fontFamily: 'monospace',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '90%',
+    overflow: 'hidden',
+    ...shadows.modal,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: '#475569',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  modalCancelBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: fontWeights.semibold,
+  },
+  modalSubmitBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#0284C7',
+  },
+  modalSubmitBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: fontWeights.bold,

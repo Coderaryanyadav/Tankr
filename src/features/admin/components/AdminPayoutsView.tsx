@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,8 +16,15 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
-  const { payoutLedger, financialSummary, executeBatchPayout } = useAdminStore();
+  const { payoutLedger, financialSummary, executeBatchPayout, createDriverPayout, settleIndividualPayout } = useAdminStore();
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // New Payout Form
+  const [driverPhone, setDriverPhone] = useState('+919000000001');
+  const [amount, setAmount] = useState('1450.00');
+  const [notes, setNotes] = useState('Trip fare payout for Marol commercial delivery');
 
   const handleBatchPayout = () => {
     confirmAction(
@@ -109,22 +119,34 @@ export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop 
           </View>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Execute Automated Batch Payout"
-          disabled={isExecuting}
-          onPress={handleBatchPayout}
-          style={[styles.payoutActionBtn, isExecuting && { opacity: 0.6 }]}
-        >
-          {isExecuting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
-              <Text style={styles.payoutActionText}>DISBURSE WEEKLY BATCH</Text>
-            </>
-          )}
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Record Driver Earning"
+            onPress={() => setIsAddModalOpen(true)}
+            style={styles.recordPayoutBtn}
+          >
+            <Ionicons name="add" size={16} color="#0284C7" />
+            <Text style={styles.recordPayoutBtnText}>+ Record Earning</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Execute Automated Batch Payout"
+            disabled={isExecuting}
+            onPress={handleBatchPayout}
+            style={[styles.payoutActionBtn, isExecuting && { opacity: 0.6 }]}
+          >
+            {isExecuting ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                <Text style={styles.payoutActionText}>DISBURSE WEEKLY BATCH</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       {/* Payout Ledger Table */}
@@ -142,6 +164,7 @@ export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop 
           <Text style={[styles.thCell, { flex: 2 }]}>TRANSACTION / DISPATCH NOTES</Text>
           <Text style={[styles.thCell, { flex: 1, textAlign: 'right' }]}>AMOUNT (₹)</Text>
           <Text style={[styles.thCell, { flex: 1.2, textAlign: 'right' }]}>TIMESTAMP</Text>
+          <Text style={[styles.thCell, { flex: 1, textAlign: 'center' }]}>ACTION</Text>
         </View>
 
         {payoutLedger.length === 0 ? (
@@ -198,10 +221,118 @@ export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop 
                   })}
                 </Text>
               </View>
+
+              <View style={[styles.tdCell, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Instant Settle"
+                  onPress={() =>
+                    confirmAction(
+                      'Settle Individual Payout',
+                      `Mark payout of ₹${row.amount} to ${row.driver_phone} as instantly settled?`,
+                      async () => {
+                        const ok = await settleIndividualPayout(row.id);
+                        if (ok) notify('Settlement Confirmed', 'Driver earning marked settled.');
+                      },
+                      'Instant Settle'
+                    )
+                  }
+                  style={styles.settleBtn}
+                >
+                  <Text style={styles.settleBtnText}>Settle</Text>
+                </Pressable>
+              </View>
             </View>
           ))
         )}
       </View>
+
+      {/* CRUD MODAL: RECORD DRIVER EARNING / PAYOUT */}
+      <Modal visible={isAddModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="cash" size={20} color="#0284C7" />
+                <Text style={styles.modalTitle}>Record Test Driver Payout / Earning</Text>
+              </View>
+              <Pressable onPress={() => setIsAddModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Driver Phone Number (+91)</Text>
+              <TextInput
+                value={driverPhone}
+                onChangeText={setDriverPhone}
+                placeholder="+919000000001"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Payable Earning Amount (₹)</Text>
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+                placeholder="1450.00"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <Text style={styles.inputLabel}>Dispatch / Trip Notes</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="e.g. Completed Marol industrial supply run"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setIsAddModalOpen(false)}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isSaving}
+                onPress={async () => {
+                  const numAmt = parseFloat(amount);
+                  if (!driverPhone.trim() || isNaN(numAmt) || numAmt <= 0) {
+                    notify('Invalid Entry', 'Please enter a valid driver phone and amount.');
+                    return;
+                  }
+                  setIsSaving(true);
+                  const ok = await createDriverPayout({
+                    driver_phone: driverPhone.trim(),
+                    amount: numAmt,
+                    notes: notes.trim(),
+                  });
+                  setIsSaving(false);
+                  if (ok) {
+                    notify('Earning Logged', `₹${numAmt} recorded for ${driverPhone}.`);
+                    setIsAddModalOpen(false);
+                  } else {
+                    notify('Error', 'Failed to record payout.');
+                  }
+                }}
+                style={styles.modalSubmitBtn}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Record Payout</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -396,5 +527,119 @@ const styles = StyleSheet.create({
   emptyTableText: {
     fontSize: 13,
     color: '#94A3B8',
+  },
+
+  // CRUD Actions & Modal Styles
+  recordPayoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+  },
+  recordPayoutBtnText: {
+    color: '#0284C7',
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+  },
+  settleBtn: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  settleBtnText: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    color: '#16A34A',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '90%',
+    overflow: 'hidden',
+    ...shadows.modal,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: '#475569',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  modalCancelBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: fontWeights.semibold,
+  },
+  modalSubmitBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#0284C7',
+  },
+  modalSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
   },
 });

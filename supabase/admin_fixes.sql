@@ -292,5 +292,117 @@ BEGIN
 END;
 $$;
 
+-- ==============================================================================
+-- 9. USER ONBOARDING SECURITY DEFINER & TABLE PERMISSION GRANTS
+-- ==============================================================================
+
+-- Fix permission denied on profiles and other public tables
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+
+-- Ensure profiles RLS permits users to manage their own profile
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
+CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Admins full access on profiles" ON public.profiles;
+CREATE POLICY "Admins full access on profiles" ON public.profiles FOR ALL USING (public.is_admin(auth.uid()));
+
+DROP POLICY IF EXISTS "Public read driver and supplier basic info" ON public.profiles;
+CREATE POLICY "Public read driver and supplier basic info" ON public.profiles FOR SELECT USING (role IN ('driver', 'supplier', 'admin'));
+
+-- Ensure saved_addresses RLS permits user CRUD
+ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can read own addresses" ON public.saved_addresses;
+CREATE POLICY "Users can read own addresses" ON public.saved_addresses FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own addresses" ON public.saved_addresses;
+CREATE POLICY "Users can insert own addresses" ON public.saved_addresses FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own addresses" ON public.saved_addresses;
+CREATE POLICY "Users can update own addresses" ON public.saved_addresses FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own addresses" ON public.saved_addresses;
+CREATE POLICY "Users can delete own addresses" ON public.saved_addresses FOR DELETE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins full access on saved_addresses" ON public.saved_addresses;
+CREATE POLICY "Admins full access on saved_addresses" ON public.saved_addresses FOR ALL USING (public.is_admin(auth.uid()));
+
+-- Complete customer onboarding RPC (Atomic, Security Definer)
+CREATE OR REPLACE FUNCTION public.complete_customer_onboarding(
+    p_full_name TEXT,
+    p_preferred_address TEXT,
+    p_city TEXT,
+    p_pincode TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_user_id UUID := auth.uid();
+    v_profile RECORD;
+BEGIN
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    UPDATE public.profiles
+    SET 
+        full_name = p_full_name,
+        preferred_address = p_preferred_address,
+        city = p_city,
+        pincode = p_pincode,
+        is_onboarding_completed = true,
+        updated_at = NOW()
+    WHERE id = v_user_id
+    RETURNING * INTO v_profile;
+
+    IF NOT FOUND THEN
+        INSERT INTO public.profiles (
+            id,
+            full_name,
+            preferred_address,
+            city,
+            pincode,
+            is_onboarding_completed,
+            role,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_user_id,
+            p_full_name,
+            p_preferred_address,
+            p_city,
+            p_pincode,
+            true,
+            'customer',
+            NOW(),
+            NOW()
+        )
+        RETURNING * INTO v_profile;
+    END IF;
+
+    RETURN to_jsonb(v_profile);
+END;
+$$;
+
 -- Grant execution to all
 GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+

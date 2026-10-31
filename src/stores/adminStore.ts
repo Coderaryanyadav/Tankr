@@ -48,13 +48,15 @@ export interface AdminAuditLogItem {
 }
 
 export interface ServiceZoneItem {
+  id?: string;
   zone_name: string;
   online_fleet_count: number;
   available_fleet_count: number;
   active_deliveries: number;
-  liquidity_status: 'OPTIMAL' | 'LIMITED_SUPPLY' | 'HIGH_DEMAND_SURGE';
+  liquidity_status: 'OPTIMAL' | 'LIMITED_SUPPLY' | 'HIGH_DEMAND_SURGE' | 'OFFLINE';
   avg_eta_minutes: number;
   traffic_factor: number;
+  traffic_multiplier?: number;
 }
 
 export interface LiveDeficitZone {
@@ -130,6 +132,7 @@ export interface FinancialSummary {
 export interface WaterCertificateItem {
   id: string;
   supplier_id: string;
+  water_source?: string;
   source_type: string;
   lab_name: string;
   test_report_number: string;
@@ -208,6 +211,61 @@ interface AdminState {
   toggleEmergencyMode: () => void;
   resolveDispute: (disputeId: string, refund: boolean) => Promise<void>;
   rebalanceTanker: (tankerId: string, zoneName?: string) => Promise<boolean>;
+  createTanker: (tanker: {
+    vehicle_number: string;
+    driver_name: string;
+    driver_phone: string;
+    capacity_liters: number;
+    water_type: string;
+    base_price: number;
+    latitude?: number;
+    longitude?: number;
+  }) => Promise<boolean>;
+  updateTanker: (tankerId: string, updates: Partial<FleetTankerItem> & { is_online?: boolean; is_available?: boolean }) => Promise<boolean>;
+  deleteTanker: (tankerId: string) => Promise<boolean>;
+  createWaterCertificate: (cert: {
+    water_source: string;
+    source_type: string;
+    lab_name: string;
+    test_report_number: string;
+    tds_ppm: number;
+    ph_level: number;
+    turbidity_ntu: number;
+    certified_date?: string;
+    expiry_date?: string;
+  }) => Promise<boolean>;
+  reinstateWaterCertificate: (certificateId: string) => Promise<boolean>;
+  deleteWaterCertificate: (certificateId: string) => Promise<boolean>;
+  completeEmergencyDispatch: (dispatchId: string) => Promise<boolean>;
+  cancelEmergencyDispatch: (dispatchId: string) => Promise<boolean>;
+  createDriverPayout: (payout: {
+    driver_phone: string;
+    amount: number;
+    notes?: string;
+  }) => Promise<boolean>;
+  settleIndividualPayout: (payoutId: string) => Promise<boolean>;
+  createTestSupplier: (sup: {
+    business_name: string;
+    contact_person: string;
+    contact_phone: string;
+    water_source: string;
+    gstin: string;
+  }) => Promise<boolean>;
+  createTestDispute: (disp: {
+    customer_name: string;
+    supplier_name: string;
+    amount: number;
+    reason: string;
+    category?: string;
+  }) => Promise<boolean>;
+  createServiceZone: (zone: {
+    zone_name: string;
+    center_lat: number;
+    center_lng: number;
+    radius_km: number;
+    traffic_multiplier: number;
+  }) => Promise<boolean>;
+  updateServiceZone: (zoneId: string, updates: { traffic_multiplier?: number; is_operational?: boolean }) => Promise<boolean>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -537,6 +595,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           waterCertificates: data.map((c: any) => ({
             id: c.id,
             supplier_id: c.supplier_id,
+            water_source: c.water_source || 'Groundwater / Aquifer Borewell',
             source_type: c.source_type,
             lab_name: c.lab_name,
             test_report_number: c.test_report_number,
@@ -705,6 +764,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       if (!error && data) {
         set({
           serviceZones: data.map((z: any) => ({
+            id: z.id,
             zone_name: z.zone_name,
             online_fleet_count: Number(z.online_fleet_count || 0),
             available_fleet_count: Number(z.available_fleet_count || 0),
@@ -712,6 +772,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             liquidity_status: z.liquidity_status || 'OPTIMAL',
             avg_eta_minutes: Number(z.avg_eta_minutes || 15),
             traffic_factor: Number(z.traffic_factor || 1.0),
+            traffic_multiplier: Number(z.traffic_multiplier || z.traffic_factor || 1.1),
           })),
         });
       }
@@ -860,6 +921,363 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           get().fetchDeficitZones(),
           get().fetchAuditLogs(),
         ]);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  createTanker: async (tankerData) => {
+    try {
+      // Find a supplier id or use default supplier
+      const sup = get().pendingSuppliers[0];
+      const { data: sups } = await supabase.from('suppliers').select('id').limit(1);
+      const supplierId = sups?.[0]?.id || '8cf81dd2-a4ca-4d4d-8268-9f3212f71e87';
+
+      const { error } = await supabase.from('tankers').insert({
+        supplier_id: supplierId,
+        vehicle_number: tankerData.vehicle_number,
+        driver_name: tankerData.driver_name,
+        driver_phone: tankerData.driver_phone,
+        capacity_liters: tankerData.capacity_liters,
+        water_type: tankerData.water_type || 'Potable (Drinking)',
+        base_price: tankerData.base_price || 650,
+        latitude: tankerData.latitude || 19.1171,
+        longitude: tankerData.longitude || 72.8809,
+        is_available: true,
+        is_online: true,
+      });
+
+      if (!error) {
+        await get().fetchFleetTankers();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'tanker_onboarded',
+          entity_type: 'tankers',
+          details: { vehicle_number: tankerData.vehicle_number, capacity: tankerData.capacity_liters },
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  updateTanker: async (tankerId, updates) => {
+    try {
+      const { error } = await supabase.from('tankers').update(updates).eq('id', tankerId);
+      if (!error) {
+        await get().fetchFleetTankers();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'tanker_updated',
+          entity_type: 'tankers',
+          entity_id: tankerId,
+          details: updates,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteTanker: async (tankerId) => {
+    try {
+      const { error } = await supabase.from('tankers').delete().eq('id', tankerId);
+      if (!error) {
+        await get().fetchFleetTankers();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'tanker_retired',
+          entity_type: 'tankers',
+          entity_id: tankerId,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  createWaterCertificate: async (cert) => {
+    try {
+      const { error } = await supabase.from('water_quality_certificates').insert({
+        water_source: cert.water_source,
+        source_type: cert.source_type,
+        lab_name: cert.lab_name,
+        test_report_number: cert.test_report_number,
+        tds_ppm: cert.tds_ppm,
+        ph_level: cert.ph_level,
+        turbidity_ntu: cert.turbidity_ntu,
+        certified_date: cert.certified_date || new Date().toISOString().split('T')[0],
+        expiry_date: cert.expiry_date || new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0],
+        is_potable: cert.tds_ppm <= 250,
+        is_active: true,
+      });
+
+      if (!error) {
+        await get().fetchWaterCertificates();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'water_certificate_created',
+          entity_type: 'water_quality_certificates',
+          details: { report_number: cert.test_report_number, tds: cert.tds_ppm },
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  reinstateWaterCertificate: async (certificateId) => {
+    try {
+      const { error } = await supabase
+        .from('water_quality_certificates')
+        .update({ is_potable: true, is_active: true })
+        .eq('id', certificateId);
+
+      if (!error) {
+        await get().fetchWaterCertificates();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'water_certificate_reinstated',
+          entity_type: 'water_quality_certificates',
+          entity_id: certificateId,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteWaterCertificate: async (certificateId) => {
+    try {
+      const { error } = await supabase
+        .from('water_quality_certificates')
+        .delete()
+        .eq('id', certificateId);
+
+      if (!error) {
+        await get().fetchWaterCertificates();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'water_certificate_deleted',
+          entity_type: 'water_quality_certificates',
+          entity_id: certificateId,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  completeEmergencyDispatch: async (dispatchId) => {
+    try {
+      const { error } = await supabase
+        .from('emergency_dispatches')
+        .update({ status: 'delivered' })
+        .eq('id', dispatchId);
+
+      if (!error) {
+        await get().fetchEmergencyDispatches();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'emergency_dispatch_completed',
+          entity_type: 'emergency_dispatches',
+          entity_id: dispatchId,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  cancelEmergencyDispatch: async (dispatchId) => {
+    try {
+      const { error } = await supabase
+        .from('emergency_dispatches')
+        .update({ status: 'cancelled' })
+        .eq('id', dispatchId);
+
+      if (!error) {
+        await get().fetchEmergencyDispatches();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'emergency_dispatch_cancelled',
+          entity_type: 'emergency_dispatches',
+          entity_id: dispatchId,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  createDriverPayout: async (payout) => {
+    try {
+      const { error } = await supabase.from('driver_payout_ledger').insert({
+        driver_phone: payout.driver_phone,
+        entry_type: 'delivery_earning',
+        amount: payout.amount,
+        notes: payout.notes || 'Trip fare & incentive earning',
+      });
+
+      if (!error) {
+        await get().fetchPayoutLedger();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'payout_recorded',
+          entity_type: 'driver_payout_ledger',
+          details: { driver_phone: payout.driver_phone, amount: payout.amount },
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  settleIndividualPayout: async (payoutId) => {
+    try {
+      const { error } = await supabase
+        .from('driver_payout_ledger')
+        .update({ notes: 'Settled via Instant NEFT' })
+        .eq('id', payoutId);
+
+      if (!error) {
+        await get().fetchPayoutLedger();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'individual_payout_settled',
+          entity_type: 'driver_payout_ledger',
+          entity_id: payoutId,
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  createTestSupplier: async (sup) => {
+    try {
+      const { error } = await supabase.from('suppliers').insert({
+        business_name: sup.business_name,
+        contact_person: sup.contact_person,
+        contact_phone: sup.contact_phone,
+        water_source: sup.water_source,
+        gstin: sup.gstin,
+        verification_status: 'pending_review',
+        is_verified: false,
+        fleet_size: 4,
+      });
+
+      if (!error) {
+        await get().fetchDashboardMetrics();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'test_supplier_created',
+          entity_type: 'suppliers',
+          details: { business: sup.business_name, gstin: sup.gstin },
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  createTestDispute: async (disp) => {
+    try {
+      const { error } = await supabase.from('disputes').insert({
+        customer_name: disp.customer_name,
+        supplier_name: disp.supplier_name,
+        amount: disp.amount,
+        reason: disp.reason,
+        category: disp.category || 'volume_shortage',
+        status: 'open',
+      });
+
+      if (!error) {
+        await get().fetchDashboardMetrics();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'test_dispute_created',
+          entity_type: 'disputes',
+          details: { customer: disp.customer_name, amount: disp.amount },
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  createServiceZone: async (zone) => {
+    try {
+      const { error } = await supabase.from('service_zones').insert({
+        zone_name: zone.zone_name,
+        center_lat: zone.center_lat,
+        center_lng: zone.center_lng,
+        radius_km: zone.radius_km,
+        traffic_multiplier: zone.traffic_multiplier,
+        minimum_fleet_density: 3,
+        is_operational: true,
+      });
+
+      if (!error) {
+        await get().fetchServiceZones();
+        await get().fetchDeficitZones();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'service_zone_created',
+          entity_type: 'service_zones',
+          details: { zone_name: zone.zone_name, radius: zone.radius_km },
+        });
+        await get().fetchAuditLogs();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  updateServiceZone: async (zoneIdOrName, updates) => {
+    try {
+      const { error } = await supabase
+        .from('service_zones')
+        .update(updates)
+        .eq('zone_name', zoneIdOrName);
+
+      if (!error) {
+        await get().fetchServiceZones();
+        await get().fetchDeficitZones();
+        await supabase.from('admin_audit_logs').insert({
+          action: 'service_zone_updated',
+          entity_type: 'service_zones',
+          details: { zone: zoneIdOrName, ...updates },
+        });
+        await get().fetchAuditLogs();
         return true;
       }
       return false;

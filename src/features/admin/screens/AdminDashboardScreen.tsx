@@ -3,12 +3,14 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -63,9 +65,20 @@ export const AdminDashboardScreen: React.FC = () => {
     setSurgeMultiplier,
     toggleEmergencyMode,
     resolveDispute,
+    createTestSupplier,
+    createTestDispute,
+    createServiceZone,
+    updateServiceZone,
   } = useAdminStore();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [isAddZoneModalOpen, setIsAddZoneModalOpen] = useState(false);
+  const [newZoneName, setNewZoneName] = useState('Goregaon East IT Hub');
+  const [newZoneLat, setNewZoneLat] = useState('19.1663');
+  const [newZoneLng, setNewZoneLng] = useState('72.8526');
+  const [newZoneRadius, setNewZoneRadius] = useState('4.5');
+  const [newZoneTraffic, setNewZoneTraffic] = useState('1.15');
+  const [isCreatingZone, setIsCreatingZone] = useState(false);
 
   useEffect(() => {
     fetchDashboardMetrics();
@@ -629,6 +642,25 @@ export const AdminDashboardScreen: React.FC = () => {
                       Verify GSTIN, water source lab test, and tanker registrations
                     </Text>
                   </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Seed Test Supplier"
+                    onPress={async () => {
+                      const num = Math.floor(1000 + Math.random() * 9000);
+                      const ok = await createTestSupplier({
+                        business_name: `Aqua Express Logistics Hub ${num}`,
+                        contact_person: 'Ramesh Yadav',
+                        contact_phone: `+9198200${Math.floor(10000 + Math.random() * 90000)}`,
+                        water_source: 'BMC Municipal / Deep Aquifer Sump',
+                        gstin: `27AABC${num}1Z5`,
+                      });
+                      if (ok) notify('Test Supplier Created', `Aqua Express Logistics Hub ${num} added to pending review.`);
+                    }}
+                    style={styles.addTestBtn}
+                  >
+                    <Ionicons name="add" size={15} color="#0284C7" />
+                    <Text style={styles.addTestBtnText}>+ Add Test Supplier</Text>
+                  </Pressable>
                 </View>
                 {pendingSuppliers.length === 0 ? (
                   <View style={styles.emptyCardBox}>
@@ -683,6 +715,25 @@ export const AdminDashboardScreen: React.FC = () => {
                       {disputes.length} recorded incidents
                     </Text>
                   </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Create Test Dispute"
+                    onPress={async () => {
+                      const num = Math.floor(100 + Math.random() * 900);
+                      const ok = await createTestDispute({
+                        customer_name: 'Pooja Bhatt',
+                        supplier_name: 'Marol Potable Water Hub',
+                        amount: 650.0,
+                        reason: `Flow meter reported 3,800L delivered instead of 5,000L ordered (Incident #${num})`,
+                        category: 'volume_shortage',
+                      });
+                      if (ok) notify('Test Dispute Logged', 'Volume shortage dispute created in queue.');
+                    }}
+                    style={styles.addTestBtn}
+                  >
+                    <Ionicons name="add" size={15} color="#0284C7" />
+                    <Text style={styles.addTestBtnText}>+ Create Test Dispute</Text>
+                  </Pressable>
                 </View>
 
                 {disputes.length === 0 ? (
@@ -747,6 +798,15 @@ export const AdminDashboardScreen: React.FC = () => {
                       Zone polygon liquidity and traffic ETA multipliers
                     </Text>
                   </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Add Service Zone"
+                    onPress={() => setIsAddZoneModalOpen(true)}
+                    style={styles.addTestBtn}
+                  >
+                    <Ionicons name="add" size={15} color="#0284C7" />
+                    <Text style={styles.addTestBtnText}>+ Add Zone</Text>
+                  </Pressable>
                 </View>
 
                 <View style={styles.zonesGrid}>
@@ -773,6 +833,33 @@ export const AdminDashboardScreen: React.FC = () => {
                         <Text style={styles.zoneSpecText}>
                           Avg ETA: <Text style={{ fontWeight: fontWeights.bold }}>~{zone.avg_eta_minutes} mins</Text>
                         </Text>
+                      </View>
+
+                      {/* Zone CRUD Actions */}
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                        <Pressable
+                          onPress={async () => {
+                            const nextMulti = Number((Number(zone.traffic_multiplier || 1.1) + 0.1).toFixed(2));
+                            const ok = await updateServiceZone(zone.zone_name, { traffic_multiplier: nextMulti });
+                            if (ok) notify('Multiplier Updated', `Zone traffic multiplier set to ${nextMulti}x.`);
+                          }}
+                          style={styles.zoneMiniBtn}
+                        >
+                          <Ionicons name="trending-up" size={12} color="#0284C7" />
+                          <Text style={styles.zoneMiniBtnText}>+0.1x Surge</Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={async () => {
+                            const nextOp = zone.liquidity_status === 'OFFLINE' ? true : false;
+                            const ok = await updateServiceZone(zone.zone_name, { is_operational: nextOp });
+                            if (ok) notify('Zone Updated', 'Zone operational state toggled.');
+                          }}
+                          style={styles.zoneMiniBtn}
+                        >
+                          <Ionicons name="power" size={12} color="#64748B" />
+                          <Text style={styles.zoneMiniBtnText}>Toggle Status</Text>
+                        </Pressable>
                       </View>
                     </View>
                   ))}
@@ -816,6 +903,132 @@ export const AdminDashboardScreen: React.FC = () => {
           </ScrollView>
         </View>
       </View>
+
+      {/* CRUD MODAL: ADD POSTGIS SERVICE ZONE */}
+      <Modal visible={isAddZoneModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="map" size={20} color="#0284C7" />
+                <Text style={styles.modalTitle}>Add Mumbai Service Zone</Text>
+              </View>
+              <Pressable onPress={() => setIsAddZoneModalOpen(false)}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Zone Name / Sector</Text>
+              <TextInput
+                value={newZoneName}
+                onChangeText={setNewZoneName}
+                placeholder="e.g. Goregaon East IT Hub"
+                placeholderTextColor="#94A3B8"
+                style={styles.textInput}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Center Latitude</Text>
+                  <TextInput
+                    value={newZoneLat}
+                    onChangeText={setNewZoneLat}
+                    placeholder="19.1663"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Center Longitude</Text>
+                  <TextInput
+                    value={newZoneLng}
+                    onChangeText={setNewZoneLng}
+                    placeholder="72.8526"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Radius (km)</Text>
+                  <TextInput
+                    value={newZoneRadius}
+                    onChangeText={setNewZoneRadius}
+                    keyboardType="numeric"
+                    placeholder="4.5"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.textInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Traffic Multiplier</Text>
+                  <TextInput
+                    value={newZoneTraffic}
+                    onChangeText={setNewZoneTraffic}
+                    keyboardType="numeric"
+                    placeholder="1.15"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setIsAddZoneModalOpen(false)}
+                style={styles.modalCancelBtn}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={isCreatingZone}
+                onPress={async () => {
+                  const lat = parseFloat(newZoneLat);
+                  const lng = parseFloat(newZoneLng);
+                  const rad = parseFloat(newZoneRadius);
+                  const traf = parseFloat(newZoneTraffic);
+
+                  if (!newZoneName.trim() || isNaN(lat) || isNaN(lng)) {
+                    notify('Missing Information', 'Please provide a valid zone name and coordinates.');
+                    return;
+                  }
+
+                  setIsCreatingZone(true);
+                  const ok = await createServiceZone({
+                    zone_name: newZoneName.trim(),
+                    center_lat: lat,
+                    center_lng: lng,
+                    radius_km: rad || 4.0,
+                    traffic_multiplier: traf || 1.1,
+                  });
+                  setIsCreatingZone(false);
+
+                  if (ok) {
+                    notify('Service Zone Created', `Zone ${newZoneName} added with PostGIS polygon.`);
+                    setIsAddZoneModalOpen(false);
+                  } else {
+                    notify('Error', 'Failed to create zone.');
+                  }
+                }}
+                style={styles.modalSubmitBtn}
+              >
+                {isCreatingZone ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Create Zone</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1405,5 +1618,126 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#94A3B8',
     marginTop: 2,
+  },
+
+  // CRUD Test Buttons & Zone Action Styles
+  addTestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  addTestBtnText: {
+    color: '#0284C7',
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+  },
+  zoneMiniBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  zoneMiniBtnText: {
+    fontSize: 11,
+    fontWeight: fontWeights.semibold,
+    color: '#334155',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '90%',
+    overflow: 'hidden',
+    ...shadows.modal,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0F172A',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: '#475569',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  modalCancelBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: fontWeights.semibold,
+  },
+  modalSubmitBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#0284C7',
+  },
+  modalSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
   },
 });

@@ -14,7 +14,12 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
-  const { emergencyDispatches, triggerEmergencyDispatch } = useAdminStore();
+  const {
+    emergencyDispatches,
+    triggerEmergencyDispatch,
+    completeEmergencyDispatch,
+    cancelEmergencyDispatch,
+  } = useAdminStore();
 
   const [institutionName, setInstitutionName] = useState('');
   const [institutionType, setInstitutionType] = useState<'hospital_dialysis' | 'icu_facility' | 'critical_sump' | 'elderly_care'>('hospital_dialysis');
@@ -282,6 +287,49 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
                         <Text style={styles.driverText}>
                           Driver: {disp.driver_name || 'Sunil Shinde'} ({disp.driver_phone || '+91 98201 10010'})
                         </Text>
+                      </View>
+
+                      {/* CRUD Actions for Hospital Dispatch */}
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Mark Delivery Complete"
+                          onPress={() =>
+                            confirmAction(
+                              'Confirm Emergency Delivery',
+                              `Confirm that priority tanker has replenished sump at ${disp.institution_name}?`,
+                              async () => {
+                                const ok = await completeEmergencyDispatch(disp.id);
+                                if (ok) notify('SLA Fulfilled', `Delivery verified for ${disp.institution_name}.`);
+                              },
+                              'Mark Delivered'
+                            )
+                          }
+                          style={styles.completeBtn}
+                        >
+                          <Ionicons name="checkmark-done" size={13} color="#FFFFFF" />
+                          <Text style={styles.completeBtnText}>Mark Delivered</Text>
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Cancel Priority Dispatch"
+                          onPress={() =>
+                            confirmAction(
+                              'Cancel Emergency Dispatch',
+                              `Cancel emergency dispatch to ${disp.institution_name}?`,
+                              async () => {
+                                const ok = await cancelEmergencyDispatch(disp.id);
+                                if (ok) notify('Dispatch Cancelled', 'Priority call aborted.');
+                              },
+                              'Cancel Call'
+                            )
+                          }
+                          style={styles.cancelBtn}
+                        >
+                          <Ionicons name="close" size={13} color="#64748B" />
+                          <Text style={styles.cancelBtnText}>Cancel</Text>
+                        </Pressable>
                       </View>
                     </View>
                   </View>
@@ -557,5 +605,33 @@ const styles = StyleSheet.create({
   driverText: {
     fontSize: 11,
     color: '#475569',
+  },
+  completeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  completeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+  },
+  cancelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  cancelBtnText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: fontWeights.semibold,
   },
 });

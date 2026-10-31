@@ -2082,5 +2082,65 @@ BEGIN
 END;
 $$;
 
+-- Complete customer onboarding RPC (Atomic, Security Definer)
+CREATE OR REPLACE FUNCTION public.complete_customer_onboarding(
+    p_full_name TEXT,
+    p_preferred_address TEXT,
+    p_city TEXT,
+    p_pincode TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_user_id UUID := auth.uid();
+    v_profile RECORD;
+BEGIN
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    UPDATE public.profiles
+    SET 
+        full_name = p_full_name,
+        preferred_address = p_preferred_address,
+        city = p_city,
+        pincode = p_pincode,
+        is_onboarding_completed = true,
+        updated_at = NOW()
+    WHERE id = v_user_id
+    RETURNING * INTO v_profile;
+
+    IF NOT FOUND THEN
+        INSERT INTO public.profiles (
+            id,
+            full_name,
+            preferred_address,
+            city,
+            pincode,
+            is_onboarding_completed,
+            role,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_user_id,
+            p_full_name,
+            p_preferred_address,
+            p_city,
+            p_pincode,
+            true,
+            'customer',
+            NOW(),
+            NOW()
+        )
+        RETURNING * INTO v_profile;
+    END IF;
+
+    RETURN to_jsonb(v_profile);
+END;
+$$;
+
 -- Grant execute on routines
 GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
