@@ -16,7 +16,7 @@ Error: permission denied for table profiles
 PostgreSQL checks table-level permissions before evaluating Row-Level Security. If the database role `authenticated` or `anon` lacks explicit `GRANT ALL` on `public.profiles`, writes fail.
 
 ### Safe Solution:
-Run [`supabase/admin_fixes.sql`](../../supabase/admin_fixes.sql) in your Supabase SQL Editor. It grants full table permissions and defines the atomic `complete_customer_onboarding` stored procedure with `SECURITY DEFINER`.
+Execute the master migration [`supabase/migrations/20261031000001_master_database_schema.sql`](../../supabase/migrations/20261031000001_master_database_schema.sql) in your Supabase SQL Editor. It grants full table permissions (`GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role`) and provides the atomic `complete_customer_onboarding` stored procedure with `SECURITY DEFINER`.
 
 ---
 

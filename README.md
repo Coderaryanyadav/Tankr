@@ -329,7 +329,7 @@ Security reports are taken with utmost seriousness. Please report vulnerabilitie
 ## 15. Troubleshooting
 
 If you encounter issues during installation or runtime:
-- **`permission denied for table profiles`**: Run [`supabase/admin_fixes.sql`](supabase/admin_fixes.sql) in your Supabase SQL Editor.
+- **`permission denied for table profiles`**: Ensure the master migration [`supabase/migrations/20261031000001_master_database_schema.sql`](supabase/migrations/20261031000001_master_database_schema.sql) has been applied in your Supabase SQL Editor (it includes table grants and `complete_customer_onboarding`).
 - **Port 8081 already in use**: Run `./scripts/clean.sh` to clear stale Metro processes.
 - **Missing environment variables**: Run `./scripts/validate-env.sh`.
 

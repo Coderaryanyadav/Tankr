@@ -1143,7 +1143,7 @@ RETURNS TABLE (
     network_surge_multiplier NUMERIC(3,2)
 )
 LANGUAGE plpgsql
-STABLE
+SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
@@ -1163,7 +1163,7 @@ BEGIN
 
     v_platform_rev := ROUND(v_total_gmv * 0.10, 2);
 
-    SELECT COUNT(*), COALESCE(SUM(delivered_liters), 0)
+    SELECT COUNT(*), COALESCE(SUM(capacity_liters), 0)
     INTO v_comp_b, v_liters
     FROM public.bookings
     WHERE status = 'delivered';
@@ -1178,6 +1178,11 @@ BEGIN
     SELECT COUNT(*) INTO v_pending_kyc
     FROM public.suppliers
     WHERE verification_status = 'pending_review';
+
+    SELECT COALESCE((value->>'surge_multiplier')::NUMERIC, 1.25)
+    INTO v_surge
+    FROM public.platform_settings
+    WHERE key = 'pricing_defaults';
 
     RETURN QUERY
     SELECT 
@@ -1786,7 +1791,14 @@ DECLARE
     v_driver_name TEXT;
     v_driver_phone TEXT;
     v_dispatch_id UUID;
+    v_type_enum public.institution_type;
 BEGIN
+    BEGIN
+        v_type_enum := p_institution_type::public.institution_type;
+    EXCEPTION WHEN OTHERS THEN
+        v_type_enum := 'hospital_dialysis'::public.institution_type;
+    END;
+
     -- Select nearest available tanker
     SELECT id, vehicle_number, driver_name, driver_phone
     INTO v_tanker_id, v_vehicle_number, v_driver_name, v_driver_phone
@@ -1835,7 +1847,7 @@ BEGIN
         driver_phone
     ) VALUES (
         p_institution_name,
-        p_institution_type,
+        v_type_enum,
         p_contact_person,
         p_contact_phone,
         p_delivery_address,
@@ -1957,6 +1969,7 @@ AS $$
 BEGIN
     UPDATE public.suppliers 
     SET verification_status = p_status,
+        is_verified = (p_status = 'verified'),
         updated_at = NOW()
     WHERE id = p_supplier_id;
 
@@ -2004,17 +2017,15 @@ BEGIN
     IF p_status = 'refunded' AND p_refund_amount > 0 THEN
         INSERT INTO public.payments (
             booking_id,
-            user_id,
             amount,
+            method,
             status,
-            payment_gateway,
             gateway_payment_id
         ) VALUES (
             v_booking_id,
-            v_customer_id,
             p_refund_amount,
+            'refund',
             'refunded',
-            'razorpay',
             'rfnd_' || substr(md5(random()::text), 1, 16)
         );
     END IF;
@@ -2142,5 +2153,12 @@ BEGIN
 END;
 $$;
 
--- Grant execute on routines
-GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+-- Grant execute and table permissions to all roles
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;

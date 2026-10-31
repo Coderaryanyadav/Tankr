@@ -59,10 +59,10 @@ report_step "Jest test suites" $?
 
 # 5. Database Schema Integrity
 echo -e "${BOLD}[5/6] Database Schema Migration Integrity...${NC}"
-if [ -f "supabase/migrations/20261031000001_master_database_schema.sql" ] && [ -f "supabase/admin_fixes.sql" ]; then
-    report_step "Master database migration files present" 0
+if [ -f "supabase/migrations/20261031000001_master_database_schema.sql" ] && [ -f "supabase/seed.sql" ]; then
+    report_step "Master database migration & seed files present" 0
 else
-    report_step "Master database migration files present" 1
+    report_step "Master database migration & seed files present" 1
 fi
 
 # 6. Hardcoded Secret & Security Scan

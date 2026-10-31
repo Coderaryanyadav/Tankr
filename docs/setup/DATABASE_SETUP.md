@@ -12,7 +12,7 @@ TANKR requires **PostgreSQL 15** with the **PostGIS** geospatial extension enabl
 2. Go to **Database** > **Extensions** and ensure `postgis` is enabled.
 3. Open **SQL Editor** > **New Query**.
 4. Paste and execute the contents of [`supabase/migrations/20261031000001_master_database_schema.sql`](../../supabase/migrations/20261031000001_master_database_schema.sql).
-5. Paste and execute [`supabase/admin_fixes.sql`](../../supabase/admin_fixes.sql).
+5. Paste and execute [`supabase/seed.sql`](../../supabase/seed.sql) to populate initial Mumbai test fleet and service zones.
 6. Copy your project URL and `anon` key from **Project Settings** > **API** into `.env`.
 
 ---

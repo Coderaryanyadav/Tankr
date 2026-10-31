@@ -3,9 +3,8 @@
 ## 1. Architecture & Migration Strategy
 
 TANKR maintains a clean, consolidated migration model:
-- **Master Database Schema**: [`supabase/migrations/20261031000001_master_database_schema.sql`](../../supabase/migrations/20261031000001_master_database_schema.sql) contains the unified definition of all 21 tables, spatial indexes, triggers, RLS policies, and core stored procedures.
-- **Admin & RPC Hotfixes**: [`supabase/admin_fixes.sql`](../../supabase/admin_fixes.sql) contains idempotent procedure updates and permission grants.
-- **Historical Archive**: Prior granular iterations are archived in `supabase/migrations_archive/`.
+- **Master Database Schema**: [`supabase/migrations/20261031000001_master_database_schema.sql`](../../supabase/migrations/20261031000001_master_database_schema.sql) contains the unified, self-contained definition of all 21 tables, spatial indexes, triggers, RLS policies, table grants, and core stored procedures.
+- **Unified Seed**: [`supabase/seed.sql`](../../supabase/seed.sql) contains Mumbai operational fleet, bookings, payouts, and service zones.
 
 ---
 

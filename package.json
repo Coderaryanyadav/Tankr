@@ -39,6 +39,7 @@
     "test": "jest",
     "test:ci": "jest --watchAll=false",
     "typecheck": "tsc --noEmit",
+    "tree": "tree -L 3 -I 'node_modules|.expo|dist|.git'",
     "setup": "./scripts/setup.sh",
     "verify": "./scripts/verify-project.sh"
   },

@@ -20,6 +20,6 @@ This reference lists standard error codes returned by TANKR stored procedures an
 
 | Code | Name | Cause | Resolution |
 | :--- | :--- | :--- | :--- |
-| `42501` | `insufficient_privilege` | Table grant missing for role `authenticated` or `anon`. | Run [`supabase/admin_fixes.sql`](../../supabase/admin_fixes.sql). |
+| `42501` | `insufficient_privilege` | Table grant missing for role `authenticated` or `anon`. | Re-apply [`supabase/migrations/20261031000001_master_database_schema.sql`](../../supabase/migrations/20261031000001_master_database_schema.sql). |
 | `23505` | `unique_violation` | Vehicle license plate or phone number already registered. | Check input fields for duplicate entries. |
 | `23503` | `foreign_key_violation` | Referenced tanker, customer, or booking ID does not exist. | Ensure parent entity exists before inserting child records. |

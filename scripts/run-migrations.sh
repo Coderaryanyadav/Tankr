@@ -15,7 +15,6 @@ NC='\033[0m'
 
 ENV_FILE=".env"
 MIGRATION_FILE="supabase/migrations/20261031000001_master_database_schema.sql"
-FIXES_FILE="supabase/admin_fixes.sql"
 
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo -e "${BLUE}${BOLD}            TANKR — Database Migration Forward Runner           ${NC}"
