@@ -126,6 +126,17 @@ CREATE TABLE IF NOT EXISTS public.tankers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 7b. DRIVER PROFILES (Link to Tankers & Authentication)
+CREATE TABLE IF NOT EXISTS public.driver_profiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL,
+    license_number TEXT NOT NULL,
+    assigned_tanker_id UUID REFERENCES public.tankers(id) ON DELETE SET NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- 8. BOOKINGS
 CREATE TABLE IF NOT EXISTS public.bookings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1234,6 +1245,8 @@ CREATE POLICY "Suppliers can update own tankers" ON public.tankers FOR UPDATE US
     EXISTS (SELECT 1 FROM public.suppliers s JOIN public.profiles p ON s.contact_phone = p.phone_number WHERE p.id = auth.uid() AND s.id = tankers.supplier_id)
     OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
+CREATE POLICY "Public read on driver_profiles" ON public.driver_profiles FOR SELECT USING (TRUE);
+CREATE POLICY "Drivers manage own driver_profiles" ON public.driver_profiles FOR ALL USING (profile_id = auth.uid() OR public.is_admin(auth.uid()));
 
 -- 21d. Bookings (Strict Isolation)
 CREATE POLICY "Customers can view own bookings" ON public.bookings FOR SELECT USING (auth.uid() = customer_id);
