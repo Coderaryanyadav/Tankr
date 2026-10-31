@@ -58,6 +58,26 @@ export const DriverDashboardScreen: React.FC = () => {
     MapplsService.openNavigation(delivery_latitude, delivery_longitude, delivery_address || 'Delivery Location');
   };
 
+  const handleCallCustomer = async () => {
+    if (!assignedDelivery) return;
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('phone_number')
+        .eq('id', assignedDelivery.customer_id)
+        .maybeSingle();
+
+      const phone = prof?.phone_number || assignedDelivery.driver_phone;
+      if (phone) {
+        Linking.openURL(`tel:${phone}`);
+      } else {
+        Alert.alert('Phone Unavailable', 'Customer contact phone is not on file.');
+      }
+    } catch {
+      Alert.alert('Phone Unavailable', 'Could not retrieve customer contact.');
+    }
+  };
+
   const handleReportCustomerNoShow = () => {
     if (!assignedDelivery) return;
     Alert.alert(
@@ -117,8 +137,19 @@ export const DriverDashboardScreen: React.FC = () => {
       return;
     }
 
-    const startVal = parseFloat(meterStart) || 0;
-    const endVal = parseFloat(meterEnd) || (startVal + (assignedDelivery.capacity_liters || 5000));
+    if (!meterStart.trim() || !meterEnd.trim()) {
+      setPinError('Both Start and End flow-meter readings are required for delivery audit compliance.');
+      return;
+    }
+
+    const startVal = parseFloat(meterStart);
+    const endVal = parseFloat(meterEnd);
+
+    if (isNaN(startVal) || isNaN(endVal) || endVal <= startVal) {
+      setPinError('Invalid meter readings: End reading must be strictly greater than Start reading.');
+      return;
+    }
+
     const deliveredLiters = Math.round(endVal - startVal);
 
     try {
@@ -275,7 +306,7 @@ export const DriverDashboardScreen: React.FC = () => {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Call Customer"
-                onPress={() => Linking.openURL('tel:+919876543210')}
+                onPress={handleCallCustomer}
                 style={[styles.quickActionBtn, styles.callBtn]}
               >
                 <Ionicons name="call" size={18} color={colors.primary} />

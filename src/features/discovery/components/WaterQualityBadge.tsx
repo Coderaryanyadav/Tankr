@@ -5,54 +5,78 @@ import { borderRadius, colors, fontWeights, spacing } from '../../../theme';
 
 export interface WaterQualityProps {
   sourceType?: string;
-  tdsPpm?: number;
-  phLevel?: number;
-  labName?: string;
-  testedDate?: string;
-  isPotable?: boolean;
+  tdsPpm?: number | null;
+  phLevel?: number | null;
+  labName?: string | null;
+  testedDate?: string | null;
+  certificateNumber?: string | null;
+  waterGrade?: string;
 }
 
 export const WaterQualityBadge: React.FC<WaterQualityProps> = ({
-  sourceType = 'Certified Deep Borewell',
-  tdsPpm = 185,
-  phLevel = 7.2,
-  labName = 'Envirocare Laboratories Mumbai (NABL Accredited)',
-  testedDate = '14 Oct 2026',
-  isPotable = true,
+  sourceType,
+  tdsPpm,
+  phLevel,
+  labName,
+  testedDate,
+  certificateNumber,
+  waterGrade = 'Potable (Drinking)',
 }) => {
+  const hasVerifiedLabReport = Boolean(tdsPpm !== undefined && tdsPpm !== null && phLevel !== undefined && phLevel !== null);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !hasVerifiedLabReport && styles.containerUnverified]}>
       <View style={styles.topRow}>
         <View style={styles.badgeHeader}>
-          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-          <Text style={styles.badgeTitle}>NABL Lab Certified Potable</Text>
+          <Ionicons
+            name={hasVerifiedLabReport ? 'shield-checkmark' : 'information-circle-outline'}
+            size={16}
+            color={hasVerifiedLabReport ? colors.success : '#0284C7'}
+          />
+          <Text style={[styles.badgeTitle, !hasVerifiedLabReport && { color: '#0369A1' }]}>
+            {hasVerifiedLabReport ? 'Verified NABL Lab Water Certificate' : `Declared Grade: ${waterGrade}`}
+          </Text>
         </View>
-        <Text style={styles.testedDate}>Valid till Jan 2027</Text>
+        <Text style={[styles.testedDate, !hasVerifiedLabReport && { color: '#64748B' }]}>
+          {hasVerifiedLabReport && testedDate ? `Tested: ${testedDate}` : 'Audit Standard: BIS-10500'}
+        </Text>
       </View>
 
-      <View style={styles.metricsRow}>
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>TDS LEVEL</Text>
-          <Text style={styles.metricValue}>{tdsPpm} PPM</Text>
-          <Text style={styles.metricSub}>Optimal (50-300)</Text>
+      {hasVerifiedLabReport ? (
+        <View style={styles.metricsRow}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>VERIFIED TDS</Text>
+            <Text style={styles.metricValue}>{tdsPpm} PPM</Text>
+            <Text style={styles.metricSub}>Potable Range (&lt;250)</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>LAB pH</Text>
+            <Text style={styles.metricValue}>{phLevel}</Text>
+            <Text style={styles.metricSub}>Balanced (6.5-8.5)</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>SOURCE</Text>
+            <Text style={styles.metricValue} numberOfLines={1}>
+              {sourceType || 'Certified Hub'}
+            </Text>
+            <Text style={styles.metricSub} numberOfLines={1}>
+              {labName || certificateNumber || 'Lab Audited'}
+            </Text>
+          </View>
         </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>pH VALUE</Text>
-          <Text style={styles.metricValue}>{phLevel}</Text>
-          <Text style={styles.metricSub}>Balanced Alkaline</Text>
+      ) : (
+        <View style={styles.unverifiedNoticeRow}>
+          <Text style={styles.unverifiedNoticeText}>
+            Source: {sourceType || 'Municipal / Certified Filtration Reservoir'}. Batch quality certificate uploaded by supplier; on-site digital flow-meter testing conducted upon delivery.
+          </Text>
         </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>SOURCE</Text>
-          <Text style={styles.metricValue} numberOfLines={1}>Borewell</Text>
-          <Text style={styles.metricSub}>Depth 650 ft</Text>
-        </View>
-      </View>
+      )}
     </View>
   );
 };
@@ -66,6 +90,10 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginVertical: spacing.xs,
   },
+  containerUnverified: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -76,6 +104,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flex: 1,
   },
   badgeTitle: {
     fontSize: 12,
@@ -85,6 +114,7 @@ const styles = StyleSheet.create({
   testedDate: {
     fontSize: 11,
     color: '#15803D',
+    fontWeight: fontWeights.medium,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -93,6 +123,16 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     borderTopWidth: 1,
     borderTopColor: '#DCFCE7',
+  },
+  unverifiedNoticeRow: {
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  unverifiedNoticeText: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
   },
   metricItem: {
     alignItems: 'center',

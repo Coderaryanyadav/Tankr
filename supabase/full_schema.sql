@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     is_onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
     profile_photo_url TEXT,
     preferred_address TEXT,
-    city TEXT DEFAULT 'Bengaluru',
+    city TEXT DEFAULT 'Mumbai',
     pincode TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS public.saved_addresses (
     flat_or_building TEXT NOT NULL,
     street_address TEXT NOT NULL,
     landmark TEXT,
-    city TEXT NOT NULL DEFAULT 'Bengaluru',
+    city TEXT NOT NULL DEFAULT 'Mumbai',
     pincode VARCHAR(6) NOT NULL,
     latitude DOUBLE PRECISION NOT NULL,
     longitude DOUBLE PRECISION NOT NULL,
@@ -331,61 +331,34 @@ AS $$
     ORDER BY dist_km ASC;
 $$;
 
--- 7. Seed Data: Verified Suppliers and Active Tankers in Bengaluru
+-- 7. Seed Data: Verified Suppliers and Active Tankers in Mumbai (Marol HQ)
 DO $$
 DECLARE
     supp1 UUID;
     supp2 UUID;
-    supp3 UUID;
-    supp4 UUID;
 BEGIN
     -- Only seed if suppliers table is empty
     IF NOT EXISTS (SELECT 1 FROM public.suppliers LIMIT 1) THEN
-        INSERT INTO public.suppliers (business_name, contact_phone, is_verified, rating, total_deliveries)
+        INSERT INTO public.suppliers (business_name, contact_phone, is_verified, rating, total_deliveries, water_source, gstin)
         VALUES 
-            ('Sri Cauvery Water Supplies', '+919845012345', TRUE, 4.9, 320)
+            ('Marol Potable Water Hub (MIDC Andheri)', '+919999999999', TRUE, 4.9, 320, 'BMC Bhandup Potable Filtration Reservoir', '276E9AC2576C1Z5')
         RETURNING id INTO supp1;
 
-        INSERT INTO public.suppliers (business_name, contact_phone, is_verified, rating, total_deliveries)
+        INSERT INTO public.suppliers (business_name, contact_phone, is_verified, rating, total_deliveries, water_source, gstin)
         VALUES 
-            ('Ganga Jal Commercial Tankers', '+919845067890', TRUE, 4.8, 280)
+            ('Marol Express Water Logistics', '+919000000004', TRUE, 4.9, 280, 'BMC Bhandup Potable Filtration Reservoir', '2748B1EDA8D01Z5')
         RETURNING id INTO supp2;
 
-        INSERT INTO public.suppliers (business_name, contact_phone, is_verified, rating, total_deliveries)
-        VALUES 
-            ('Nandi Water Express Logistics', '+919845098765', TRUE, 4.7, 195)
-        RETURNING id INTO supp3;
-
-        INSERT INTO public.suppliers (business_name, contact_phone, is_verified, rating, total_deliveries)
-        VALUES 
-            ('Bangalore Pure Drops Supply', '+919845054321', TRUE, 4.9, 410)
-        RETURNING id INTO supp4;
-
-        -- Insert Tankers across 6 initial configurable categories:
-        -- 1kL, 2kL, 5kL, 10kL, 12kL, 20kL
+        -- Insert Tankers across active Mumbai operational fleet:
         INSERT INTO public.tankers 
-            (supplier_id, vehicle_number, driver_name, driver_phone, capacity_liters, water_type, base_price, price_per_km, latitude, longitude, heading_degrees)
+            (supplier_id, vehicle_number, driver_name, driver_phone, capacity_liters, water_type, base_price, price_per_km, latitude, longitude, heading_degrees, is_available, is_online, current_location)
         VALUES
-            -- 1,000 Litres (Compact Quick Emergency Top-up)
-            (supp1, 'KA-01-MJ-1001', 'Manjunath Gowda', '+919845110001', 1000, 'Potable (Drinking)', 350.00, 20.00, 12.9730, 77.5960, 45),
-            
-            -- 2,000 Litres (Small Home & Kitchen)
-            (supp2, 'KA-03-FA-2002', 'Ravi Shankar', '+919845120002', 2000, 'Potable (Drinking)', 480.00, 22.00, 12.9680, 77.6020, 120),
-            
-            -- 5,000 Litres (Standard Independent House)
-            (supp1, 'KA-04-TC-5001', 'Basavaraj Patil', '+919845150001', 5000, 'Potable (Drinking)', 750.00, 25.00, 12.9780, 77.6100, 90),
-            (supp3, 'KA-05-TC-5002', 'Suresh Kumar', '+919845150002', 5000, 'Filtered Borewell', 650.00, 22.00, 12.9600, 77.5850, 210),
-
-            -- 10,000 Litres (Residential Society Sump)
-            (supp2, 'KA-51-TN-1001', 'Kiran Reddy', '+919845110010', 10000, 'Potable (Drinking)', 1200.00, 30.00, 12.9850, 77.6200, 310),
-            (supp4, 'KA-53-TN-1002', 'Venkatesh Rao', '+919845110020', 10000, 'Filtered Borewell', 1050.00, 28.00, 12.9550, 77.6250, 180),
-
-            -- 12,000 Litres (Apartment Blocks & Commercial)
-            (supp3, 'KA-01-EQ-1201', 'Anand Swamy', '+919845112001', 12000, 'Potable (Drinking)', 1450.00, 35.00, 12.9900, 77.5800, 15),
-
-            -- 20,000 Litres (Mega Society Bulk Reservoir)
-            (supp4, 'KA-04-HV-2001', 'Mohan Das', '+919845120001', 20000, 'Potable (Drinking)', 2200.00, 45.00, 12.9450, 77.6100, 270),
-            (supp2, 'KA-51-HV-2002', 'Dhananjay Singh', '+919845120002', 20000, 'Commercial Tank', 1950.00, 40.00, 13.0020, 77.6050, 80);
+            (supp1, 'MH-02-TC-5001', 'Rajesh Sharma', '+919820011001', 5000, 'Potable (Drinking)', 750.00, 25.00, 19.1171, 72.8809, 90, TRUE, TRUE, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography),
+            (supp1, 'MH-02-TC-5002', 'Suresh Shinde', '+919820011002', 5000, 'Potable (Drinking)', 750.00, 25.00, 19.1128, 72.8988, 120, TRUE, TRUE, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography),
+            (supp2, 'MH-02-TN-1001', 'Sunil Pawar', '+919820011003', 10000, 'Potable (Drinking)', 1200.00, 30.00, 19.1068, 72.8877, 180, TRUE, TRUE, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography),
+            (supp2, 'MH-02-EQ-1201', 'Anand Kadam', '+919820011004', 12000, 'Potable (Drinking)', 1450.00, 35.00, 19.1280, 72.8790, 45, TRUE, TRUE, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography),
+            (supp1, 'MH-02-HV-2002', 'Dhananjay Patil', '+919820011005', 20000, 'Potable (Drinking)', 2200.00, 45.00, 19.1197, 72.9051, 270, TRUE, TRUE, ST_SetSRID(ST_MakePoint(72.9051, 19.1197), 4326)::geography),
+            (supp2, 'MH-02-MN-1002', 'Venkatesh Parab', '+919820011006', 2000, 'Filtered Borewell', 450.00, 20.00, 19.1114, 72.8617, 310, TRUE, TRUE, ST_SetSRID(ST_MakePoint(72.8617, 19.1114), 4326)::geography);
     END IF;
 END $$;
 
@@ -1345,3 +1318,117 @@ $$;
 -- Revokes API exposure from anon and authenticated PostgREST roles
 REVOKE ALL ON TABLE public.spatial_ref_sys FROM anon, authenticated;
 
+
+-- ==============================================================================
+-- TANKR DATABASE MIGRATION 34 & 35: Master Security, RLS & Function Hardening
+-- ==============================================================================
+
+-- 1. DROP PRIVILEGE ESCALATION BACKDOOR FUNCTION
+DROP FUNCTION IF EXISTS public.dev_switch_role(TEXT);
+
+-- 2. HARDEN ROLE ESCALATION TRIGGER ON PROFILES
+CREATE OR REPLACE FUNCTION public.protect_profile_role_escalation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.role IS DISTINCT FROM OLD.role THEN
+        IF auth.role() != 'service_role' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM public.profiles
+                WHERE id = auth.uid() AND role = 'admin'
+            ) THEN
+                RAISE EXCEPTION 'Privilege escalation denied: You cannot alter your account role.'
+                    USING ERRCODE = '42501';
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- 3. REVISE BOOKINGS RLS POLICIES (ELIMINATE CROSS-ACCOUNT & ESCALATION LEAKS)
+DROP POLICY IF EXISTS "Admins have full access to bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Customers can insert own bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Customers can update own bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Customers can view own bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Drivers can update assigned bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Drivers can view assigned bookings" ON public.bookings;
+DROP POLICY IF EXISTS "Suppliers can view hub bookings" ON public.bookings;
+
+CREATE POLICY "Customers can view own bookings"
+    ON public.bookings FOR SELECT
+    USING (auth.uid() = customer_id);
+
+CREATE POLICY "Customers can insert own bookings"
+    ON public.bookings FOR INSERT
+    WITH CHECK (
+        auth.uid() = customer_id
+        AND status = 'pending'::booking_status
+        AND payment_status IN ('pending_delivery', 'authorized')
+    );
+
+CREATE POLICY "Customers can update own bookings"
+    ON public.bookings FOR UPDATE
+    USING (auth.uid() = customer_id)
+    WITH CHECK (
+        auth.uid() = customer_id
+        AND status IN ('pending'::booking_status, 'cancelled'::booking_status)
+    );
+
+CREATE POLICY "Drivers can view assigned bookings"
+    ON public.bookings FOR SELECT
+    USING (
+        driver_phone IN (
+            SELECT phone_number FROM public.profiles WHERE id = auth.uid()
+            UNION
+            SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid()
+        )
+        OR EXISTS (
+            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Drivers can update assigned bookings"
+    ON public.bookings FOR UPDATE
+    USING (
+        driver_phone IN (
+            SELECT phone_number FROM public.profiles WHERE id = auth.uid()
+            UNION
+            SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid()
+        )
+        OR EXISTS (
+            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+        )
+    )
+    WITH CHECK (
+        driver_phone IN (
+            SELECT phone_number FROM public.profiles WHERE id = auth.uid()
+            UNION
+            SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid()
+        )
+        OR EXISTS (
+            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Suppliers can view hub bookings"
+    ON public.bookings FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.suppliers s
+            JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number)
+            WHERE p.id = auth.uid() AND s.id = public.bookings.supplier_id
+        )
+        OR EXISTS (
+            SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Admins have full access to bookings"
+    ON public.bookings FOR ALL
+    USING (
+        EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    );

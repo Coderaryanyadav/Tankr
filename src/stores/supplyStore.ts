@@ -100,16 +100,17 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
         );
       }
 
-      let { data: supplierData } = await supplierQuery.limit(1).maybeSingle();
+      const { data: supplierData } = await supplierQuery.limit(1).maybeSingle();
 
       if (!supplierData) {
-        // Fallback to first verified supplier in system
-        const { data: firstSup } = await supabase.from('suppliers').select('*').limit(1).maybeSingle();
-        supplierData = firstSup;
-      }
-
-      if (!supplierData) {
-        set({ isLoadingSupplier: false, supplierBusinessName: 'No Supplier Hub Registered' });
+        set({
+          supplierId: null,
+          supplierBusinessName: 'No Supplier Hub Registered',
+          verificationStatus: 'unregistered',
+          fleetTankers: [],
+          pendingRequests: [],
+          isLoadingSupplier: false,
+        });
         return;
       }
 
@@ -118,7 +119,7 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       set({
         supplierId: currentSupplierId,
         supplierBusinessName: supplierData.business_name,
-        verificationStatus: supplierData.verification_status || 'verified',
+        verificationStatus: supplierData.verification_status || (supplierData.is_verified ? 'verified' : 'pending_review'),
       });
 
       // 2. Fetch Fleet Tankers for this supplier

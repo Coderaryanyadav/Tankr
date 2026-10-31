@@ -94,16 +94,21 @@ class PaymentService {
     bookingId: string,
     orderId: string,
     paymentId: string,
-    signature: string,
-    isSignatureValid: boolean = true
+    signature: string
   ): Promise<PaymentProcessResult> {
+    if (!orderId || !paymentId || !signature) {
+      return {
+        success: false,
+        error: 'Payment verification refused: Missing gateway orderId, paymentId, or signature.',
+      };
+    }
+
     try {
       const { data, error } = await supabase.rpc('verify_and_reconcile_payment', {
         p_booking_id: bookingId,
         p_gateway_order_id: orderId,
         p_gateway_payment_id: paymentId,
         p_gateway_signature: signature,
-        p_verified: isSignatureValid,
       });
 
       if (error) {
@@ -176,8 +181,7 @@ class PaymentService {
       bookingId,
       orderId,
       gatewayPaymentId,
-      gatewaySignature,
-      true
+      gatewaySignature
     );
   }
 
