@@ -1229,13 +1229,77 @@ AS $$
     SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid AND role = 'admin');
 $$;
 
+-- Privilege Grants & Default Privileges for Authenticated & Anon Roles
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+
+-- Clean existing policies for idempotency
+DO $$ BEGIN
+    DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
+    DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+    DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+    DROP POLICY IF EXISTS "Admins full read on profiles" ON public.profiles;
+    DROP POLICY IF EXISTS "Public read driver and supplier basic info" ON public.profiles;
+
+    DROP POLICY IF EXISTS "Users can read own addresses" ON public.saved_addresses;
+    DROP POLICY IF EXISTS "Users can insert own addresses" ON public.saved_addresses;
+    DROP POLICY IF EXISTS "Users can update own addresses" ON public.saved_addresses;
+    DROP POLICY IF EXISTS "Users can delete own addresses" ON public.saved_addresses;
+    DROP POLICY IF EXISTS "Admins full access on saved_addresses" ON public.saved_addresses;
+    DROP POLICY IF EXISTS "Users can manage own addresses" ON public.saved_addresses;
+
+    DROP POLICY IF EXISTS "Public read on service_zones" ON public.service_zones;
+    DROP POLICY IF EXISTS "Public read on suppliers" ON public.suppliers;
+    DROP POLICY IF EXISTS "Public read on tankers" ON public.tankers;
+    DROP POLICY IF EXISTS "Suppliers can update own tankers" ON public.tankers;
+    DROP POLICY IF EXISTS "Public read on driver_profiles" ON public.driver_profiles;
+    DROP POLICY IF EXISTS "Drivers manage own driver_profiles" ON public.driver_profiles;
+
+    DROP POLICY IF EXISTS "Customers can view own bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Customers can insert own bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Customers can update own bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Drivers can view assigned bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Drivers can update assigned bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Suppliers can view hub bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Admins have full access to bookings" ON public.bookings;
+
+    DROP POLICY IF EXISTS "Users read own invoices" ON public.invoices;
+    DROP POLICY IF EXISTS "Users read own payments" ON public.payments;
+    DROP POLICY IF EXISTS "Users read own notifications" ON public.notifications;
+    DROP POLICY IF EXISTS "Tracking read by booking parties" ON public.tracking_breadcrumbs;
+
+    DROP POLICY IF EXISTS "Public read community_pools" ON public.community_pools;
+    DROP POLICY IF EXISTS "Public insert pool contributions" ON public.community_pool_contributions;
+    DROP POLICY IF EXISTS "Public read pool contributions" ON public.community_pool_contributions;
+    DROP POLICY IF EXISTS "Public read water certificates" ON public.water_quality_certificates;
+    DROP POLICY IF EXISTS "Admins full emergency dispatches" ON public.emergency_dispatches;
+    DROP POLICY IF EXISTS "Admins full corporate subscriptions" ON public.corporate_subscriptions;
+    DROP POLICY IF EXISTS "Admins full platform settings" ON public.platform_settings;
+    DROP POLICY IF EXISTS "Admins full audit logs" ON public.admin_audit_logs;
+EXCEPTION WHEN OTHERS THEN null;
+END $$;
+
 -- 21a. Profiles
 CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 CREATE POLICY "Admins full read on profiles" ON public.profiles FOR SELECT USING (public.is_admin(auth.uid()));
+CREATE POLICY "Public read driver and supplier basic info" ON public.profiles FOR SELECT USING (
+    role IN ('driver', 'supplier') OR auth.uid() = id OR public.is_admin(auth.uid())
+);
 
 -- 21b. Saved Addresses
-CREATE POLICY "Users can manage own addresses" ON public.saved_addresses FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can read own addresses" ON public.saved_addresses FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own addresses" ON public.saved_addresses FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own addresses" ON public.saved_addresses FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own addresses" ON public.saved_addresses FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Admins full access on saved_addresses" ON public.saved_addresses FOR ALL USING (public.is_admin(auth.uid()));
 
 -- 21c. Service Zones & Suppliers & Tankers (Publicly discoverable by authenticated users)
 CREATE POLICY "Public read on service_zones" ON public.service_zones FOR SELECT USING (TRUE);
@@ -1376,18 +1440,64 @@ INSERT INTO public.tankers (
     water_type, base_price, price_per_km, is_available, is_online,
     latitude, longitude, current_location, heading_degrees, gross_vehicle_weight_tonnes
 ) VALUES 
-    ('415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-TC-5001', 'Rajesh Sharma', '+919820011001', 5000, 'Potable (Drinking)', 750.00, 25.00, TRUE, TRUE, 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, 90, 9.5),
-    ('d7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-TC-5002', 'Suresh Shinde', '+919820011002', 5000, 'Potable (Drinking)', 750.00, 25.00, TRUE, TRUE, 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, 120, 9.5),
-    ('1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-TN-1001', 'Sunil Pawar', '+919820011003', 10000, 'Potable (Drinking)', 1200.00, 30.00, TRUE, TRUE, 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, 180, 16.0),
-    ('f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-EQ-1201', 'Anand Kadam', '+919820011004', 12000, 'Potable (Drinking)', 1450.00, 35.00, TRUE, TRUE, 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, 45, 18.0),
+    ('415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-TC-5001', 'Rajesh Sharma', '+919000000001', 5000, 'Potable (Drinking)', 750.00, 25.00, FALSE, TRUE, 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, 90, 9.5),
+    ('d7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-TC-5002', 'Suresh Shinde', '+919000000002', 5000, 'Potable (Drinking)', 750.00, 25.00, TRUE, TRUE, 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, 120, 9.5),
+    ('1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-TN-1001', 'Sunil Pawar', '+919000000003', 10000, 'Potable (Drinking)', 1200.00, 30.00, TRUE, TRUE, 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, 180, 16.0),
+    ('f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-EQ-1201', 'Anand Kadam', '+919000000004', 12000, 'Potable (Drinking)', 1450.00, 35.00, TRUE, TRUE, 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, 45, 18.0),
     ('ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-HV-2002', 'Dhananjay Patil', '+919820011005', 20000, 'Potable (Drinking)', 2200.00, 45.00, TRUE, TRUE, 19.1197, 72.9051, ST_SetSRID(ST_MakePoint(72.9051, 19.1197), 4326)::geography, 270, 24.0),
     ('3dfcbb4f-77ae-4f6c-94e8-8b9393ebc5e9', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-MN-1002', 'Venkatesh Parab', '+919820011006', 2000, 'Filtered Borewell', 450.00, 20.00, TRUE, TRUE, 19.1114, 72.8617, ST_SetSRID(ST_MakePoint(72.8617, 19.1114), 4326)::geography, 310, 5.5)
 ON CONFLICT (vehicle_number) DO UPDATE SET 
     latitude = EXCLUDED.latitude,
     longitude = EXCLUDED.longitude,
     current_location = EXCLUDED.current_location,
-    is_available = TRUE,
+    driver_phone = EXCLUDED.driver_phone,
+    is_available = EXCLUDED.is_available,
     is_online = TRUE;
+
+-- 23c-2. Driver Profiles
+INSERT INTO public.driver_profiles (id, profile_id, full_name, license_number, assigned_tanker_id, is_active)
+VALUES 
+    ('d1111111-1111-1111-1111-111111111111', 'd64671d9-665d-4a90-9a45-52be0313978d', 'Rajesh Sharma', 'MH02-2018-0098471', '415b741d-9372-46be-9e7f-fcad2a8449c2', TRUE),
+    ('d2222222-2222-2222-2222-222222222222', 'b70a66f3-f265-45af-8bb8-ed463ed6e000', 'Suresh Shinde', 'MH02-2019-0043120', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', TRUE),
+    ('d3333333-3333-3333-3333-333333333333', 'b9a4be98-b394-4c00-b5d8-7b2d6bb7c8de', 'Sunil Pawar', 'MH02-2020-0076541', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+-- 23c-3. Saved Addresses for Verified Customer
+INSERT INTO public.saved_addresses (
+    id, user_id, label, custom_name, flat_or_building, street_address,
+    landmark, city, pincode, latitude, longitude, coordinates, is_default
+) VALUES 
+    (
+        'a1111111-1111-1111-1111-111111111111',
+        '2644c504-f611-40d3-a1c1-0d97214bf6f9',
+        'home',
+        'Marol Hill View Flat',
+        'Flat 402, Wing B',
+        'Marol Military Road, Andheri East',
+        'Near SevenHills Hospital',
+        'Mumbai',
+        '400059',
+        19.1171,
+        72.8809,
+        ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography,
+        TRUE
+    ),
+    (
+        'a2222222-2222-2222-2222-222222222222',
+        '2644c504-f611-40d3-a1c1-0d97214bf6f9',
+        'work',
+        'SEEPZ Office',
+        'Building 5, 2nd Floor',
+        'SEEPZ SEZ, Central Road, Andheri East',
+        'Gate 2 SEEPZ',
+        'Mumbai',
+        '400096',
+        19.1280,
+        72.8790,
+        ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography,
+        FALSE
+    )
+ON CONFLICT (id) DO NOTHING;
 
 -- 23d. Water Quality Certificates
 INSERT INTO public.water_quality_certificates (supplier_id, water_source, tds_ppm, ph_level, lab_name, certified_at, valid_until, is_active)
@@ -1441,13 +1551,43 @@ INSERT INTO public.bookings (
     ('b3333333-3333-3333-3333-333333333333', 'TKR-2026-88103', 'bca75357-3da7-4106-b7e8-bd275857efbc', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Marol Maroshi Rd, Near SevenHills', 19.1210, 72.8820, ST_SetSRID(ST_MakePoint(72.8820, 19.1210), 4326)::geography, '5129', 2.4, 18, 750, 60, 0, 40.50, 850.50, 'upi', 'authorized', 'Suresh Shinde', '+919820011002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
     ('b4444444-4444-4444-4444-444444444444', 'TKR-2026-88104', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 10000, 'Potable (Drinking)', 'Sakinaka Metro Station, Andheri-Kurla Rd', 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, '8410', 3.2, 22, 1200, 96, 0, 64.80, 1360.80, 'upi', 'paid', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
     ('b5555555-5555-5555-5555-555555555555', 'TKR-2026-88105', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'pending', 10000, 'Potable (Drinking)', 'Asalpha Village, Sakinaka, Mumbai', 19.1040, 72.8910, ST_SetSRID(ST_MakePoint(72.8910, 19.1040), 4326)::geography, '2941', 3.5, 25, 1200, 105, 0, 65.25, 1370.25, 'upi', 'authorized', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
-    ('b6666666-6666-6666-6666-666666666666', 'TKR-2026-88106', '65cee903-3554-49b1-9729-55552d400087', 'f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 12000, 'Potable (Drinking)', 'SEEPZ Gate 2, Mahakali Caves Rd', 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, '3321', 2.8, 19, 1450, 98, 0, 77.40, 1625.40, 'upi', 'paid', 'Anand Kadam', '+919820011004', 'MH-02-EQ-1201', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour')
+    ('b6666666-6666-6666-6666-666666666666', 'TKR-2026-88106', '65cee903-3554-49b1-9729-55552d400087', 'f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 12000, 'Potable (Drinking)', 'SEEPZ Gate 2, Mahakali Caves Rd', 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, '3321', 2.8, 19, 1450, 98, 0, 77.40, 1625.40, 'upi', 'paid', 'Anand Kadam', '+919820011004', 'MH-02-EQ-1201', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
+    ('b7777777-7777-7777-7777-777777777777', 'TKR-2026-90401', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 2.3, 14, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '2 hours'),
+    ('b8888888-8888-8888-8888-888888888888', 'TKR-2026-89100', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'delivered', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '3128', 2.3, 0, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() - INTERVAL '1 day'),
+    ('b9999999-9999-9999-9999-999999999999', 'TKR-2026-95001', '2644c504-f611-40d3-a1c1-0d97214bf6f9', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Raheja Vihar Wing C, Chandivali, Andheri East, Mumbai', 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, '6219', 2.8, 18, 750, 55, 0, 40.25, 845.25, 'upi', 'authorized', 'Suresh Shinde', '+919000000002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour')
 ON CONFLICT (id) DO UPDATE SET 
     status = EXCLUDED.status,
     delivery_address = EXCLUDED.delivery_address,
     delivery_latitude = EXCLUDED.delivery_latitude,
     delivery_longitude = EXCLUDED.delivery_longitude,
     delivery_coordinates = EXCLUDED.delivery_coordinates;
+
+-- 23i-2. Invoices
+INSERT INTO public.invoices (
+    id, booking_id, invoice_number, customer_name, customer_phone,
+    delivery_address, supplier_business_name, supplier_gstin, water_type,
+    volume_liters, base_price, delivery_charge, surcharge, tax_amount,
+    final_amount, payment_status, issued_at
+) VALUES (
+    'c1111111-1111-1111-1111-111111111111',
+    'b8888888-8888-8888-8888-888888888888',
+    'INV-2026-89100',
+    'Vikram Malhotra',
+    '+919876543210',
+    'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai',
+    'Marol Potable Water Hub (MIDC Andheri)',
+    '276E9AC2576C1Z5',
+    'Potable (Drinking)',
+    5000,
+    750.00,
+    50.00,
+    0.00,
+    40.00,
+    840.00,
+    'PAID',
+    NOW() - INTERVAL '1 day'
+)
+ON CONFLICT (invoice_number) DO NOTHING;
 
 -- 23j. Platform Settings
 INSERT INTO public.platform_settings (key, value)
