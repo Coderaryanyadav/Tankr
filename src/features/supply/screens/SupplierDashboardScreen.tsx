@@ -22,12 +22,14 @@ export const SupplierDashboardScreen: React.FC = () => {
   const { user, signOut } = useAuthStore();
   const [addVehicleVisible, setAddVehicleVisible] = useState(false);
   const {
+    supplierId,
     supplierBusinessName,
     verificationStatus,
     pendingRequests,
     fleetTankers,
     supplierMetrics,
     loadSupplierData,
+    subscribeToSupplierBookings,
     onboardTankerVehicle,
     acceptSupplierBooking,
     rejectSupplierBooking,
@@ -36,6 +38,13 @@ export const SupplierDashboardScreen: React.FC = () => {
   useEffect(() => {
     loadSupplierData(user?.id || '', user?.phone);
   }, [user, loadSupplierData]);
+
+  useEffect(() => {
+    if (supplierId) {
+      const unsub = subscribeToSupplierBookings(supplierId);
+      return () => unsub();
+    }
+  }, [supplierId, subscribeToSupplierBookings]);
 
   const handleAccept = async (id: string, ref: string) => {
     const res = await acceptSupplierBooking(id);

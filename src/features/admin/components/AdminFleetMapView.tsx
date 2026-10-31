@@ -26,7 +26,13 @@ function projectToTileCoords(lat: number, lng: number, zoom: number) {
 }
 
 export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
-  const { fleetTankers, deficitZones, fetchDeficitZones, fetchFleetTankers } = useAdminStore();
+  const {
+    fleetTankers,
+    deficitZones,
+    fetchDeficitZones,
+    fetchFleetTankers,
+    subscribeToLiveFleetAndHeatmap,
+  } = useAdminStore();
   const [zoom, setZoom] = useState<number>(13);
   const [centerLat, setCenterLat] = useState<number>(19.1171);
   const [centerLng, setCenterLng] = useState<number>(72.8809);
@@ -37,7 +43,11 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
   useEffect(() => {
     fetchDeficitZones();
     fetchFleetTankers();
-  }, [fetchDeficitZones, fetchFleetTankers]);
+    const unsubscribe = subscribeToLiveFleetAndHeatmap();
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchDeficitZones, fetchFleetTankers, subscribeToLiveFleetAndHeatmap]);
 
   // Center map dynamically on first zone when data loads
   useEffect(() => {

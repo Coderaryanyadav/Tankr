@@ -54,7 +54,7 @@ export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesk
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={styles.bannerTitle}>Water Purity & Compliance Audit Desk</Text>
             <View style={styles.bisBadge}>
-              <Text style={styles.bisBadgeText}>BIS-10500 & BWSSB ENFORCED</Text>
+              <Text style={styles.bisBadgeText}>BIS-10500 & BMC ENFORCED</Text>
             </View>
           </View>
           <Text style={styles.bannerSub}>

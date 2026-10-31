@@ -92,3 +92,4 @@ BEGIN
     ORDER BY zs.center_lat DESC;
 END;
 $$;
+

@@ -33,13 +33,18 @@ export const DriverDashboardScreen: React.FC = () => {
     toggleDriverDuty,
     driverUpdateStatus,
     loadDriverData,
+    subscribeToDriverTrips,
     driverName,
     driverAssignedVehicle,
   } = useSupplyStore();
 
   useEffect(() => {
     loadDriverData(user?.id || '', user?.phone);
-  }, [user, loadDriverData]);
+    if (user?.phone) {
+      const unsub = subscribeToDriverTrips(user.phone);
+      return () => unsub();
+    }
+  }, [user, loadDriverData, subscribeToDriverTrips]);
 
   const [pinModalVisible, setPinModalVisible] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');

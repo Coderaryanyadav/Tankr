@@ -95,6 +95,33 @@ class NotificationService {
       // Ignored
     }
   }
+
+  /**
+   * Subscribes to real-time notifications for a user via Supabase Realtime WebSocket.
+   */
+  subscribeToUserNotifications(userId: string, onNotification: (n: TankrNotification) => void): () => void {
+    const channel = supabase
+      .channel(`user-notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            onNotification(payload.new as TankrNotification);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
 }
 
 export const notificationService = new NotificationService();

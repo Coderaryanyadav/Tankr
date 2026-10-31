@@ -44,6 +44,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     activeAddressText,
     setActiveLocation,
     locateUserViaGps,
+    initializeLocation,
     fetchSavedAddresses,
     addSavedAddress,
     isLocating,
@@ -64,6 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     isLoading,
     isRefreshing,
     fetchNearbyTankers,
+    subscribeToLiveTankers,
     selectTanker,
     setCapacityFilter,
     setSortOption,
@@ -76,19 +78,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [communityPoolModalVisible, setCommunityPoolModalVisible] = useState<boolean>(false);
   const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(null);
 
-  const { notifications, unreadCount, fetchNotifications } = useNotificationStore();
+  const { notifications, unreadCount, fetchNotifications, subscribeToNotifications } = useNotificationStore();
+
+  // Initialize live customer location from database or GPS
+  useEffect(() => {
+    initializeLocation(user?.id);
+  }, [user?.id, initializeLocation]);
 
   // Initial fetch on mount & when coordinates change
   useEffect(() => {
     fetchNearbyTankers(activeCoordinates.latitude, activeCoordinates.longitude);
   }, [activeCoordinates.latitude, activeCoordinates.longitude, fetchNearbyTankers]);
 
+  // Subscribe to live Realtime tanker movement and availability updates from Supabase
+  useEffect(() => {
+    const unsubscribe = subscribeToLiveTankers();
+    return () => {
+      unsubscribe();
+    };
+  }, [subscribeToLiveTankers]);
+
   useEffect(() => {
     if (user?.id) {
       fetchSavedAddresses(user.id);
       fetchNotifications(user.id);
+      const unsub = subscribeToNotifications(user.id);
+      return () => {
+        unsub();
+      };
     }
-  }, [user, fetchSavedAddresses, fetchNotifications]);
+  }, [user, fetchSavedAddresses, fetchNotifications, subscribeToNotifications]);
 
   // Recenter GPS
   const handleRecenterGps = async () => {

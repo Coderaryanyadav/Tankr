@@ -35,6 +35,7 @@ interface LocationState {
   isLoadingAddresses: boolean;
 
   // Actions
+  initializeLocation: (userId?: string) => Promise<void>;
   fetchSavedAddresses: (userId: string) => Promise<void>;
   setActiveLocation: (addressText: string, coords: GeoLocation, label?: string) => void;
   locateUserViaGps: () => Promise<GeocodedAddress | null>;
@@ -56,6 +57,68 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   isLocating: false,
   savedAddresses: [],
   isLoadingAddresses: false,
+
+  initializeLocation: async (userId?: string) => {
+    try {
+      // 1. If user is logged in, check saved addresses from Supabase database
+      if (userId) {
+        const { data: addresses } = await supabase
+          .from('saved_addresses')
+          .select('*')
+          .eq('user_id', userId)
+          .order('is_default', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (addresses && addresses.length > 0) {
+          const defaultAddr = addresses.find((a) => a.is_default) || addresses[0];
+          set({
+            savedAddresses: addresses as SavedAddress[],
+            activeCoordinates: {
+              latitude: Number(defaultAddr.latitude),
+              longitude: Number(defaultAddr.longitude),
+            },
+            activeAddressText: `${defaultAddr.flat_or_building}, ${defaultAddr.street_address}`,
+            activeAddressLabel: defaultAddr.label.toUpperCase(),
+          });
+          return;
+        }
+      }
+
+      // 2. Try native GPS location
+      const coords = await LocationService.getCurrentLocation();
+      if (coords) {
+        const geocoded = await LocationService.reverseGeocode(coords);
+        set({
+          activeCoordinates: coords,
+          activeAddressText: geocoded?.formattedAddress || 'Current GPS Location',
+          activeAddressLabel: 'CURRENT LOCATION',
+        });
+        return;
+      }
+
+      // 3. Dynamic operational center fetched live from Supabase service_zones table
+      const { data: operationalZone } = await supabase
+        .from('service_zones')
+        .select('center_lat, center_lng, zone_name')
+        .eq('is_operational', true)
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (operationalZone) {
+        set({
+          activeCoordinates: {
+            latitude: Number(operationalZone.center_lat),
+            longitude: Number(operationalZone.center_lng),
+          },
+          activeAddressText: operationalZone.zone_name,
+          activeAddressLabel: 'SERVICE HUB',
+        });
+      }
+    } catch (err) {
+      console.warn('[LocationStore] Initialization error:', err);
+    }
+  },
 
   setActiveLocation: (addressText: string, coords: GeoLocation, label = 'Delivery Point') => {
     set({

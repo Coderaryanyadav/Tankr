@@ -44,6 +44,8 @@ interface SupplyState {
   // Actions
   loadSupplierData: (userId: string, userPhone?: string) => Promise<void>;
   loadDriverData: (userId: string, userPhone?: string) => Promise<void>;
+  subscribeToSupplierBookings: (supplierId: string) => () => void;
+  subscribeToDriverTrips: (driverPhone: string) => () => void;
   onboardTankerVehicle: (payload: {
     vehicleNumber: string;
     capacityLiters: number;
@@ -267,6 +269,45 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
     } catch {
       set({ isLoadingDriver: false });
     }
+  },
+
+  subscribeToSupplierBookings: (supplierId: string) => {
+    const channel = supabase
+      .channel(`supplier:bookings:${supplierId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `supplier_id=eq.${supplierId}` },
+        () => {
+          const supId = get().supplierId;
+          if (supId) {
+            get().loadSupplierData(supId);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  },
+
+  subscribeToDriverTrips: (driverPhone: string) => {
+    const raw = driverPhone.replace(/\D/g, '');
+    const last10 = raw.slice(-10);
+    const channel = supabase
+      .channel(`driver:trips:${last10}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          get().loadDriverData('', driverPhone);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   },
 
   onboardTankerVehicle: async (payload) => {

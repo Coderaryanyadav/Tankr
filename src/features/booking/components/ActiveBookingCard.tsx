@@ -95,7 +95,7 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
             {booking.driver_name || 'Assigned Driver'}
           </Text>
           <Text style={styles.vehicleDetails}>
-            {booking.vehicle_number || 'KA-01-MJ-1001'} • {booking.supplier_name}
+            {booking.vehicle_number || 'MH-02-TC-5001'} • {booking.supplier_name}
           </Text>
         </View>
 

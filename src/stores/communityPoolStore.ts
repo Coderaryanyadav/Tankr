@@ -31,6 +31,7 @@ interface CommunityPoolState {
   isLoading: boolean;
   isContributing: boolean;
   fetchCommunityPools: () => Promise<void>;
+  subscribeToLivePools: () => () => void;
   contributeToPool: (
     poolCode: string,
     contributorName: string,
@@ -131,7 +132,7 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
   createCommunityPool: async (params) => {
     try {
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-      const poolCode = `POOL-BLR-${randomSuffix}`;
+      const poolCode = `POOL-MUM-${randomSuffix}`;
 
       const { error } = await supabase.from('community_pools').insert({
         pool_code: poolCode,
@@ -153,6 +154,30 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to create community pool' };
     }
+  },
+
+  subscribeToLivePools: () => {
+    const channel = supabase
+      .channel('public:community_pools:live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_pools' },
+        () => {
+          get().fetchCommunityPools();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_pool_contributions' },
+        () => {
+          get().fetchCommunityPools();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   },
 }));
 

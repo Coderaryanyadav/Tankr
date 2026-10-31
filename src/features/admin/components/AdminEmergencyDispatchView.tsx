@@ -274,12 +274,12 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
                       <View style={styles.assignedVehicleBox}>
                         <Ionicons name="car" size={14} color="#0284C7" />
                         <Text style={styles.assignedVehicleText}>
-                          {disp.vehicle_number || 'Tanker KA-01-MJ-1001'} ({disp.required_liters.toLocaleString('en-IN')}L)
+                          {disp.vehicle_number || 'Tanker MH-02-TC-5001'} ({disp.required_liters.toLocaleString('en-IN')}L)
                         </Text>
                       </View>
                       <View style={styles.driverBox}>
                         <Text style={styles.driverText}>
-                          Driver: {disp.driver_name || 'Kiran Reddy'} ({disp.driver_phone || '+91 98451 10010'})
+                          Driver: {disp.driver_name || 'Sunil Shinde'} ({disp.driver_phone || '+91 98201 10010'})
                         </Text>
                       </View>
                     </View>

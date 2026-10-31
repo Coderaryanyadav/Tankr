@@ -401,7 +401,7 @@ export const AdminDashboardScreen: React.FC = () => {
                     </Text>
                     <View style={styles.kpiFooter}>
                       <Ionicons name="shield-checkmark" size={13} color="#0284C7" />
-                      <Text style={styles.kpiSub}>BWSSB / Certified Purity</Text>
+                      <Text style={styles.kpiSub}>BMC / Certified Purity</Text>
                     </View>
                   </View>
                 </View>
@@ -474,7 +474,7 @@ export const AdminDashboardScreen: React.FC = () => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.moduleTitle}>Water Purity & Safety Audit</Text>
                       <Text style={styles.moduleSub}>
-                        TDS sensors (&lt;250 ppm), pH balances, and BWSSB lab certificate repository
+                        TDS sensors (&lt;250 ppm), pH balances, and BMC lab certificate repository
                       </Text>
                     </View>
                     <Ionicons name="arrow-forward" size={16} color="#94A3B8" />

@@ -171,7 +171,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
             <Text style={styles.label}>Registered Business / Agency Name *</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Sri Cauvery Water Supplies"
+              placeholder="e.g. Marol Express Water Logistics"
               placeholderTextColor={colors.textMuted}
               value={businessName}
               onChangeText={setBusinessName}
@@ -182,7 +182,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
             <Text style={styles.label}>Authorized Owner / Director Name *</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. R. K. Gowda"
+              placeholder="e.g. Rajesh Sharma"
               placeholderTextColor={colors.textMuted}
               value={ownerName}
               onChangeText={setOwnerName}

@@ -28,6 +28,7 @@ interface DiscoveryState {
 
   // Actions
   fetchNearbyTankers: (lat: number, lng: number, forceRefresh?: boolean) => Promise<void>;
+  subscribeToLiveTankers: () => () => void;
   selectTanker: (id: string | null) => void;
   setCapacityFilter: (capacity: TankerCapacityLiters | null) => void;
   setSortOption: (sort: TankerSortOption) => void;
@@ -136,6 +137,26 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       });
       get().applyFiltersAndSort();
     }
+  },
+
+  subscribeToLiveTankers: () => {
+    const channel = supabase
+      .channel('public:tankers:live_discovery')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tankers' },
+        () => {
+          const coords = get().userCoordinates;
+          if (coords.latitude && coords.longitude) {
+            get().fetchNearbyTankers(coords.latitude, coords.longitude, false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   },
 
   selectTanker: (id: string | null) => {

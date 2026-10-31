@@ -188,7 +188,7 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
                       {b.capacity_liters.toLocaleString('en-IN')} Litres • {b.water_type}
                     </Text>
                     <Text numberOfLines={1} style={styles.supplierText}>
-                      {b.supplier_name || 'Sri Cauvery Water Supplies'}
+                      {b.supplier_name || 'Verified Supplier Hub'}
                     </Text>
                     <Text numberOfLines={1} style={styles.addressText}>
                       {b.delivery_address}

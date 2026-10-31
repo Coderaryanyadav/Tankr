@@ -181,6 +181,7 @@ interface AdminState {
   fetchServiceZones: () => Promise<void>;
   fetchDeficitZones: () => Promise<void>;
   fetchFleetTankers: () => Promise<void>;
+  subscribeToLiveFleetAndHeatmap: () => () => void;
   fetchEmergencyDispatches: () => Promise<void>;
   triggerEmergencyDispatch: (params: {
     institution_name: string;
@@ -380,6 +381,32 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     } catch (err) {
       console.warn('[AdminStore] Error fetching live deficit zones:', err);
     }
+  },
+
+  subscribeToLiveFleetAndHeatmap: () => {
+    const channel = supabase
+      .channel('admin:realtime:fleet_and_deficits')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tankers' },
+        () => {
+          get().fetchFleetTankers();
+          get().fetchDeficitZones();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          get().fetchDeficitZones();
+          get().fetchDashboardMetrics();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   },
 
   fetchEmergencyDispatches: async () => {

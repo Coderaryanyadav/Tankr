@@ -48,7 +48,7 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({
 
     const cleanVeh = vehicleNumber.trim().toUpperCase();
     if (cleanVeh.length < 8) {
-      Alert.alert('Invalid Vehicle Number', 'Please enter a valid RTO registration (e.g. KA-04-TC-5001).');
+      Alert.alert('Invalid Vehicle Number', 'Please enter a valid RTO registration (e.g. MH-02-TC-5001).');
       return;
     }
 
@@ -94,7 +94,7 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({
               <Text style={styles.label}>RTO Vehicle Registration Number *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="KA-04-TC-5001"
+                placeholder="MH-02-TC-5001"
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="characters"
                 value={vehicleNumber}

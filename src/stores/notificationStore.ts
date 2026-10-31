@@ -7,6 +7,7 @@ interface NotificationState {
   unreadCount: number;
 
   fetchNotifications: (userId: string) => Promise<void>;
+  subscribeToNotifications: (userId: string) => () => void;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: (userId: string) => Promise<void>;
   addNotification: (notification: TankrNotification) => void;
@@ -26,6 +27,21 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     } catch {
       set({ isLoading: false });
     }
+  },
+
+  subscribeToNotifications: (userId: string) => {
+    const unsub = notificationService.subscribeToUserNotifications(userId, (newNotification) => {
+      set((state) => {
+        const exists = state.notifications.some((n) => n.id === newNotification.id);
+        if (exists) return state;
+        const updated = [newNotification, ...state.notifications];
+        return {
+          notifications: updated,
+          unreadCount: updated.filter((n) => !n.is_read).length,
+        };
+      });
+    });
+    return unsub;
   },
 
   markAsRead: async (id: string) => {

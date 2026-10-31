@@ -34,6 +34,7 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
     isLoading,
     isContributing,
     fetchCommunityPools,
+    subscribeToLivePools,
     contributeToPool,
     createCommunityPool,
   } = useCommunityPoolStore();
@@ -56,8 +57,12 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
   useEffect(() => {
     if (visible) {
       fetchCommunityPools();
+      const unsub = subscribeToLivePools();
+      return () => {
+        unsub();
+      };
     }
-  }, [visible, fetchCommunityPools]);
+  }, [visible, fetchCommunityPools, subscribeToLivePools]);
 
   const handlePledge = async (poolCode: string) => {
     if (!contributorName.trim() || !flatNumber.trim()) {

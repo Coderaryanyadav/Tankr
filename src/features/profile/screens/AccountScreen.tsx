@@ -79,7 +79,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
                 <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
               </View>
               <Text style={styles.profilePhone}>{displayPhone}</Text>
-              <Text style={styles.profileCity}>📍 {displayCity}, Karnataka</Text>
+              <Text style={styles.profileCity}>📍 {displayCity}, Maharashtra</Text>
             </View>
           </View>
         </Card>
@@ -144,7 +144,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
             onPress={() => {
               Alert.alert(
                 'Water Quality Guarantee',
-                'All TANKR fleet partners use BWSSB / certified potable sources with TDS testing conducted weekly.'
+                'All TANKR fleet partners use BMC / certified potable sources with TDS testing conducted weekly.'
               );
             }}
           >
