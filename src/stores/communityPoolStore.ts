@@ -83,7 +83,7 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
           return {
             id: p.id,
             pool_code: p.pool_code,
-            society_name: p.society_name,
+            society_name: p.community_name || p.society_name || 'Society Sump Pool',
             target_liters: Number(p.target_liters || 20000),
             target_amount: Number(p.target_amount || 2400),
             collected_amount: Number(p.collected_amount || 0),
@@ -149,7 +149,6 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
         .update({
           collected_amount: newCollected,
           status: newStatus,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', pool.id);
 
@@ -169,7 +168,7 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
 
       const { error } = await supabase.from('community_pools').insert({
         pool_code: poolCode,
-        society_name: params.societyName,
+        community_name: params.societyName,
         delivery_address: params.deliveryAddress,
         latitude: params.latitude,
         longitude: params.longitude,

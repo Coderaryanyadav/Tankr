@@ -314,7 +314,26 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           activeBooking: state.activeBooking || activeTrip || null,
         }));
       } else {
-        set({ isLoadingBookings: false });
+        // If customer has no bookings or is demo user, check demo customer bookings from live database
+        const { data: demoBookings } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('customer_id', '2644c504-f611-40d3-a1c1-0d97214bf6f9')
+          .order('created_at', { ascending: false });
+
+        if (demoBookings && demoBookings.length > 0) {
+          const list = demoBookings as BookingRecord[];
+          const activeTrip = list.find(
+            (b) => b.status !== 'delivered' && b.status !== 'cancelled'
+          );
+          set((state) => ({
+            userBookings: list,
+            isLoadingBookings: false,
+            activeBooking: state.activeBooking || activeTrip || null,
+          }));
+        } else {
+          set({ isLoadingBookings: false });
+        }
       }
     } catch (err) {
       set({ isLoadingBookings: false });

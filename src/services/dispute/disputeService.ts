@@ -11,6 +11,7 @@ export interface DisputeSubmission {
   category: DisputeCategory;
   reason: string;
   litersReceived?: number;
+  claimedRefundAmount?: number;
   evidenceUrl?: string;
 }
 
@@ -52,7 +53,7 @@ export const DisputeService = {
       // 2. Resilient Fallback: Insert into public.disputes directly
       const { data: b, error: bErr } = await supabase
         .from('bookings')
-        .select('customer_id, supplier_id')
+        .select('customer_id')
         .eq('id', payload.bookingId)
         .single();
 
@@ -60,17 +61,17 @@ export const DisputeService = {
         return { success: false, error: bErr?.message || 'Booking not found' };
       }
 
+      const formattedReason = `[${payload.category.toUpperCase()}] ${payload.reason}${payload.litersReceived ? ` (Claimed delivered: ${payload.litersReceived}L)` : ''}`;
+
       const { data: disp, error: dErr } = await supabase
         .from('disputes')
         .insert({
           booking_id: payload.bookingId,
           customer_id: b.customer_id,
-          supplier_id: b.supplier_id,
-          category: payload.category,
-          reason: payload.reason,
-          liters_received: payload.litersReceived || null,
+          reason: formattedReason,
           evidence_url: payload.evidenceUrl || null,
-          status: 'open',
+          claimed_refund_amount: payload.claimedRefundAmount || null,
+          status: 'pending_review',
         })
         .select('id')
         .single();

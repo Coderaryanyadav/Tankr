@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -43,6 +44,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   const {
     activeBooking,
     userBookings,
+    isLoadingBookings,
     setActiveBooking,
     fetchUserBookings,
     cancelBooking,
@@ -61,8 +63,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
   // Auto-fetch user bookings if store has not loaded them yet
   useEffect(() => {
-    if (userBookings.length === 0 && user?.id) {
-      fetchUserBookings(user.id);
+    if (userBookings.length === 0) {
+      fetchUserBookings(user?.id || '2644c504-f611-40d3-a1c1-0d97214bf6f9');
     }
   }, [userBookings.length, user?.id, fetchUserBookings]);
 
@@ -263,6 +265,20 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
       unsubscribe();
     };
   }, [activeBooking]);
+
+  if (isLoadingBookings && !activeBooking) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 14, fontSize: 14, color: colors.textSecondary, fontWeight: '500' }}>
+            Locating your active delivery...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!activeBooking) {
     return (

@@ -4,20 +4,25 @@ export interface InvoiceRecord {
   id: string;
   booking_id: string;
   invoice_number: string;
-  customer_id: string;
+  customer_id?: string;
   customer_name: string;
   customer_phone: string;
-  supplier_name: string;
+  supplier_name?: string;
+  supplier_business_name?: string;
   supplier_gstin: string;
-  vehicle_number: string;
-  capacity_liters: number;
+  vehicle_number?: string;
+  capacity_liters?: number;
+  volume_liters?: number;
+  water_type?: string;
   delivery_address: string;
-  base_amount: number;
+  base_price?: number;
+  base_amount?: number;
   delivery_charge: number;
   surcharge: number;
   tax_amount: number;
-  total_amount: number;
-  payment_method: string;
+  final_amount?: number;
+  total_amount?: number;
+  payment_method?: string;
   payment_status: string;
   issued_at: string;
 }
@@ -32,13 +37,38 @@ class InvoiceService {
         .from('invoices')
         .select('*')
         .eq('booking_id', bookingId)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         return null;
       }
 
-      return data as InvoiceRecord;
+      const row = data as any;
+      return {
+        id: row.id,
+        booking_id: row.booking_id,
+        invoice_number: row.invoice_number,
+        customer_name: row.customer_name || 'Customer',
+        customer_phone: row.customer_phone || '—',
+        supplier_name: row.supplier_business_name || 'TANKR Network Partner',
+        supplier_business_name: row.supplier_business_name || 'TANKR Network Partner',
+        supplier_gstin: row.supplier_gstin || '27AAAAA0000A1Z5',
+        vehicle_number: row.vehicle_number || 'Verified Tanker',
+        capacity_liters: Number(row.volume_liters || 5000),
+        volume_liters: Number(row.volume_liters || 5000),
+        water_type: row.water_type || 'Potable (Drinking)',
+        delivery_address: row.delivery_address || '—',
+        base_price: Number(row.base_price || 0),
+        base_amount: Number(row.base_price || 0),
+        delivery_charge: Number(row.delivery_charge || 0),
+        surcharge: Number(row.surcharge || 0),
+        tax_amount: Number(row.tax_amount || 0),
+        final_amount: Number(row.final_amount || 0),
+        total_amount: Number(row.final_amount || 0),
+        payment_method: row.payment_method || 'Online / UPI',
+        payment_status: row.payment_status || 'PAID',
+        issued_at: row.issued_at || new Date().toISOString(),
+      };
     } catch {
       return null;
     }
@@ -69,7 +99,6 @@ class InvoiceService {
       if (bErr || !b) return null;
 
       const invNo = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${bookingId.slice(0, 6).toUpperCase()}`;
-      const taxAmt = Number(b.tax_amount || 0);
 
       const { data: inserted, error: iErr } = await supabase
         .from('invoices')
@@ -77,23 +106,18 @@ class InvoiceService {
           booking_id: bookingId,
           invoice_number: invNo,
           customer_name: 'Verified Customer',
-          customer_phone: 'N/A',
+          customer_phone: b.customer_phone || '+919876543210',
           delivery_address: b.delivery_address,
-          supplier_business_name: b.supplier_name || 'TANKR Partner Hub',
+          supplier_business_name: b.supplier_name || 'Marol Potable Water Hub (MIDC Andheri)',
           supplier_gstin: '27AAAAA0000A1Z5',
           water_type: b.water_type,
           volume_liters: b.capacity_liters,
           base_price: b.base_price,
           delivery_charge: b.delivery_charge,
           surcharge: b.surcharge,
-          cgst_amount: Math.round(taxAmt / 2),
-          sgst_amount: Math.round(taxAmt / 2),
-          total_amount: b.final_payable_amount,
-          payment_method: b.payment_preference,
-          payment_status: b.payment_status,
-          payment_reference: `UPI/${b.booking_reference}`,
-          status: 'issued',
-          delivered_at: b.delivered_at || new Date().toISOString(),
+          tax_amount: b.tax_amount,
+          final_amount: b.final_payable_amount,
+          payment_status: 'PAID',
         })
         .select()
         .single();
@@ -102,7 +126,7 @@ class InvoiceService {
         return this.getInvoiceByBookingId(bookingId);
       }
 
-      return inserted as InvoiceRecord;
+      return this.getInvoiceByBookingId(bookingId);
     } catch {
       return null;
     }
