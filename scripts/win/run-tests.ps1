@@ -49,3 +49,4 @@ if ($failed) {
     Write-Host "All tests and typechecks passed successfully!" -ForegroundColor Green
     exit 0
 }
+

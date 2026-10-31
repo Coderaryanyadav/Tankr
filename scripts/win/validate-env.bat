@@ -42,3 +42,4 @@ if %ERRORLEVEL% neq 0 (
 
 echo [SUCCESS] Mandatory variables verified.
 exit /b 0
+

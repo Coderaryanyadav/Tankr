@@ -34,3 +34,4 @@ if exist "tsconfig.tsbuildinfo" del /f /q "tsconfig.tsbuildinfo"
 
 echo [SUCCESS] Temporary caches removed.
 exit /b 0
+

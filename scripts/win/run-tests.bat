@@ -42,3 +42,4 @@ if %OVERALL_STATUS% equ 0 (
     echo [ERROR] Test suite failed. Please review errors above.
     exit /b 1
 )
+

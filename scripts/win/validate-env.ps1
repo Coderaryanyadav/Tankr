@@ -100,3 +100,4 @@ if ($Errors -gt 0) {
     Write-Host "All environment variables are properly configured!" -ForegroundColor Green
     exit 0
 }
+

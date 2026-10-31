@@ -4,3 +4,4 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 exec ./scripts/clean.sh "$@"
+

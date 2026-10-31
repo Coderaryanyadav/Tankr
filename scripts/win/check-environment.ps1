@@ -116,3 +116,4 @@ if ($FailCount -gt 0) {
     Write-Host "Environment is fully operational for TANKR development!" -ForegroundColor Green
     exit 0
 }
+

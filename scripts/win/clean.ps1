@@ -43,3 +43,4 @@ if (Test-Path "tsconfig.tsbuildinfo") {
 }
 
 Write-Host "`n[SUCCESS] Temporary caches removed successfully!" -ForegroundColor Green
+
