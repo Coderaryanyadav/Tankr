@@ -2,25 +2,39 @@
 
 ## 1. Quick Start (Automated One-Command Setup)
 
-The fastest and most reliable way to prepare your machine for TANKR development is our automated setup script:
+The fastest and most reliable way to prepare your machine for TANKR development is our platform-specific automated setup:
 
+### macOS / Linux
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Coderaryanyadav/Tankr.git
 cd Tankr
 
 # 2. Make scripts executable and run setup
-chmod +x scripts/*.sh
-./scripts/setup.sh
+chmod +x scripts/*.sh scripts/mac/*.sh
+./scripts/mac/setup.sh
+# or simply: ./scripts/setup.sh
 ```
 
-The script will automatically:
-1. Verify operating system and architecture prerequisites.
-2. Confirm Node.js (`>= v18`) and package managers.
-3. Install dependencies from lockfiles.
-4. Generate `.env` from template.
-5. Validate environment configuration.
-6. Verify static type compilation and run all 28 automated test suites.
+### Windows (CMD & PowerShell)
+```bat
+REM From Command Prompt:
+scripts\win\setup.bat
+REM or simply:
+scripts\setup.bat
+```
+```powershell
+# From PowerShell:
+powershell -ExecutionPolicy Bypass -File scripts\win\setup.ps1
+```
+
+The setup script automatically:
+1. Verifies operating system and architecture prerequisites.
+2. Confirms Node.js (`>= v18`) and package managers.
+3. Installs dependencies from lockfiles.
+4. Generates `.env` from `.env.example` if not present.
+5. Runs static type compilation (`npx tsc --noEmit`).
+6. Runs all Jest test suites to ensure 100% regression passing.
 
 ---
 

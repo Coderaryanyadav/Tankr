@@ -183,35 +183,53 @@ Before setting up TANKR, ensure your host machine has:
 
 ## 7. Automated Quick Start (One-Command Setup)
 
-To bootstrap your development environment in a single command:
+TANKR provides dedicated platform scripts for both macOS/Linux and Windows:
 
+### macOS / Linux
 ```bash
 # 1. Clone repository
 git clone https://github.com/Coderaryanyadav/Tankr.git
 cd Tankr
 
-# 2. Make automation scripts executable
-chmod +x scripts/*.sh
-
-# 3. Run automated one-command setup
-./scripts/setup.sh
+# 2. Make automation scripts executable and run setup
+chmod +x scripts/*.sh scripts/mac/*.sh
+./scripts/mac/setup.sh
+# or simply: ./scripts/setup.sh
 ```
 
-### What `./scripts/setup.sh` Automates:
-1. Verifies host OS, architecture, Node version, and required tools.
+### Windows (CMD & PowerShell)
+```bat
+REM Command Prompt (CMD):
+scripts\win\setup.bat
+REM or simply:
+scripts\setup.bat
+```
+```powershell
+# PowerShell:
+powershell -ExecutionPolicy Bypass -File scripts\win\setup.ps1
+```
+
+### What Setup Automates:
+1. Verifies host OS, architecture, Node version (`>= v18.0.0`), and required tools.
 2. Generates `.env` from template if missing.
 3. Installs exact dependencies using `npm install`.
-4. Runs `./scripts/validate-env.sh` to check configuration validity without leaking secrets.
+4. Runs environment validation to verify configuration validity without leaking secrets.
 5. Runs static type compilation (`npx tsc --noEmit`) to verify 0 errors.
 6. Executes all 28 automated unit and regression tests.
 7. Prints copy-paste launch commands and demo login accounts.
 
 ### Launching the Application:
-```bash
-./scripts/start-dev.sh web       # Opens in Web Browser at http://localhost:8081
-./scripts/start-dev.sh ios       # Launches in iOS Simulator
-./scripts/start-dev.sh android   # Launches in Android Emulator
-```
+- **macOS / Linux**:
+  ```bash
+  ./scripts/mac/start-dev.sh web       # Opens in Web Browser at http://localhost:8081
+  ./scripts/mac/start-dev.sh ios       # Launches in iOS Simulator
+  ./scripts/mac/start-dev.sh android   # Launches in Android Emulator
+  ```
+- **Windows**:
+  ```bat
+  scripts\win\start-dev.bat web        # Opens in Web Browser at http://localhost:8081
+  scripts\win\start-dev.bat android    # Launches in Android Emulator
+  ```
 
 ---
 
