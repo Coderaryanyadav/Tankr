@@ -24,3 +24,4 @@
 | **P-SUPP-01** | `supplier` | `+91 98200 33333` (Marol Express Water Logistics) | Fleet management, booking acceptance, vehicle onboarding |
 | **P-DRIV-01** | `driver` | `+91 98200 44444` (Sunil Pawar) | Duty toggle, GPS breadcrumb broadcast, flow meter handshake |
 | **P-ADMN-01** | `admin` | `+91 98200 99999` (Platform Operations Desk) | KYC approvals, emergency overrides, dispute arbitration |
+

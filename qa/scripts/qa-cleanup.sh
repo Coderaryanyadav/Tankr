@@ -20,3 +20,4 @@ rm -rf qa/reports/*.tmp 2>/dev/null || true
 echo -e "  [${GREEN}OK${NC}] Temporary test artifacts cleaned"
 
 echo -e "${GREEN}${BOLD}Cleanup completed safely.${NC}"
+

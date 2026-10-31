@@ -26,3 +26,4 @@ for sql in supabase/migrations/*.sql; do
 done
 
 echo -e "${GREEN}${BOLD}Database schema files verified.${NC}"
+

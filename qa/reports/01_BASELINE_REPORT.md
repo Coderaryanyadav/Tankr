@@ -62,3 +62,4 @@ This baseline health report documents the initial state of the TANKR repository 
 2. **ESLint / Static Security Scanning:** ESLint with security plugins needs setup to prevent hidden vulnerabilities.
 3. **End-to-End Multi-Role Coverage:** Customer, Supplier, Driver, and Admin workflows must be verified in automated end-to-end integration tests.
 4. **Resilience & Offline Synchronization:** GPS telemetry queuing and offline recovery must be tested under simulated network dropouts.
+

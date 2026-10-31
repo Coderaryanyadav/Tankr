@@ -23,3 +23,4 @@
 ### DECISION: **APPROVED FOR CONTROLLED REAL-WORLD PILOT (PHASE 1)**
 
 The independent engineering and QA organization formally certifies that TANKR has satisfied all 6 release gates. The codebase is stable, secure, highly resilient, and ready for deployment in a controlled pilot (e.g., Mumbai Metro / Marol Operations Hub).
+

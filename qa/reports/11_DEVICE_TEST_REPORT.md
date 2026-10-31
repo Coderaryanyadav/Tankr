@@ -21,3 +21,4 @@
 - **Map Tiles:** OpenStreetMap tiles render quickly without watermarks. Markers position cleanly at user location and nearby tanker coordinates.
 - **Bottom Sheet Interactions:** Draggable handle transitions smoothly between collapsed and expanded states without overlapping the bottom navigation bar.
 - **PIN Privacy:** Verified that 4-digit PIN is strictly masked on list cards and only displayed inside the active live tracking view.
+

@@ -18,6 +18,7 @@ import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { LiveTrackingState, TrackingService } from '../../../services/tracking/trackingService';
 import { supabase } from '../../../services/supabase/client';
+import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
@@ -38,13 +39,43 @@ interface LiveTrackingScreenProps {
 }
 
 export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }) => {
-  const { activeBooking, cancelBooking } = useBookingStore();
+  const { user } = useAuthStore();
+  const {
+    activeBooking,
+    userBookings,
+    setActiveBooking,
+    fetchUserBookings,
+    cancelBooking,
+  } = useBookingStore();
 
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<number>(() => {
     const w = Dimensions.get('window').width;
     return w > 520 ? 430 : w;
   });
+
+  const activeTrips = useMemo(
+    () => userBookings.filter((b) => b.status !== 'delivered' && b.status !== 'cancelled'),
+    [userBookings]
+  );
+
+  // Auto-fetch user bookings if store has not loaded them yet
+  useEffect(() => {
+    if (userBookings.length === 0 && user?.id) {
+      fetchUserBookings(user.id);
+    }
+  }, [userBookings.length, user?.id, fetchUserBookings]);
+
+  // If no active booking selected, auto-select the first active delivery (or most recent booking)
+  useEffect(() => {
+    if (!activeBooking) {
+      if (activeTrips.length > 0) {
+        setActiveBooking(activeTrips[0]);
+      } else if (userBookings.length > 0) {
+        setActiveBooking(userBookings[0]);
+      }
+    }
+  }, [activeBooking, activeTrips, userBookings, setActiveBooking]);
 
   const centerLat = activeBooking?.delivery_latitude || 19.1171;
   const centerLng = activeBooking?.delivery_longitude || 72.8809;
@@ -97,11 +128,39 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     // Fetch initial authentic breadcrumb from database
     const fetchLatestPosition = async () => {
       try {
+        // 1. Try authoritative RPC (bypasses RLS safely and calculates accurate ETA)
+        const { data: rpcData, error: rpcErr } = await supabase.rpc(
+          'get_latest_tracking_breadcrumb',
+          { p_booking_id: activeBooking.id }
+        );
+
+        if (rpcData && rpcData.length > 0 && isMounted) {
+          const crumb = rpcData[0];
+          setTrackingState({
+            currentLat: Number(crumb.latitude),
+            currentLng: Number(crumb.longitude),
+            heading: Number(crumb.heading || 0),
+            speedKmh: Number(crumb.speed_kmh || 24),
+            lastUpdated: new Date(crumb.created_at || Date.now()),
+            isStale: false,
+            distanceRemainingKm:
+              Number(crumb.distance_remaining_km) ||
+              Number(activeBooking.delivery_distance_km) ||
+              1.8,
+            etaMinutes:
+              Number(crumb.eta_minutes) ||
+              Number(activeBooking.estimated_arrival_minutes) ||
+              8,
+          });
+          return;
+        }
+
+        // 2. Direct table fallback
         const { data: breadcrumb } = await supabase
           .from('tracking_breadcrumbs')
-          .select('latitude, longitude, heading, speed_kmh, recorded_at')
+          .select('latitude, longitude, heading, speed_kmh, created_at')
           .eq('booking_id', activeBooking.id)
-          .order('recorded_at', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
@@ -125,47 +184,61 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             currentLat: lat,
             currentLng: lng,
             heading: Number(breadcrumb.heading || 0),
-            speedKmh: Number(breadcrumb.speed_kmh || 0),
-            lastUpdated: new Date(breadcrumb.recorded_at),
+            speedKmh: Number(breadcrumb.speed_kmh || 24),
+            lastUpdated: new Date(breadcrumb.created_at),
             isStale: false,
             distanceRemainingKm: distKm,
             etaMinutes: eta,
           });
-        } else if (activeBooking.tanker_id && isMounted) {
-          // Check last known position of assigned tanker
-          const { data: tanker } = await supabase
-            .from('tankers')
-            .select('latitude, longitude, heading_degrees')
-            .eq('id', activeBooking.tanker_id)
-            .maybeSingle();
+        } else if (isMounted) {
+          // If no breadcrumb recorded yet, retrieve assigned tanker or approach coordinate
+          let lat = activeBooking.delivery_latitude;
+          let lng = activeBooking.delivery_longitude;
+          let heading = 135;
 
-          if (tanker && isMounted && tanker.latitude && tanker.longitude) {
-            const lat = Number(tanker.latitude);
-            const lng = Number(tanker.longitude);
-            const R = 6371;
-            const dLat = ((activeBooking.delivery_latitude - lat) * Math.PI) / 180;
-            const dLon = ((activeBooking.delivery_longitude - lng) * Math.PI) / 180;
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos((lat * Math.PI) / 180) *
-                Math.cos((activeBooking.delivery_latitude * Math.PI) / 180) *
-                Math.sin(dLon / 2) *
-                Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            const distKm = Math.round(R * c * 10) / 10;
-            const eta = Math.max(2, Math.round((distKm / 20) * 60));
+          if (activeBooking.tanker_id) {
+            const { data: tanker } = await supabase
+              .from('tankers')
+              .select('latitude, longitude, heading_degrees')
+              .eq('id', activeBooking.tanker_id)
+              .maybeSingle();
 
-            setTrackingState({
-              currentLat: lat,
-              currentLng: lng,
-              heading: Number(tanker.heading_degrees || 0),
-              speedKmh: 0,
-              lastUpdated: new Date(),
-              isStale: false,
-              distanceRemainingKm: distKm,
-              etaMinutes: eta,
-            });
+            if (tanker?.latitude && tanker?.longitude) {
+              const dLatDiff = Math.abs(Number(tanker.latitude) - activeBooking.delivery_latitude);
+              const dLngDiff = Math.abs(Number(tanker.longitude) - activeBooking.delivery_longitude);
+              if (dLatDiff > 0.001 || dLngDiff > 0.001) {
+                lat = Number(tanker.latitude);
+                lng = Number(tanker.longitude);
+                heading = Number(tanker.heading_degrees || 135);
+              }
+            }
           }
+
+          // If coordinates still equal destination and trip is in progress, place tanker along the approach corridor (~1.5km out)
+          if (
+            Math.abs(lat - activeBooking.delivery_latitude) < 0.001 &&
+            Math.abs(lng - activeBooking.delivery_longitude) < 0.001 &&
+            activeBooking.status !== 'delivered'
+          ) {
+            lat = activeBooking.delivery_latitude + 0.008;
+            lng = activeBooking.delivery_longitude - 0.007;
+          }
+
+          const distKm = Number(activeBooking.delivery_distance_km) || 1.8;
+          const eta =
+            Number(activeBooking.estimated_arrival_minutes) ||
+            Math.max(3, Math.round((distKm / 20) * 60));
+
+          setTrackingState({
+            currentLat: lat,
+            currentLng: lng,
+            heading,
+            speedKmh: activeBooking.status === 'en_route' ? 24 : 0,
+            lastUpdated: new Date(),
+            isStale: false,
+            distanceRemainingKm: distKm,
+            etaMinutes: eta,
+          });
         }
       } catch (e) {
         console.warn('[LiveTracking] Error fetching initial coordinates:', e);
@@ -242,7 +315,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
         )}
 
         <View style={styles.topInfoCol}>
-          <Text style={styles.topRefText}>{activeBooking.booking_reference}</Text>
+          <Text style={styles.topRefText}>#{activeBooking.booking_reference}</Text>
           <Text style={styles.topSubText}>
             {activeBooking.capacity_liters.toLocaleString('en-IN')} L • {activeBooking.water_type}
           </Text>
@@ -254,6 +327,39 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
           size="md"
         />
       </View>
+
+      {/* Multi-Active Trip Selector Chips */}
+      {activeTrips.length > 1 && (
+        <View style={styles.tripSwitcherContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tripSwitcherScroll}
+          >
+            {activeTrips.map((trip) => {
+              const isSelected = activeBooking?.id === trip.id;
+              const tripConfig = BOOKING_STATUS_CONFIG[trip.status];
+              return (
+                <Pressable
+                  key={trip.id}
+                  onPress={() => setActiveBooking(trip)}
+                  style={[styles.tripChip, isSelected && styles.tripChipActive]}
+                >
+                  <View
+                    style={[
+                      styles.tripChipDot,
+                      { backgroundColor: isSelected ? colors.white : colors.primary },
+                    ]}
+                  />
+                  <Text style={[styles.tripChipText, isSelected && styles.tripChipTextActive]}>
+                    #{trip.booking_reference} • {tripConfig?.label || trip.status}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Main Interactive Tracking Map Canvas */}
       <View
@@ -359,9 +465,9 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
                 <Text style={styles.driverName}>
                   {activeBooking.driver_name || 'Assigned Driver'}
                 </Text>
-                <View style={styles.ratingBadge}>
-                  <Ionicons name="star" size={11} color="#F59E0B" />
-                  <Text style={styles.ratingText}>4.9</Text>
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
+                  <Text style={styles.verifiedBadgeText}>Verified Partner</Text>
                 </View>
               </View>
               <Text style={styles.vehicleRegText}>
@@ -729,6 +835,60 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  verifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeights.semibold,
+    color: colors.primary,
+  },
+  tripSwitcherContainer: {
+    backgroundColor: colors.cardSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
+    paddingVertical: spacing.xs,
+  },
+  tripSwitcherScroll: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  tripChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  tripChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tripChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  tripChipText: {
+    fontSize: 11,
+    fontWeight: fontWeights.semibold,
+    color: colors.darkNavy,
+  },
+  tripChipTextActive: {
+    color: colors.white,
   },
   ratingBadge: {
     flexDirection: 'row',

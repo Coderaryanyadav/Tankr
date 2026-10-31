@@ -640,6 +640,79 @@ BEGIN
 END;
 $$;
 
+-- 10. get_latest_tracking_breadcrumb
+CREATE OR REPLACE FUNCTION public.get_latest_tracking_breadcrumb(p_booking_id UUID)
+RETURNS TABLE (
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    heading DOUBLE PRECISION,
+    speed_kmh DOUBLE PRECISION,
+    created_at TIMESTAMPTZ,
+    distance_remaining_km NUMERIC,
+    eta_minutes INTEGER
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_b public.bookings;
+    v_crumb public.tracking_breadcrumbs;
+    v_dist NUMERIC;
+    v_eta INTEGER;
+BEGIN
+    SELECT * INTO v_b FROM public.bookings WHERE id = p_booking_id;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    SELECT * INTO v_crumb
+    FROM public.tracking_breadcrumbs
+    WHERE booking_id = p_booking_id
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF FOUND THEN
+        v_dist := ROUND(((ST_Distance(
+            ST_SetSRID(ST_MakePoint(v_crumb.longitude, v_crumb.latitude), 4326)::geography,
+            v_b.delivery_coordinates
+        ) * 1.25) / 1000.0)::numeric, 2);
+        v_eta := GREATEST(1, ROUND(v_dist * 3.3)::int);
+
+        RETURN QUERY SELECT
+            v_crumb.latitude,
+            v_crumb.longitude,
+            v_crumb.heading,
+            v_crumb.speed_kmh,
+            v_crumb.created_at,
+            v_dist,
+            v_eta;
+    ELSE
+        -- Fallback to tanker position or booking distance
+        SELECT latitude, longitude, heading_degrees INTO v_crumb.latitude, v_crumb.longitude, v_crumb.heading
+        FROM public.tankers
+        WHERE id = v_b.tanker_id;
+
+        IF FOUND AND v_crumb.latitude IS NOT NULL THEN
+            v_dist := ROUND(((ST_Distance(
+                ST_SetSRID(ST_MakePoint(v_crumb.longitude, v_crumb.latitude), 4326)::geography,
+                v_b.delivery_coordinates
+            ) * 1.25) / 1000.0)::numeric, 2);
+            v_eta := GREATEST(1, ROUND(v_dist * 3.3)::int);
+
+            RETURN QUERY SELECT
+                v_crumb.latitude,
+                v_crumb.longitude,
+                COALESCE(v_crumb.heading, 0.0)::double precision,
+                24.0::double precision,
+                NOW(),
+                v_dist,
+                v_eta;
+        END IF;
+    END IF;
+END;
+$$;
+
 -- Grant execution to authenticated and anon
 GRANT EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) TO authenticated, anon;
@@ -650,3 +723,14 @@ GRANT EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, 
 GRANT EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.get_nearby_tankers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) TO authenticated, anon;
+
+-- Seed breadcrumbs for demo active trip TKR-2026-90401
+INSERT INTO public.tracking_breadcrumbs (
+    booking_id, latitude, longitude, heading, speed_kmh, created_at
+) VALUES
+    ('b7777777-7777-7777-7777-777777777777', 19.1245, 72.8720, 135, 28, NOW() - INTERVAL '2 minutes'),
+    ('b7777777-7777-7777-7777-777777777777', 19.1215, 72.8755, 135, 25, NOW() - INTERVAL '1 minute'),
+    ('b7777777-7777-7777-7777-777777777777', 19.1190, 72.8785, 130, 22, NOW())
+ON CONFLICT DO NOTHING;
+

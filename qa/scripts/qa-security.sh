@@ -13,3 +13,4 @@ echo -e "${BLUE}${BOLD}=== TANKR Security & RLS Test Suite ===${NC}"
 
 npx jest qa/security/ --watchAll=false
 echo -e "${GREEN}${BOLD}Security and RLS tests passed.${NC}"
+

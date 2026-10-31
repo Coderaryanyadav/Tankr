@@ -5,10 +5,12 @@ import { BookingsListScreen } from '../features/booking/screens/BookingsListScre
 import { HomeScreen } from '../features/discovery/screens/HomeScreen';
 import { LiveTrackingScreen } from '../features/tracking/screens/LiveTrackingScreen';
 import { AccountScreen } from '../features/profile/screens/AccountScreen';
+import { useBookingStore } from '../stores/bookingStore';
 import { colors } from '../theme';
 
 export const AppTabs: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('discovery');
+  const { setActiveBooking } = useBookingStore();
 
   return (
     <View style={styles.container}>
@@ -21,7 +23,10 @@ export const AppTabs: React.FC = () => {
         ) : activeTab === 'bookings' ? (
           <BookingsListScreen
             onBack={() => setActiveTab('discovery')}
-            onSelectBooking={() => setActiveTab('activity')}
+            onSelectBooking={(b) => {
+              setActiveBooking(b);
+              setActiveTab('activity');
+            }}
           />
         ) : activeTab === 'activity' ? (
           <LiveTrackingScreen onBack={() => setActiveTab('discovery')} />

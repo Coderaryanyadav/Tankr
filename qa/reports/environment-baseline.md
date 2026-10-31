@@ -69,3 +69,4 @@
 
 - Production Safety Guard: Test runners must check `NODE_ENV=test` and confirm that target database operations are confined to test entities with unique testing prefixes (`test-`, `test_run_`).
 - Destructive operations (`DROP DATABASE`, unrestricted `DELETE FROM`) are strictly prevented by environment filters and RLS policies.
+

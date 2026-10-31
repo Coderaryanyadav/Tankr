@@ -22,6 +22,7 @@ interface BookingState {
   bookingError: string | null;
 
   // Actions
+  setActiveBooking: (booking: BookingRecord | null) => void;
   requestPriceQuote: (
     tanker: NearbyTanker,
     deliveryLat: number,
@@ -59,6 +60,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   isCreatingBooking: false,
   isSearchingDriver: false,
   bookingError: null,
+
+  setActiveBooking: (booking) => set({ activeBooking: booking }),
 
   requestPriceQuote: async (tanker, deliveryLat, deliveryLng) => {
     set({ isLoadingQuote: true, bookingError: null });
@@ -301,7 +304,15 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        set({ userBookings: data as BookingRecord[], isLoadingBookings: false });
+        const list = data as BookingRecord[];
+        const activeTrip = list.find(
+          (b) => b.status !== 'delivered' && b.status !== 'cancelled'
+        );
+        set((state) => ({
+          userBookings: list,
+          isLoadingBookings: false,
+          activeBooking: state.activeBooking || activeTrip || null,
+        }));
       } else {
         set({ isLoadingBookings: false });
       }

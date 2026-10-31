@@ -49,3 +49,4 @@
 18. **Scenario 18:** Expired booking quote rejection by backend stored procedure.
 19. **Scenario 19:** Tanker capacity & availability changes during customer checkout.
 20. **Scenario 20:** Account deletion, personal data scrub, and regulatory financial data retention.
+

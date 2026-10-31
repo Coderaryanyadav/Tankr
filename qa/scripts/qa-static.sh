@@ -42,3 +42,4 @@ fi
 
 echo -e "${GREEN}${BOLD}Static analysis checks completed successfully.${NC}"
 exit 0
+

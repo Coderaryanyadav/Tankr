@@ -23,3 +23,4 @@ A comprehensive application security and penetration testing audit was performed
 | **Payment Tampering** | Manipulating amount in client request or replaying captured order IDs | Idempotency keys & server-side quote recalculation prevent price tampering | **PASS** |
 | **PIN Privacy & Information Leakage** | Plain-text delivery PIN exposure in card views or general notifications | PIN is strictly hidden from order cards and only revealed in authorized live tracking session | **PASS** |
 | **SQL Injection** | Parameterized inputs in PostgREST and PL/pgSQL procedures | Parameter binding used exclusively; zero dynamic SQL concatenation | **PASS** |
+

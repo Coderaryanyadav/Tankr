@@ -44,3 +44,4 @@
 - **Root Cause:** Several UI workflows depended on RPC functions without direct table fallbacks.
 - **Fix Applied:** Added missing functions to `20261031000002_core_operational_rpcs.sql` and implemented resilient direct table mutation fallbacks across all affected services.
 - **Regression Tests:** `qa/integration/booking/booking_lifecycle.test.ts`, `qa/unit/pricing/pricing_calculations.test.ts` (ALL PASS).
+

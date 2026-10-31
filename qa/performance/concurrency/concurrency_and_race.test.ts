@@ -78,3 +78,4 @@ describe('TANKR Performance QA — Concurrency & Race Condition Elimination', ()
     expect(engine.getBookings().length).toBe(1);
   });
 });
+

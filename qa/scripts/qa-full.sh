@@ -64,3 +64,4 @@ DURATION=$((END_TIME - START_TIME))
 echo -e "${GREEN}${BOLD}================================================================${NC}"
 echo -e "${GREEN}${BOLD}       ALL 8 QA STAGES PASSED SUCCESSFULLY IN ${DURATION}s              ${NC}"
 echo -e "${GREEN}${BOLD}================================================================${NC}"
+

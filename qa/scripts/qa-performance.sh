@@ -13,3 +13,4 @@ echo -e "${BLUE}${BOLD}=== TANKR Performance & Concurrency Test Suite ===${NC}"
 
 npx jest qa/performance/ --watchAll=false
 echo -e "${GREEN}${BOLD}Performance and concurrency tests passed.${NC}"
+

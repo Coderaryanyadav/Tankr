@@ -53,3 +53,4 @@ fi
 
 echo -e "${GREEN}${BOLD}Preflight verification successful.${NC}"
 exit 0
+

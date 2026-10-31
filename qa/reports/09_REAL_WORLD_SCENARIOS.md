@@ -29,3 +29,4 @@
 | **Scenario 18** | Expired Booking Quote Rejection | Checkout rejected if quote is > 10 minutes old | Stale quote rejected | **PASS** |
 | **Scenario 19** | Tanker Availability Change Mid-Checkout | Safely rejected if tanker went offline before confirmation | Rejection verified | **PASS** |
 | **Scenario 20** | Account Deletion Retention | Personal data scrubbed; anonymized financial tax receipts retained | Compliant data retention | **PASS** |
+

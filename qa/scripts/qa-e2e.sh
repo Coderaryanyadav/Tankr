@@ -13,3 +13,4 @@ echo -e "${BLUE}${BOLD}=== TANKR E2E Real-World Scenarios Suite ===${NC}"
 
 npx jest qa/e2e/ --watchAll=false
 echo -e "${GREEN}${BOLD}All 20 Real-World Scenarios verified successfully.${NC}"
+

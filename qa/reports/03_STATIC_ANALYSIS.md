@@ -22,3 +22,4 @@
 1. **Zustand State Isolation:** All stores (`authStore`, `bookingStore`, `discoveryStore`, `locationStore`, `supplyStore`, `adminStore`, `communityPoolStore`, `notificationStore`) maintain clean separation of concerns without cyclical dependencies.
 2. **Dual-Layer Database Resilience:** Direct table queries combined with RPC execution ensure that frontend views do not crash even during asynchronous database migration rollouts.
 3. **No Fabricated Data:** Verified zero hardcoded ratings (`★ 4.8`) or synthetic mock supplier listings in runtime application code.
+

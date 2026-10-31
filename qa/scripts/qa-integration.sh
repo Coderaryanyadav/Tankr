@@ -13,3 +13,4 @@ echo -e "${BLUE}${BOLD}=== TANKR Integration Test Suite ===${NC}"
 
 npx jest qa/integration/ --watchAll=false
 echo -e "${GREEN}${BOLD}Integration tests passed.${NC}"
+

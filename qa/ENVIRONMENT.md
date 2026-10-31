@@ -32,3 +32,4 @@ EXPO_PUBLIC_MAPPLS_REST_KEY=demo_mappls_rest_key
 - **Unit & Integration:** Jest with `ts-jest` targeting Node runtime with React Native / polyfill mocking.
 - **Concurrency & Live Database:** Direct HTTP RPC invocation against Supabase PostgREST endpoints and `pg.Pool` connection where direct database credentials are provided.
 - **Safe Cleanup:** All test runs execute `qa/scripts/qa-cleanup.sh` to purge synthetic test records without affecting seed data.
+

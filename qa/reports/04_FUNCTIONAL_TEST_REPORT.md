@@ -27,3 +27,4 @@ All critical functional modules were tested across Customer, Supplier, Driver, a
 - **Dynamic Quote Calculation:** Successfully verified minimum order rates, distance multipliers, peak hour surcharges, and 5% GST tax calculation.
 - **PIN Verification:** Handshake PIN is strictly verified; orders cannot transition to `delivering` or `delivered` without correct matching PIN.
 - **Fair Metering:** Prorated refund calculations verified to the exact Rupee when actual pumped volume is less than ordered capacity.
+

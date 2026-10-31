@@ -52,3 +52,4 @@ The objective of this comprehensive quality engineering audit is to rigorously v
 - **Gate 3 (Security):** All RLS policies validated. Unauthenticated or wrong-role requests are rejected with HTTP 401/403 or empty rows.
 - **Gate 4 (Financial Accuracy):** All quotes and meter discrepancy refunds balance to within ₹0.00 currency precision.
 - **Gate 5 (Observability):** Structured logging for booking state changes, payments, and location breadcrumbs.
+

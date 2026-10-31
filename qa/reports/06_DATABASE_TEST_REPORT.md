@@ -19,3 +19,4 @@
 - **Unique Constraints:** `tankers.vehicle_number`, `suppliers.gstin`, `invoices.invoice_number`, `payments.idempotency_key`.
 - **Spatial Geometry:** `coordinates GEOGRAPHY(Point, 4326)` indexed on `saved_addresses`, `service_zones`, and `tankers.current_location`.
 - **Transaction Safety:** Stored procedures utilize `FOR UPDATE` row locks to prevent concurrency deadlocks and race conditions.
+
