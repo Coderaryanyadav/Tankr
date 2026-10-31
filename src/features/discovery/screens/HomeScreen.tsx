@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Pressable,
   StatusBar,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Modal } from '../../../components/common/Overlay/Modal';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
 import { DiscoveryHeader } from '../components/DiscoveryHeader';
@@ -15,6 +18,7 @@ import { BookingReviewModal } from '../../booking/components/BookingReviewModal'
 import { BookingSearchingOverlay } from '../../booking/components/BookingSearchingOverlay';
 import { ActiveBookingCard } from '../../booking/components/ActiveBookingCard';
 import { NotificationsModal } from '../../notifications/screens/NotificationsModal';
+import { CommunityPoolModal } from '../../community/components/CommunityPoolModal';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
@@ -69,6 +73,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [addressSheetVisible, setAddressSheetVisible] = useState<boolean>(false);
   const [reviewModalVisible, setReviewModalVisible] = useState<boolean>(false);
   const [notificationsModalVisible, setNotificationsModalVisible] = useState<boolean>(false);
+  const [communityPoolModalVisible, setCommunityPoolModalVisible] = useState<boolean>(false);
   const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(null);
 
   const { notifications, unreadCount, fetchNotifications } = useNotificationStore();
@@ -138,6 +143,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onRecenterGps={handleRecenterGps}
           isLocating={isLocating}
         />
+
+        {/* Floating Community Sump Pooling Pill */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Community Sump Pooling"
+          onPress={() => setCommunityPoolModalVisible(true)}
+          style={styles.communityPoolPill}
+        >
+          <Ionicons name="people" size={15} color="#FFFFFF" />
+          <Text style={styles.communityPoolPillText}>Community Sump Pool (20kL)</Text>
+          <Ionicons name="chevron-forward" size={12} color="#FFFFFF" />
+        </Pressable>
       </View>
 
       {/* Active Live Booking Card (Uber/Ola in-trip card) */}
@@ -237,6 +254,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={notificationsModalVisible}
         onClose={() => setNotificationsModalVisible(false)}
       />
+
+      {/* Community Sump Pooling Modal */}
+      <CommunityPoolModal
+        visible={communityPoolModalVisible}
+        onClose={() => setCommunityPoolModalVisible(false)}
+        defaultAddress={activeAddressText}
+        defaultLat={activeCoordinates.latitude}
+        defaultLng={activeCoordinates.longitude}
+      />
     </SafeAreaView>
   );
 };
@@ -249,6 +275,27 @@ const styles = StyleSheet.create({
   mapSection: {
     height: 280,
     width: '100%',
+    position: 'relative',
+  },
+  communityPoolPill: {
+    position: 'absolute',
+    top: 10,
+    left: 16,
+    backgroundColor: '#0F172A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    zIndex: 25,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  communityPoolPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   activeBookingWrapper: {
     position: 'absolute',

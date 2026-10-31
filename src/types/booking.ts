@@ -58,6 +58,17 @@ export interface BookingRecord {
   payment_status: string;
   cancellation_reason?: string | null;
   created_at: string;
+  // Scheduled & Recurring Deliveries
+  delivery_type?: 'instant' | 'scheduled_once' | 'recurring';
+  scheduled_for?: string | null;
+  recurring_days?: string[];
+  recurring_time_slot?: string | null;
+  is_subscription_active?: boolean;
+  // Two-Way Flow Meter Handshake
+  flow_meter_start?: number | null;
+  flow_meter_end?: number | null;
+  delivered_liters?: number | null;
+  volume_discrepancy_liters?: number | null;
 }
 
 export const CreateBookingSchema = z.object({

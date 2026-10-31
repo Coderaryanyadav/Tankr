@@ -130,10 +130,21 @@ export const DriverDashboardScreen: React.FC = () => {
 
       setPinModalVisible(false);
       loadDriverData(user?.id || '', user?.phone);
-      Alert.alert(
-        'Delivery Verified & Audited! 🎉',
-        `Flow meter confirmed: ${deliveredLiters.toLocaleString('en-IN')}L pumped.\n₹${Math.round(assignedDelivery.final_payable_amount * 0.85)} earnings credited to driver ledger.`
-      );
+
+      const shortfall = data?.shortfall_liters || 0;
+      const refundAmt = data?.refund_amount || 0;
+
+      if (shortfall > 0) {
+        Alert.alert(
+          'Delivery Verified with Proration! 💧',
+          `Delivered: ${deliveredLiters.toLocaleString('en-IN')}L (${shortfall}L shortfall)\nInstant customer refund: ₹${refundAmt} credited to customer UPI.\nDriver earnings settled: ₹${data?.driver_earnings || Math.round(assignedDelivery.final_payable_amount * 0.85)}.`
+        );
+      } else {
+        Alert.alert(
+          'Delivery Verified & Audited! 🎉',
+          `Flow meter confirmed: ${deliveredLiters.toLocaleString('en-IN')}L pumped.\n₹${data?.driver_earnings || Math.round(assignedDelivery.final_payable_amount * 0.85)} earnings credited to driver ledger.`
+        );
+      }
     } catch (err: any) {
       setPinError(err?.message || 'Verification failed');
     }
@@ -215,6 +226,24 @@ export const DriverDashboardScreen: React.FC = () => {
                 <Text style={styles.destDistance}>
                   Distance: {assignedDelivery.delivery_distance_km} km away
                 </Text>
+              </View>
+            </View>
+
+            {/* Heavy Vehicle Commercial Route Warning & Clearance Block */}
+            <View style={styles.heavyVehicleBox}>
+              <View style={styles.heavyHeaderRow}>
+                <Ionicons name="bus" size={16} color="#B45309" />
+                <Text style={styles.heavyTitle}>Mappls Heavy Vehicle Routing Active</Text>
+                <View style={styles.weightPill}>
+                  <Text style={styles.weightPillText}>16 TONNES</Text>
+                </View>
+              </View>
+              <Text style={styles.heavyDesc}>
+                Commercial corridor route avoiding residential lanes &lt;6m and low cables.
+              </Text>
+              <View style={styles.heavySpecsRow}>
+                <Text style={styles.heavySpecText}>Clearance: 3.5m safe</Text>
+                <Text style={styles.heavySpecText}>• Bypass: Outer Ring Road</Text>
               </View>
             </View>
 
@@ -448,6 +477,53 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     gap: spacing.sm,
     marginBottom: spacing.md,
+  },
+  heavyVehicleBox: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    gap: 4,
+  },
+  heavyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heavyTitle: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: '#92400E',
+  },
+  weightPill: {
+    backgroundColor: '#D97706',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+  },
+  weightPillText: {
+    fontSize: 8,
+    fontWeight: fontWeights.bold,
+    color: '#FFFFFF',
+  },
+  heavyDesc: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 15,
+  },
+  heavySpecsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  heavySpecText: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    color: '#92400E',
   },
   destTitle: {
     fontSize: 10,

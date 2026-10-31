@@ -33,7 +33,13 @@ interface BookingState {
     deliveryAddress: string,
     deliveryLat: number,
     deliveryLng: number,
-    paymentPreference: PaymentPreference
+    paymentPreference: PaymentPreference,
+    scheduleOptions?: {
+      delivery_type: 'instant' | 'scheduled_once' | 'recurring';
+      scheduled_for?: string;
+      recurring_days?: string[];
+      recurring_time_slot?: string;
+    }
   ) => Promise<{ success: boolean; booking?: BookingRecord; error?: string }>;
   cancelBooking: (
     bookingId: string,
@@ -110,7 +116,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     deliveryAddress,
     deliveryLat,
     deliveryLng,
-    paymentPreference
+    paymentPreference,
+    scheduleOptions
   ) => {
     set({ isCreatingBooking: true, bookingError: null });
 
@@ -142,6 +149,19 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       const deliveryPin = bookingRow.delivery_pin;
       const finalAmount = Number(bookingRow.final_payable_amount);
 
+      // If scheduled or recurring, update booking attributes in Supabase
+      if (scheduleOptions && scheduleOptions.delivery_type !== 'instant') {
+        await supabase
+          .from('bookings')
+          .update({
+            delivery_type: scheduleOptions.delivery_type,
+            scheduled_for: scheduleOptions.scheduled_for || null,
+            recurring_days: scheduleOptions.recurring_days || null,
+            recurring_time_slot: scheduleOptions.recurring_time_slot || null,
+          })
+          .eq('id', bookingId);
+      }
+
       const quote = get().activeQuote;
 
       const newRecord: BookingRecord = {
@@ -171,6 +191,10 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         payment_preference: paymentPreference,
         payment_status: paymentPreference === 'cash_on_delivery' ? 'pending_delivery' : 'authorized',
         created_at: new Date().toISOString(),
+        delivery_type: scheduleOptions?.delivery_type || 'instant',
+        scheduled_for: scheduleOptions?.scheduled_for,
+        recurring_days: scheduleOptions?.recurring_days,
+        recurring_time_slot: scheduleOptions?.recurring_time_slot,
       };
 
       // Phase 8: Authoritative payment processing (Idempotent & Reconciled)

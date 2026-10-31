@@ -42,6 +42,9 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
   } = useBookingStore();
 
   const [paymentPref, setPaymentPref] = useState<PaymentPreference>('upi');
+  const [deliveryType, setDeliveryType] = useState<'instant' | 'scheduled_once' | 'recurring'>('instant');
+  const [scheduledSlot, setScheduledSlot] = useState<string>('07:00 AM - 09:00 AM');
+  const [recurringDays, setRecurringDays] = useState<string[]>(['Mon', 'Thu']);
 
   // Request backend quote whenever modal opens
   useEffect(() => {
@@ -61,7 +64,16 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
       activeAddressText,
       activeCoordinates.latitude,
       activeCoordinates.longitude,
-      paymentPref
+      paymentPref,
+      {
+        delivery_type: deliveryType,
+        scheduled_for:
+          deliveryType === 'scheduled_once'
+            ? new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+            : undefined,
+        recurring_days: deliveryType === 'recurring' ? recurringDays : undefined,
+        recurring_time_slot: deliveryType !== 'instant' ? scheduledSlot : undefined,
+      }
     );
 
     if (res.success) {
@@ -128,6 +140,88 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
                   {activeAddressText}
                 </Text>
               </View>
+            </View>
+
+            {/* Delivery Timing: Instant vs Advance vs Recurring Subscription */}
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>DELIVERY TIMING & SCHEDULE</Text>
+              <View style={styles.timingGrid}>
+                {[
+                  { id: 'instant' as const, title: 'Instant Dispatch', sub: 'Arriving in ~14 mins', icon: 'flash' },
+                  { id: 'scheduled_once' as const, title: 'Advance Schedule', sub: 'Tomorrow 07:00 AM', icon: 'calendar-outline' },
+                  { id: 'recurring' as const, title: 'Weekly Subscription', sub: 'Mon & Thu 06:00 AM', icon: 'repeat' },
+                ].map((t) => {
+                  const isSelected = deliveryType === t.id;
+                  return (
+                    <Pressable
+                      key={t.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select delivery timing ${t.title}`}
+                      onPress={() => setDeliveryType(t.id)}
+                      style={[
+                        styles.timingOptionCard,
+                        isSelected && styles.timingOptionCardActive,
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons
+                          name={t.icon as any}
+                          size={16}
+                          color={isSelected ? colors.primary : '#64748B'}
+                        />
+                        <Text
+                          style={[
+                            styles.timingTitle,
+                            isSelected && styles.timingTitleActive,
+                          ]}
+                        >
+                          {t.title}
+                        </Text>
+                      </View>
+                      <Text style={styles.timingSub}>{t.sub}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Recurring Day Chips when Subscription is selected */}
+              {deliveryType === 'recurring' && (
+                <View style={styles.recurringConfigBox}>
+                  <Text style={styles.recurringConfigLabel}>Repeat Every Week On:</Text>
+                  <View style={styles.daysRow}>
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
+                      const isDaySelected = recurringDays.includes(day);
+                      return (
+                        <Pressable
+                          key={day}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Toggle day ${day}`}
+                          onPress={() => {
+                            if (isDaySelected) {
+                              setRecurringDays(recurringDays.filter((d) => d !== day));
+                            } else {
+                              setRecurringDays([...recurringDays, day]);
+                            }
+                          }}
+                          style={[
+                            styles.dayChip,
+                            isDaySelected && styles.dayChipActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.dayChipText,
+                              isDaySelected && styles.dayChipTextActive,
+                            ]}
+                          >
+                            {day}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
 
             {/* Itemized Price Breakdown */}
@@ -381,6 +475,75 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: fontWeights.semibold,
     color: colors.darkNavy,
+  },
+  timingGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  timingOptionCard: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: colors.backgroundMuted,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    gap: 4,
+  },
+  timingOptionCardActive: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+  },
+  timingTitle: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: colors.darkNavy,
+  },
+  timingTitleActive: {
+    color: colors.primary,
+  },
+  timingSub: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  recurringConfigBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    gap: 6,
+  },
+  recurringConfigLabel: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: colors.darkNavy,
+  },
+  daysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  dayChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  dayChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  dayChipText: {
+    fontSize: 10,
+    fontWeight: fontWeights.semibold,
+    color: '#64748B',
+  },
+  dayChipTextActive: {
+    color: '#FFFFFF',
   },
   quoteLoading: {
     flexDirection: 'row',

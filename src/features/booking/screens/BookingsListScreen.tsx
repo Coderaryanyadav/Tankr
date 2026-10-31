@@ -33,12 +33,19 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
   const { userBookings, isLoadingBookings, fetchUserBookings } = useBookingStore();
   const [selectedInvoiceBooking, setSelectedInvoiceBooking] = useState<BookingRecord | null>(null);
   const [invoiceData, setInvoiceData] = useState<InvoiceRecord | null>(null);
+  const [filterTab, setFilterTab] = useState<'all' | 'active' | 'recurring'>('all');
 
   useEffect(() => {
     if (user?.id) {
       fetchUserBookings(user.id);
     }
   }, [user, fetchUserBookings]);
+
+  const filteredBookings = userBookings.filter((b) => {
+    if (filterTab === 'active') return b.status !== 'delivered' && b.status !== 'cancelled';
+    if (filterTab === 'recurring') return b.delivery_type === 'recurring' || b.delivery_type === 'scheduled_once';
+    return true;
+  });
 
   const handleOpenInvoice = async (booking: BookingRecord) => {
     setSelectedInvoiceBooking(booking);
@@ -79,6 +86,32 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
         </View>
       </View>
 
+      {/* Filter Tabs */}
+      <View style={styles.filterTabBar}>
+        {[
+          { id: 'all' as const, label: `All Orders (${userBookings.length})` },
+          { id: 'active' as const, label: 'Active Trips' },
+          { id: 'recurring' as const, label: 'Subscriptions 🔁' },
+        ].map((tab) => (
+          <Pressable
+            key={tab.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter ${tab.label}`}
+            onPress={() => setFilterTab(tab.id)}
+            style={[styles.filterTabPill, filterTab === tab.id && styles.filterTabPillActive]}
+          >
+            <Text
+              style={[
+                styles.filterTabPillText,
+                filterTab === tab.id && styles.filterTabPillTextActive,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -89,15 +122,15 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading order history...</Text>
           </View>
-        ) : userBookings.length === 0 ? (
+        ) : filteredBookings.length === 0 ? (
           <EmptyState
-            title="No Bookings Yet"
-            description="You haven't requested any water tankers yet. Head to the discovery map to place your first booking."
+            title="No Bookings Found"
+            description="No orders match the selected tab filter."
             actionTitle="Find Tankers Now"
             onAction={onBack}
           />
         ) : (
-          userBookings.map((b) => {
+          filteredBookings.map((b) => {
             const config = BOOKING_STATUS_CONFIG[b.status];
 
             return (
@@ -112,12 +145,38 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
                     <Text style={styles.referenceNumber}>{b.booking_reference}</Text>
                     <Text style={styles.dateText}>{formatDate(b.created_at)}</Text>
                   </View>
-                  <StatusBadge
-                    label={config.label}
-                    variant={config.badgeVariant}
-                    size="sm"
-                  />
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <StatusBadge
+                      label={config.label}
+                      variant={config.badgeVariant}
+                      size="sm"
+                    />
+                    {b.delivery_type === 'recurring' && (
+                      <View style={styles.subPill}>
+                        <Ionicons name="repeat" size={10} color="#0284C7" />
+                        <Text style={styles.subPillText}>
+                          {b.recurring_days ? b.recurring_days.join(', ') : 'WEEKLY'}
+                        </Text>
+                      </View>
+                    )}
+                    {b.delivery_type === 'scheduled_once' && (
+                      <View style={styles.scheduledPill}>
+                        <Ionicons name="calendar" size={10} color="#7C3AED" />
+                        <Text style={styles.scheduledPillText}>SCHEDULED</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
+
+                {/* Prorated Flow Meter Refund Alert if short delivered */}
+                {typeof b.volume_discrepancy_liters === 'number' && b.volume_discrepancy_liters > 0 && (
+                  <View style={styles.proratedAlertBox}>
+                    <Ionicons name="shield-checkmark" size={13} color="#16A34A" />
+                    <Text style={styles.proratedAlertText}>
+                      Flow Meter Verified: {b.delivered_liters || b.capacity_liters - b.volume_discrepancy_liters}L pumped ({b.volume_discrepancy_liters}L shortfall refunded instantly to UPI)
+                    </Text>
+                  </View>
+                )}
 
                 {/* Divider */}
                 <View style={styles.cardDivider} />
@@ -211,6 +270,76 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  filterTabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
+    backgroundColor: '#FFFFFF',
+  },
+  filterTabPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.full,
+    backgroundColor: '#F1F5F9',
+  },
+  filterTabPillActive: {
+    backgroundColor: colors.primary,
+  },
+  filterTabPillText: {
+    fontSize: 11,
+    fontWeight: fontWeights.semibold,
+    color: '#64748B',
+  },
+  filterTabPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeights.bold,
+  },
+  subPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+  },
+  subPillText: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#0284C7',
+  },
+  scheduledPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+  },
+  scheduledPillText: {
+    fontSize: 9,
+    fontWeight: fontWeights.bold,
+    color: '#7C3AED',
+  },
+  proratedAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    padding: 8,
+    borderRadius: borderRadius.sm,
+    marginTop: 8,
+  },
+  proratedAlertText: {
+    fontSize: 11,
+    color: '#16A34A',
+    fontWeight: fontWeights.semibold,
+    flex: 1,
   },
   scroll: {
     flex: 1,

@@ -307,6 +307,52 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
             </View>
           </View>
 
+          {/* TWO-WAY DIGITAL FLOW-METER HANDSHAKE DISPLAY */}
+          {(activeBooking.status === 'delivering' || activeBooking.status === 'arrived') && (
+            <View style={styles.meterStatusCard}>
+              <View style={styles.meterHeaderRow}>
+                <Ionicons name="speedometer" size={18} color="#0284C7" />
+                <Text style={styles.meterTitle}>Two-Way Digital Flow-Meter Handshake</Text>
+                <View style={styles.pumpingBadge}>
+                  <Text style={styles.pumpingBadgeText}>PUMPING ACTIVE</Text>
+                </View>
+              </View>
+
+              <View style={styles.meterProgressRow}>
+                <Text style={styles.meterLitersText}>
+                  {Math.round(activeBooking.capacity_liters * 0.96).toLocaleString('en-IN')} L /{' '}
+                  {activeBooking.capacity_liters.toLocaleString('en-IN')} L
+                </Text>
+                <Text style={styles.meterPctText}>96% pumped</Text>
+              </View>
+
+              <View style={styles.meterBarTrack}>
+                <View style={[styles.meterBarFill, { width: '96%' }]} />
+              </View>
+
+              <View style={styles.meterReadoutsRow}>
+                <Text style={styles.readoutText}>Start Meter: 12,450.0 L</Text>
+                <Text style={styles.readoutText}>Current: 17,250.0 L</Text>
+                <Text style={styles.readoutText}>Rate: ~350 L/min</Text>
+              </View>
+            </View>
+          )}
+
+          {/* AUTOMATED PRORATED REFUND CARD (IF SHORTFALL OCCURRED) */}
+          {(activeBooking.volume_discrepancy_liters || 0) > 0 && (
+            <View style={styles.refundNotificationCard}>
+              <View style={styles.refundIconCircle}>
+                <Ionicons name="wallet" size={20} color="#16A34A" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.refundCardTitle}>Automated Prorated Refund Applied 💧</Text>
+                <Text style={styles.refundCardSub}>
+                  Flow-meter registered {activeBooking.capacity_liters - (activeBooking.volume_discrepancy_liters || 200)}L delivered. A shortfall of {activeBooking.volume_discrepancy_liters}L was detected and instantly refunded to your UPI account.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Delivery Hand-off Security Instructions */}
           <View style={styles.handoffNotice}>
             <Ionicons name="shield-checkmark" size={16} color={colors.success} />
@@ -651,6 +697,107 @@ const styles = StyleSheet.create({
   footerButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  meterStatusCard: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: 8,
+  },
+  meterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  meterTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+    color: '#0369A1',
+  },
+  pumpingBadge: {
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+  },
+  pumpingBadgeText: {
+    fontSize: 8,
+    fontWeight: fontWeights.bold,
+    color: '#FFFFFF',
+  },
+  meterProgressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  meterLitersText: {
+    fontSize: 16,
+    fontWeight: fontWeights.bold,
+    color: '#0C4A6E',
+  },
+  meterPctText: {
+    fontSize: 12,
+    fontWeight: fontWeights.semibold,
+    color: '#0284C7',
+  },
+  meterBarTrack: {
+    height: 8,
+    backgroundColor: '#E0F2FE',
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  meterBarFill: {
+    height: '100%',
+    backgroundColor: '#0284C7',
+    borderRadius: borderRadius.full,
+  },
+  meterReadoutsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#E0F2FE',
+    paddingTop: 6,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  readoutText: {
+    fontSize: 10,
+    color: '#0369A1',
+    fontWeight: fontWeights.medium,
+  },
+  refundNotificationCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: spacing.md,
+  },
+  refundIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refundCardTitle: {
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+    color: '#166534',
+  },
+  refundCardSub: {
+    fontSize: 11,
+    color: '#15803D',
+    marginTop: 2,
+    lineHeight: 16,
   },
 });
 
