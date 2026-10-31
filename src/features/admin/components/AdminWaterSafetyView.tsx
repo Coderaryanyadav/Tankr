@@ -10,30 +10,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore, WaterCertificateItem } from '../../../stores/adminStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
   const { waterCertificates, suspendWaterCertificate } = useAdminStore();
   const [suspendingId, setSuspendingId] = useState<string | null>(null);
 
   const handleSuspend = (cert: WaterCertificateItem) => {
-    Alert.alert(
+    confirmAction(
       'Emergency Water Quality Action',
       `Suspend certificate ${cert.test_report_number} issued by ${cert.lab_name}? Tankers linked to this water source will be immediately taken offline.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Suspend Source',
-          style: 'destructive',
-          onPress: async () => {
-            setSuspendingId(cert.id);
-            const success = await suspendWaterCertificate(cert.id, 'TDS threshold or potability audit violation');
-            setSuspendingId(null);
-            if (success) {
-              Alert.alert('Source Suspended', 'The water source certificate has been marked non-potable and suspended.');
-            }
-          },
-        },
-      ]
+      async () => {
+        setSuspendingId(cert.id);
+        const success = await suspendWaterCertificate(cert.id, 'TDS threshold or potability audit violation');
+        setSuspendingId(null);
+        if (success) {
+          notify('Source Suspended', 'The water source certificate has been marked non-potable and suspended.');
+        }
+      },
+      'Suspend Source'
     );
   };
 

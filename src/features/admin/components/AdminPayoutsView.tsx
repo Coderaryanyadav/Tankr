@@ -10,35 +10,31 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
   const { payoutLedger, financialSummary, executeBatchPayout } = useAdminStore();
   const [isExecuting, setIsExecuting] = useState(false);
 
   const handleBatchPayout = () => {
-    Alert.alert(
+    confirmAction(
       'Execute Automated Payout Batch',
       `Disburse ₹${financialSummary.supplierPayout.toLocaleString('en-IN', {
         minimumFractionDigits: 2,
       })} to suppliers & drivers via automated bank transfer (Razorpay Payouts / NEFT)?\n\nPlatform take of 10% (₹${financialSummary.platformTake.toLocaleString('en-IN', {
         minimumFractionDigits: 2,
       })}) is retained.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disburse Batch',
-          onPress: async () => {
-            setIsExecuting(true);
-            const success = await executeBatchPayout();
-            setIsExecuting(false);
-            if (success) {
-              Alert.alert('Payout Batch Disbursed', 'All pending driver & supplier balances successfully settled.');
-            } else {
-              Alert.alert('Settlement Complete', 'Batch ledger recorded in Supabase.');
-            }
-          },
-        },
-      ]
+      async () => {
+        setIsExecuting(true);
+        const success = await executeBatchPayout();
+        setIsExecuting(false);
+        if (success) {
+          notify('Payout Batch Disbursed', 'All pending driver & supplier balances successfully settled.');
+        } else {
+          notify('Settlement Complete', 'Batch ledger recorded in Supabase.');
+        }
+      },
+      'Disburse Batch'
     );
   };
 

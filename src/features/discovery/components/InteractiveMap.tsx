@@ -16,8 +16,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAP_HEIGHT = 280;
 const TILE_SIZE = 256;
 
-const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
-
 interface InteractiveMapProps {
   userLocation: { latitude: number; longitude: number };
   tankers: NearbyTanker[];
@@ -85,11 +83,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         const left = (tileX - center.x) * TILE_SIZE + SCREEN_WIDTH / 2;
         const top = (tileY - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
 
-        const sub = ['a', 'b', 'c', 'd'][Math.abs((tileX + tileY) % 4)];
-        const keyParam = CARTO_KEY ? `?key=${CARTO_KEY}` : '';
+        // ArcGIS World Street Map (Crisp Mumbai street cartography, zero watermark, no API key needed)
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tileX}/${tileY}.png${keyParam}`,
+          url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${tileY}/${tileX}`,
           left,
           top,
         });

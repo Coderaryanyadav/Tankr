@@ -23,7 +23,6 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
 
 function projectToTileCoords(lat: number, lng: number, zoom: number) {
   const n = Math.pow(2, zoom);
@@ -63,7 +62,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tileX}/${tileY}.png?key=${CARTO_KEY}`,
+          url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${tileY}/${tileX}`,
           left,
           top,
         });

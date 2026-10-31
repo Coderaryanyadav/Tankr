@@ -19,6 +19,7 @@ import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { useAdminStore } from '../../../stores/adminStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 import { AdminFleetMapView } from '../components/AdminFleetMapView';
 import { AdminEmergencyDispatchView } from '../components/AdminEmergencyDispatchView';
@@ -72,36 +73,28 @@ export const AdminDashboardScreen: React.FC = () => {
   }, [fetchDashboardMetrics, fetchServiceZones]);
 
   const handleApprove = (id: string, name: string) => {
-    Alert.alert(
+    confirmAction(
       'Verify Supplier KYC',
       `Approve ${name} to operate on the TANKR dispatch network?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve & Activate',
-          onPress: async () => {
-            await approveSupplier(id);
-            Alert.alert('Supplier Verified', `${name} is now approved to receive bookings.`);
-          },
-        },
-      ]
+      async () => {
+        const ok = await approveSupplier(id);
+        if (ok) {
+          notify('Supplier Verified', `${name} is now approved to receive bookings.`);
+        }
+      },
+      'Approve & Activate'
     );
   };
 
   const handleReject = (id: string, name: string) => {
-    Alert.alert(
+    confirmAction(
       'Reject Supplier',
       `Reject ${name}'s application? They will need to resubmit compliance documents.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            await rejectSupplier(id);
-          },
-        },
-      ]
+      async () => {
+        await rejectSupplier(id);
+        notify('Supplier Rejected', `${name}'s application has been rejected.`);
+      },
+      'Reject'
     );
   };
 
@@ -590,12 +583,14 @@ export const AdminDashboardScreen: React.FC = () => {
                                   title="Approve"
                                   size="sm"
                                   variant="primary"
+                                  fullWidth={false}
                                   onPress={() => handleApprove(sup.id, sup.business_name)}
                                 />
                                 <Button
                                   title="Reject"
                                   size="sm"
                                   variant="outline"
+                                  fullWidth={false}
                                   onPress={() => handleReject(sup.id, sup.business_name)}
                                 />
                               </View>
@@ -660,12 +655,14 @@ export const AdminDashboardScreen: React.FC = () => {
                             title="Approve & Verify"
                             size="sm"
                             variant="primary"
+                            fullWidth={false}
                             onPress={() => handleApprove(sup.id, sup.business_name)}
                           />
                           <Button
                             title="Reject"
                             size="sm"
                             variant="outline"
+                            fullWidth={false}
                             onPress={() => handleReject(sup.id, sup.business_name)}
                           />
                         </View>
@@ -714,12 +711,14 @@ export const AdminDashboardScreen: React.FC = () => {
                                 title="Approve Refund"
                                 size="sm"
                                 variant="outline"
+                                fullWidth={false}
                                 onPress={() => resolveDispute(disp.id, true)}
                               />
                               <Button
                                 title="Dismiss / Resolve"
                                 size="sm"
                                 variant="primary"
+                                fullWidth={false}
                                 onPress={() => resolveDispute(disp.id, false)}
                               />
                             </>
@@ -1332,7 +1331,9 @@ const styles = StyleSheet.create({
   },
   kycActions: {
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: 8,
   },
   zonesGrid: {
     flexDirection: 'row',

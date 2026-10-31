@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
   const { emergencyDispatches, triggerEmergencyDispatch } = useAdminStore();
@@ -25,7 +26,7 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
 
   const handleForceDispatch = async () => {
     if (!institutionName.trim() || !contactPerson.trim() || !contactPhone.trim() || !deliveryAddress.trim()) {
-      Alert.alert('Required Fields', 'Please complete all emergency facility details before dispatching.');
+      notify('Required Fields', 'Please complete all emergency facility details before dispatching.');
       return;
     }
 
@@ -44,7 +45,7 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
     setIsSubmitting(false);
 
     if (success) {
-      Alert.alert(
+      notify(
         'Priority Tanker Dispatched',
         `Top-of-queue priority tanker dispatched to ${institutionName} under 20-minute SLA guarantee.`
       );
@@ -53,7 +54,7 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
       setContactPhone('');
       setDeliveryAddress('');
     } else {
-      Alert.alert('Dispatch Error', 'Failed to dispatch emergency tanker. Please try again.');
+      notify('Dispatch Error', 'Failed to dispatch emergency tanker. Please try again.');
     }
   };
 

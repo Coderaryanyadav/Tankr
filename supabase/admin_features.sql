@@ -482,3 +482,4 @@ $$;
 
 -- Grant execute on routines
 GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+

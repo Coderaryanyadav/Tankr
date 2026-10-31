@@ -825,11 +825,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   resolveDispute: async (disputeId: string, refund: boolean) => {
     try {
+      const disp = get().disputes.find((d) => d.id === disputeId);
+      const refundAmt = refund ? (disp?.amount || 450.0) : 0.0;
       await supabase.rpc('admin_resolve_dispute', {
         p_dispute_id: disputeId,
         p_status: refund ? 'refunded' : 'resolved',
-        p_refund_amount: refund ? 875.0 : 0.0,
-        p_notes: refund ? 'Customer refund approved due to verified short delivery.' : 'Resolved after driver clarification.',
+        p_refund_amount: refundAmt,
+        p_notes: refund
+          ? 'Customer refund approved due to verified short delivery.'
+          : 'Resolved after driver clarification.',
       });
 
       set((state) => ({

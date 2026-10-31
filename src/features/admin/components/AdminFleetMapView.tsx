@@ -17,9 +17,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FleetTankerItem, useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, fontWeights, shadows, spacing } from '../../../theme';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 const TILE_SIZE = 256;
-const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
 
 // Primary Operations Center (Marol HQ, Andheri East, Mumbai)
 const MAROL_HQ_LAT = 19.1171;
@@ -75,6 +75,7 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
   const [centerLat, setCenterLat] = useState<number>(MAROL_HQ_LAT);
   const [centerLng, setCenterLng] = useState<number>(MAROL_HQ_LNG);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
+  const [mapTheme, setMapTheme] = useState<'dark' | 'street'>('dark');
   const [selectedCapacity, setSelectedCapacity] = useState<number | null>(null);
   const [selectedTanker, setSelectedTanker] = useState<FleetTankerItem | null>(null);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -139,24 +140,25 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     const maxTileY = Math.ceil(effectiveCenterY + height / (2 * TILE_SIZE)) + 1;
 
     const tiles: Array<{ key: string; url: string; left: number; top: number }> = [];
-    const subdomains = ['a', 'b', 'c', 'd'];
 
     for (let tx = minTileX; tx <= maxTileX; tx++) {
       for (let ty = minTileY; ty <= maxTileY; ty++) {
         const left = (tx - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
         const top = (ty - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
-        const sub = subdomains[Math.abs((tx + ty) % 4)];
-        const keyParam = CARTO_KEY ? `?key=${CARTO_KEY}` : '';
+        // ArcGIS public CDN tiles (Zero watermarks, No API key required, high-speed cached)
+        const url = mapTheme === 'dark'
+          ? `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${zoom}/${ty}/${tx}`
+          : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${ty}/${tx}`;
         tiles.push({
-          key: `${zoom}-${tx}-${ty}`,
-          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tx}/${ty}.png${keyParam}`,
+          key: `${mapTheme}-${zoom}-${tx}-${ty}`,
+          url,
           left,
           top,
         });
       }
     }
     return tiles;
-  }, [centerProj, containerSize, panOffset, zoom]);
+  }, [centerProj, containerSize, panOffset, zoom, mapTheme]);
 
   // Calculate pixel coordinates for Deficit Heatmap Zones
   const placedZones = useMemo(() => {
@@ -296,6 +298,32 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
         </View>
 
         <View style={styles.toolbarRight}>
+          {/* Map Base Theme Selector */}
+          <View style={styles.themeToggleWrap}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dark Operations Map"
+              onPress={() => setMapTheme('dark')}
+              style={[styles.themeChip, mapTheme === 'dark' && styles.themeChipActive]}
+            >
+              <Ionicons name="moon" size={13} color={mapTheme === 'dark' ? '#38BDF8' : '#64748B'} />
+              <Text style={[styles.themeChipText, mapTheme === 'dark' && styles.themeChipTextActive]}>
+                Dark Ops
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Street Grid Map"
+              onPress={() => setMapTheme('street')}
+              style={[styles.themeChip, mapTheme === 'street' && styles.themeChipActive]}
+            >
+              <Ionicons name="map" size={13} color={mapTheme === 'street' ? '#0284C7' : '#64748B'} />
+              <Text style={[styles.themeChipText, mapTheme === 'street' && styles.themeChipTextActive]}>
+                Street Grid
+              </Text>
+            </Pressable>
+          </View>
+
           {/* Surge Heatmap Toggle */}
           <View style={styles.heatmapToggleWrap}>
             <Ionicons name="flame" size={16} color={showHeatmap ? '#DC2626' : '#94A3B8'} />
@@ -695,24 +723,19 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
             <View style={styles.actionButtonsRow}>
               <Pressable
                 onPress={() =>
-                  Alert.alert(
+                  confirmAction(
                     'Rebalance Dispatch',
                     `Route tanker ${selectedTanker.vehicle_number} to high-deficit Marol sector?`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Confirm Dispatch',
-                        onPress: async () => {
-                          const ok = await rebalanceTanker(selectedTanker.id, 'Marol / MIDC Andheri East');
-                          if (ok) {
-                            Alert.alert('Dispatch Transmitted', `Tanker ${selectedTanker.vehicle_number} rebalanced to Marol high-deficit zone.`);
-                            setSelectedTanker(null);
-                          } else {
-                            Alert.alert('Dispatch Error', 'Failed to dispatch tanker rebalance.');
-                          }
-                        },
-                      },
-                    ]
+                    async () => {
+                      const ok = await rebalanceTanker(selectedTanker.id, 'Marol / MIDC Andheri East');
+                      if (ok) {
+                        notify('Dispatch Transmitted', `Tanker ${selectedTanker.vehicle_number} rebalanced to Marol high-deficit zone.`);
+                        setSelectedTanker(null);
+                      } else {
+                        notify('Dispatch Error', 'Failed to dispatch tanker rebalance.');
+                      }
+                    },
+                    'Confirm Dispatch'
                   )
                 }
                 style={styles.rebalanceBtn}
@@ -810,6 +833,36 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  themeToggleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 2,
+  },
+  themeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  themeChipActive: {
+    backgroundColor: '#0F172A',
+  },
+  themeChipText: {
+    fontSize: 11,
+    fontWeight: fontWeights.semibold,
+    color: '#64748B',
+  },
+  themeChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeights.bold,
   },
   toggleLabel: {
     fontSize: 12,

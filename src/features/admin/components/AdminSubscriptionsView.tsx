@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
   const { corporateSubscriptions, toggleSubscriptionStatus, createCorporateSubscription } = useAdminStore();
@@ -39,24 +40,20 @@ export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDe
 
   const handleToggle = async (id: string, name: string, currentStatus: string) => {
     const next = currentStatus === 'active' ? 'pause' : 'activate';
-    Alert.alert(
+    confirmAction(
       `${next.toUpperCase()} CONTRACT`,
       `Are you sure you want to ${next} recurring bulk water deliveries for ${name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            await toggleSubscriptionStatus(id, currentStatus);
-          },
-        },
-      ]
+      async () => {
+        await toggleSubscriptionStatus(id, currentStatus);
+        notify('Contract Updated', `Subscription for ${name} is now ${next === 'pause' ? 'paused' : 'active'}.`);
+      },
+      'Confirm'
     );
   };
 
   const handleCreateContract = async () => {
     if (!clientName.trim() || !contactPerson.trim() || !contactPhone.trim() || !deliveryAddress.trim()) {
-      Alert.alert('Required Fields', 'Please complete all contract fields.');
+      notify('Required Fields', 'Please complete all contract fields.');
       return;
     }
 
@@ -73,20 +70,20 @@ export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDe
       preferred_time_slot: timeSlot,
       monthly_rate: Number(monthlyRate) || 60000,
       status: 'active',
-      assigned_supplier_name: 'Seema Water Hub',
+      assigned_supplier_name: 'Marol Aqua Logistics',
       start_date: new Date().toISOString().split('T')[0],
     });
     setIsSubmitting(false);
 
     if (success) {
-      Alert.alert('Corporate Contract Created', `Recurring delivery contract for ${clientName} is now active.`);
+      notify('Corporate Contract Created', `Recurring delivery contract for ${clientName} is now active.`);
       setIsAddModalOpen(false);
       setClientName('');
       setContactPerson('');
       setContactPhone('');
       setDeliveryAddress('');
     } else {
-      Alert.alert('Error', 'Failed to create contract. Please try again.');
+      notify('Error', 'Failed to create contract. Please try again.');
     }
   };
 

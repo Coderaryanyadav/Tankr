@@ -273,6 +273,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
 
     try {
+      // 1. Try atomic SECURITY DEFINER RPC first to bypass client RLS edge-cases
+      const { data: rpcData, error: rpcError } = await supabase.rpc('complete_customer_onboarding', {
+        p_full_name: data.fullName,
+        p_preferred_address: data.preferredAddress,
+        p_city: data.city,
+        p_pincode: data.pincode,
+      });
+
+      if (!rpcError && rpcData) {
+        const updatedProfile = await get().fetchProfile(user.id);
+        set({ profile: updatedProfile || (rpcData as UserProfile), isLoading: false });
+        return { success: true };
+      }
+
+      // 2. Fallback to direct upsert if RPC is unavailable
       const updatePayload: Partial<UserProfile> = {
         full_name: data.fullName,
         preferred_address: data.preferredAddress,
