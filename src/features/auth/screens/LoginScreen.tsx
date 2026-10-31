@@ -97,6 +97,45 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onOtpRequested }) => {
               autoFocus
             />
 
+            {/* Quick Demo Personas */}
+            <View style={styles.demoChipsContainer}>
+              <Text style={styles.demoChipsTitle}>Quick Demo Switcher (OTP: 123456):</Text>
+              <View style={styles.demoChipsRow}>
+                <Pressable
+                  style={[styles.demoChip, rawPhoneDigits === '9876543210' && styles.demoChipActive]}
+                  onPress={() => handlePhoneChange('9876543210')}
+                >
+                  <Text style={[styles.demoChipText, rawPhoneDigits === '9876543210' && styles.demoChipTextActive]}>
+                    👤 Customer (Vikram)
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.demoChip, rawPhoneDigits === '9999999999' && styles.demoChipActive]}
+                  onPress={() => handlePhoneChange('9999999999')}
+                >
+                  <Text style={[styles.demoChipText, rawPhoneDigits === '9999999999' && styles.demoChipTextActive]}>
+                    🏢 Supplier (Marol Hub)
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.demoChip, rawPhoneDigits === '9000000001' && styles.demoChipActive]}
+                  onPress={() => handlePhoneChange('9000000001')}
+                >
+                  <Text style={[styles.demoChipText, rawPhoneDigits === '9000000001' && styles.demoChipTextActive]}>
+                    🚛 Driver (Rajesh)
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.demoChip, rawPhoneDigits === '8888888888' && styles.demoChipActive]}
+                  onPress={() => handlePhoneChange('8888888888')}
+                >
+                  <Text style={[styles.demoChipText, rawPhoneDigits === '8888888888' && styles.demoChipTextActive]}>
+                    🛡️ Operations Admin
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
             <View style={styles.buttonWrapper}>
               <Button
                 title="Continue"
@@ -206,6 +245,44 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
     ...shadows.card,
+  },
+  demoChipsContainer: {
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  demoChipsTitle: {
+    fontSize: 11,
+    fontWeight: fontWeights.semibold,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  demoChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  demoChip: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  demoChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: colors.primary,
+  },
+  demoChipText: {
+    fontSize: 12,
+    fontWeight: fontWeights.medium,
+    color: colors.textSecondary,
+  },
+  demoChipTextActive: {
+    color: colors.primary,
+    fontWeight: fontWeights.bold,
   },
   buttonWrapper: {
     marginTop: spacing.md,

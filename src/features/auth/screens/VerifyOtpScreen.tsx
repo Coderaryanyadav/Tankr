@@ -161,6 +161,29 @@ export const VerifyOtpScreen: React.FC<VerifyOtpScreenProps> = ({
               autoFocus
             />
 
+            {/* Quick Demo OTP Autofill */}
+            <View style={{ alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.xs }}>
+              <Pressable
+                onPress={() => handleOtpChange('123456')}
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.xs,
+                  borderRadius: borderRadius.full,
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Ionicons name="flash" size={14} color={colors.primary} />
+                <Text style={{ fontSize: 12, fontWeight: fontWeights.semibold, color: colors.primary }}>
+                  Auto-fill Demo OTP: 123456
+                </Text>
+              </Pressable>
+            </View>
+
             <View style={styles.resendSection}>
               {cooldownSeconds > 0 ? (
                 <View style={styles.timerRow}>
