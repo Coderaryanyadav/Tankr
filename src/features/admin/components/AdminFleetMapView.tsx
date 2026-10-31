@@ -19,6 +19,7 @@ import { FleetTankerItem, useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, fontWeights, shadows, spacing } from '../../../theme';
 
 const TILE_SIZE = 256;
+const CARTO_KEY = process.env.EXPO_PUBLIC_CARTO_API_KEY || 'cb1_4yut_1_53099494f5cc36d9ace8e1e4';
 
 // Primary Operations Center (Marol HQ, Andheri East, Mumbai)
 const MAROL_HQ_LAT = 19.1171;
@@ -144,9 +145,10 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
         const left = (tx - centerProj.x) * TILE_SIZE + width / 2 + panOffset.x;
         const top = (ty - centerProj.y) * TILE_SIZE + height / 2 + panOffset.y;
         const sub = subdomains[Math.abs((tx + ty) % 4)];
+        const keyParam = CARTO_KEY ? `?key=${CARTO_KEY}` : '';
         tiles.push({
           key: `${zoom}-${tx}-${ty}`,
-          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tx}/${ty}.png`,
+          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tx}/${ty}.png${keyParam}`,
           left,
           top,
         });

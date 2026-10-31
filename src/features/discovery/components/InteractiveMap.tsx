@@ -86,9 +86,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         const top = (tileY - center.y) * TILE_SIZE + MAP_HEIGHT / 2;
 
         const sub = ['a', 'b', 'c', 'd'][Math.abs((tileX + tileY) % 4)];
+        const keyParam = CARTO_KEY ? `?key=${CARTO_KEY}` : '';
         tiles.push({
           key: `${zoom}-${tileX}-${tileY}`,
-          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tileX}/${tileY}.png`,
+          url: `https://${sub}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${tileX}/${tileY}.png${keyParam}`,
           left,
           top,
         });
