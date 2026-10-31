@@ -1,0 +1,1438 @@
+-- ==============================================================================
+-- TANKR MASTER DATABASE SCHEMA & ENGINE
+-- Single Unified Production-Grade Schema (Mumbai Metro / Marol HQ Operations)
+-- ==============================================================================
+
+-- 1. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "postgis";
+
+-- 2. ENUMS
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('customer', 'supplier', 'driver', 'admin');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE booking_status AS ENUM (
+        'pending', 
+        'accepted', 
+        'driver_assigned', 
+        'en_route', 
+        'arrived', 
+        'delivering', 
+        'delivered', 
+        'cancelled', 
+        'disputed',
+        'unfulfilled_refunded'
+    );
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE payment_preference AS ENUM ('upi', 'credit_debit_card', 'net_banking', 'cash_on_delivery');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE institution_type AS ENUM ('hospital_dialysis', 'icu_critical', 'maternity_emergency', 'residential_society');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+-- 3. PROFILES TABLE (Linked to auth.users)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    phone_number TEXT NOT NULL UNIQUE,
+    full_name TEXT,
+    role user_role NOT NULL DEFAULT 'customer',
+    is_onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
+    profile_photo_url TEXT,
+    preferred_address TEXT,
+    city TEXT DEFAULT 'Mumbai',
+    pincode TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 4. SAVED ADDRESSES
+CREATE TABLE IF NOT EXISTS public.saved_addresses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    custom_name TEXT,
+    flat_or_building TEXT NOT NULL,
+    street_address TEXT NOT NULL,
+    landmark TEXT,
+    city TEXT NOT NULL DEFAULT 'Mumbai',
+    pincode TEXT NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    coordinates GEOGRAPHY(Point, 4326) NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 5. SERVICE ZONES (Mumbai Operational Hubs & Demand Sectors)
+CREATE TABLE IF NOT EXISTS public.service_zones (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    zone_name TEXT NOT NULL UNIQUE,
+    center_lat DOUBLE PRECISION NOT NULL,
+    center_lng DOUBLE PRECISION NOT NULL,
+    radius_km NUMERIC(4,1) NOT NULL DEFAULT 5.0,
+    traffic_multiplier NUMERIC(3,2) NOT NULL DEFAULT 1.00,
+    minimum_fleet_density INT NOT NULL DEFAULT 2,
+    is_operational BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 6. SUPPLIERS
+CREATE TABLE IF NOT EXISTS public.suppliers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    business_name TEXT NOT NULL,
+    contact_phone TEXT NOT NULL,
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verification_status TEXT NOT NULL DEFAULT 'pending_review',
+    rating NUMERIC(2,1) NOT NULL DEFAULT 5.0,
+    total_deliveries INT NOT NULL DEFAULT 0,
+    water_source TEXT NOT NULL DEFAULT 'BMC Bhandup Potable Filtration Reservoir',
+    gstin TEXT UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 7. TANKERS (Fleet Vehicles)
+CREATE TABLE IF NOT EXISTS public.tankers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    supplier_id UUID NOT NULL REFERENCES public.suppliers(id) ON DELETE CASCADE,
+    vehicle_number TEXT NOT NULL UNIQUE,
+    driver_name TEXT NOT NULL,
+    driver_phone TEXT NOT NULL,
+    capacity_liters INT NOT NULL,
+    water_type TEXT NOT NULL DEFAULT 'Potable (Drinking)',
+    base_price NUMERIC(10,2) NOT NULL DEFAULT 750.00,
+    price_per_km NUMERIC(10,2) NOT NULL DEFAULT 25.00,
+    is_available BOOLEAN NOT NULL DEFAULT TRUE,
+    is_online BOOLEAN NOT NULL DEFAULT TRUE,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    current_location GEOGRAPHY(Point, 4326),
+    heading_degrees DOUBLE PRECISION DEFAULT 0.0,
+    last_ping_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    gross_vehicle_weight_tonnes NUMERIC(4,1) DEFAULT 16.0,
+    height_clearance_meters NUMERIC(3,1) DEFAULT 3.4,
+    commercial_route_profile TEXT DEFAULT 'heavy_water_tanker',
+    active_certificate_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 8. BOOKINGS
+CREATE TABLE IF NOT EXISTS public.bookings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_reference TEXT NOT NULL UNIQUE,
+    customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    tanker_id UUID NOT NULL REFERENCES public.tankers(id) ON DELETE RESTRICT,
+    supplier_id UUID NOT NULL REFERENCES public.suppliers(id) ON DELETE RESTRICT,
+    status booking_status NOT NULL DEFAULT 'pending',
+    capacity_liters INT NOT NULL,
+    water_type TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    delivery_latitude DOUBLE PRECISION NOT NULL,
+    delivery_longitude DOUBLE PRECISION NOT NULL,
+    delivery_coordinates GEOGRAPHY(Point, 4326) NOT NULL,
+    delivery_pin VARCHAR(4) NOT NULL,
+    delivery_distance_km NUMERIC(5,2) NOT NULL,
+    estimated_arrival_minutes INT NOT NULL,
+    base_price NUMERIC(10,2) NOT NULL,
+    delivery_charge NUMERIC(10,2) NOT NULL,
+    surcharge NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    tax_amount NUMERIC(10,2) NOT NULL,
+    final_payable_amount NUMERIC(10,2) NOT NULL,
+    payment_preference payment_preference NOT NULL DEFAULT 'upi',
+    payment_status TEXT NOT NULL DEFAULT 'authorized',
+    driver_name TEXT,
+    driver_phone TEXT,
+    vehicle_number TEXT,
+    supplier_name TEXT,
+    flow_meter_start NUMERIC(10,2),
+    flow_meter_end NUMERIC(10,2),
+    delivered_liters INT,
+    volume_discrepancy_liters INT DEFAULT 0,
+    meter_photo_url TEXT,
+    customer_volume_confirmed BOOLEAN DEFAULT FALSE,
+    water_certificate_id UUID,
+    quote_expires_at TIMESTAMPTZ NOT NULL,
+    cancellation_reason TEXT,
+    cancelled_at TIMESTAMPTZ,
+    delivery_type TEXT DEFAULT 'instant',
+    scheduled_for TIMESTAMPTZ,
+    recurring_days TEXT,
+    recurring_time_slot TEXT,
+    is_subscription_active BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. PAYMENTS
+CREATE TABLE IF NOT EXISTS public.payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
+    gateway_order_id TEXT,
+    gateway_payment_id TEXT,
+    gateway_signature TEXT,
+    amount NUMERIC(10,2) NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'INR',
+    method TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'created',
+    idempotency_key TEXT UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 10. INVOICES
+CREATE TABLE IF NOT EXISTS public.invoices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_id UUID NOT NULL UNIQUE REFERENCES public.bookings(id) ON DELETE CASCADE,
+    invoice_number TEXT NOT NULL UNIQUE,
+    customer_name TEXT,
+    customer_phone TEXT,
+    delivery_address TEXT,
+    supplier_business_name TEXT,
+    supplier_gstin TEXT,
+    water_type TEXT,
+    volume_liters INT,
+    base_price NUMERIC(10,2),
+    delivery_charge NUMERIC(10,2),
+    surcharge NUMERIC(10,2),
+    tax_amount NUMERIC(10,2),
+    final_amount NUMERIC(10,2),
+    payment_status TEXT NOT NULL DEFAULT 'PAID',
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 11. NOTIFICATIONS
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+    type TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 12. TRACKING BREADCRUMBS
+CREATE TABLE IF NOT EXISTS public.tracking_breadcrumbs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    heading DOUBLE PRECISION DEFAULT 0,
+    speed_kmh DOUBLE PRECISION DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 13. DISPUTES
+CREATE TABLE IF NOT EXISTS public.disputes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL,
+    evidence_url TEXT,
+    claimed_refund_amount NUMERIC(10,2),
+    status TEXT NOT NULL DEFAULT 'pending_review',
+    admin_notes TEXT,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 14. EMERGENCY DISPATCHES (Hospitals & Critical Care Sumps)
+CREATE TABLE IF NOT EXISTS public.emergency_dispatches (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    institution_name TEXT NOT NULL,
+    institution_type institution_type NOT NULL DEFAULT 'hospital_dialysis',
+    contact_person TEXT NOT NULL,
+    contact_phone TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    required_liters INT NOT NULL DEFAULT 10000,
+    water_type TEXT NOT NULL DEFAULT 'Potable (Drinking)',
+    sla_minutes INT NOT NULL DEFAULT 20,
+    status TEXT NOT NULL DEFAULT 'priority_queued',
+    assigned_tanker_id UUID REFERENCES public.tankers(id) ON DELETE SET NULL,
+    vehicle_number TEXT,
+    driver_name TEXT,
+    driver_phone TEXT,
+    dispatched_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 15. CORPORATE SUBSCRIPTIONS & BULK CONTRACTS
+CREATE TABLE IF NOT EXISTS public.corporate_subscriptions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'tech_park',
+    contact_person TEXT NOT NULL,
+    contact_phone TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    daily_liters INT NOT NULL DEFAULT 20000,
+    frequency_per_day INT NOT NULL DEFAULT 2,
+    preferred_time_slot TEXT NOT NULL DEFAULT '06:00 AM - 08:00 AM',
+    monthly_rate NUMERIC(12,2) NOT NULL DEFAULT 95000.00,
+    status TEXT NOT NULL DEFAULT 'active',
+    assigned_supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
+    assigned_supplier_name TEXT,
+    start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    end_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 16. COMMUNITY POOLS & COST-SPLITTING
+CREATE TABLE IF NOT EXISTS public.community_pools (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    pool_code TEXT NOT NULL UNIQUE,
+    community_name TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    target_liters INT NOT NULL DEFAULT 20000,
+    target_amount NUMERIC(10,2) NOT NULL DEFAULT 2400.00,
+    collected_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    status TEXT NOT NULL DEFAULT 'collecting',
+    created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '4 hours')
+);
+
+CREATE TABLE IF NOT EXISTS public.community_pool_contributions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    pool_id UUID NOT NULL REFERENCES public.community_pools(id) ON DELETE CASCADE,
+    contributor_name TEXT NOT NULL,
+    flat_number TEXT NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    payment_status TEXT NOT NULL DEFAULT 'paid',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 17. DRIVER PAYOUT LEDGER
+CREATE TABLE IF NOT EXISTS public.driver_payout_ledger (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    driver_phone TEXT NOT NULL,
+    booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+    entry_type TEXT NOT NULL DEFAULT 'delivery_earnings',
+    amount NUMERIC(10,2) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 18. WATER QUALITY CERTIFICATES
+CREATE TABLE IF NOT EXISTS public.water_quality_certificates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    supplier_id UUID NOT NULL REFERENCES public.suppliers(id) ON DELETE CASCADE,
+    water_source TEXT NOT NULL,
+    tds_ppm INT NOT NULL,
+    ph_level NUMERIC(3,1) NOT NULL,
+    lab_name TEXT NOT NULL,
+    certified_at DATE NOT NULL DEFAULT CURRENT_DATE,
+    valid_until DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '90 days'),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 19. PLATFORM SETTINGS & AUDIT LOGS
+CREATE TABLE IF NOT EXISTS public.platform_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    key TEXT NOT NULL UNIQUE,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    admin_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    target_entity TEXT NOT NULL,
+    target_id TEXT,
+    details JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.suspended_entities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type TEXT NOT NULL,
+    identifier_value TEXT NOT NULL UNIQUE,
+    reason TEXT NOT NULL,
+    suspended_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 20. SECURITY TRIGGERS & FUNCTIONS
+-- ==============================================================================
+
+-- 20a. Auto-create profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    INSERT INTO public.profiles (id, phone_number, full_name, role)
+    VALUES (
+        NEW.id,
+        COALESCE(NEW.phone, '98200' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::text, 5, '0')),
+        COALESCE(NEW.raw_user_meta_data->>'full_name', 'Verified User'),
+        COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'customer'::user_role)
+    )
+    ON CONFLICT (id) DO NOTHING;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 20b. Protect role escalation
+CREATE OR REPLACE FUNCTION public.protect_profile_role_escalation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.role IS DISTINCT FROM OLD.role THEN
+        IF auth.role() != 'service_role' THEN
+            IF NOT EXISTS (
+                SELECT 1 FROM public.profiles
+                WHERE id = auth.uid() AND role = 'admin'
+            ) THEN
+                RAISE EXCEPTION 'Privilege escalation denied: You cannot alter your account role.'
+                    USING ERRCODE = '42501';
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_role ON public.profiles;
+CREATE TRIGGER trg_protect_profile_role
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW EXECUTE FUNCTION public.protect_profile_role_escalation();
+
+-- 20c. calculate_booking_quote
+CREATE OR REPLACE FUNCTION public.calculate_booking_quote(
+    p_tanker_id uuid,
+    p_delivery_lat double precision,
+    p_delivery_lng double precision
+)
+RETURNS TABLE(
+    tanker_id uuid,
+    supplier_name text,
+    vehicle_number text,
+    capacity_liters integer,
+    water_type text,
+    distance_km numeric,
+    eta_minutes integer,
+    base_price numeric,
+    delivery_charge numeric,
+    surcharge numeric,
+    tax_amount numeric,
+    final_payable_amount numeric
+)
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_tanker RECORD;
+    v_dist_km NUMERIC(5,2);
+    v_eta_min INT;
+    v_base_price NUMERIC(10,2);
+    v_delivery_charge NUMERIC(10,2);
+    v_surcharge NUMERIC(10,2) := 0.00;
+    v_tax_amount NUMERIC(10,2);
+    v_total NUMERIC(10,2);
+    v_hour INT;
+BEGIN
+    SELECT 
+        t.id, t.capacity_liters, t.water_type, t.base_price, t.price_per_km,
+        t.current_location, t.vehicle_number, t.driver_name,
+        s.business_name AS supplier_name
+    INTO v_tanker
+    FROM public.tankers t
+    JOIN public.suppliers s ON s.id = t.supplier_id
+    WHERE t.id = p_tanker_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Tanker not found or unavailable';
+    END IF;
+
+    v_dist_km := ROUND(((ST_Distance(
+        v_tanker.current_location,
+        ST_SetSRID(ST_MakePoint(p_delivery_lng, p_delivery_lat), 4326)::geography
+    ) * 1.25) / 1000.0)::numeric, 2);
+
+    v_eta_min := GREATEST(5, ROUND(6 + (v_dist_km * 3.3))::int);
+
+    v_base_price := v_tanker.base_price;
+    v_delivery_charge := ROUND((v_dist_km * v_tanker.price_per_km)::numeric, 2);
+
+    v_hour := EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'Asia/Kolkata'))::int;
+    IF v_hour >= 18 AND v_hour <= 22 THEN
+        v_surcharge := ROUND((v_base_price * 0.10)::numeric, 2);
+    END IF;
+
+    v_tax_amount := ROUND(((v_base_price + v_delivery_charge + v_surcharge) * 0.05)::numeric, 2);
+    v_total := ROUND(v_base_price + v_delivery_charge + v_surcharge + v_tax_amount, 2);
+
+    RETURN QUERY
+    SELECT 
+        v_tanker.id,
+        v_tanker.supplier_name,
+        v_tanker.vehicle_number,
+        v_tanker.capacity_liters,
+        v_tanker.water_type,
+        v_dist_km,
+        v_eta_min,
+        v_base_price,
+        v_delivery_charge,
+        v_surcharge,
+        v_tax_amount,
+        v_total;
+END;
+$$;
+
+-- 20d. create_booking_atomic
+CREATE OR REPLACE FUNCTION public.create_booking_atomic(
+    p_tanker_id uuid,
+    p_customer_id uuid,
+    p_delivery_address text,
+    p_delivery_lat double precision,
+    p_delivery_lng double precision,
+    p_payment_preference text DEFAULT 'upi'::text
+)
+RETURNS TABLE(booking_id uuid, booking_reference text, status booking_status, delivery_pin text, final_payable_amount numeric)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_tanker RECORD;
+    v_quote RECORD;
+    v_supplier RECORD;
+    v_ref TEXT;
+    v_pin VARCHAR(4);
+    v_booking_id UUID;
+    v_pref payment_preference;
+BEGIN
+    IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' AND auth.uid() != p_customer_id THEN
+        RAISE EXCEPTION 'Unauthorized: You can only create bookings for your own customer account.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    SELECT * INTO v_tanker
+    FROM public.tankers
+    WHERE id = p_tanker_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Tanker not found';
+    END IF;
+
+    IF v_tanker.is_available = FALSE OR v_tanker.is_online = FALSE THEN
+        RAISE EXCEPTION 'This tanker has just been booked by another customer. Please choose another nearby tanker.';
+    END IF;
+
+    SELECT * INTO v_supplier
+    FROM public.suppliers
+    WHERE id = v_tanker.supplier_id;
+
+    BEGIN
+        v_pref := p_payment_preference::payment_preference;
+    EXCEPTION WHEN OTHERS THEN
+        v_pref := 'upi'::payment_preference;
+    END;
+
+    SELECT * INTO v_quote
+    FROM public.calculate_booking_quote(p_tanker_id, p_delivery_lat, p_delivery_lng);
+
+    v_pin := LPAD(FLOOR(RANDOM() * 9000 + 1000)::text, 4, '0');
+    v_ref := 'TKR-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::text, 5, '0');
+
+    INSERT INTO public.bookings (
+        booking_reference,
+        customer_id,
+        tanker_id,
+        supplier_id,
+        status,
+        capacity_liters,
+        water_type,
+        delivery_address,
+        delivery_latitude,
+        delivery_longitude,
+        delivery_coordinates,
+        delivery_pin,
+        delivery_distance_km,
+        estimated_arrival_minutes,
+        base_price,
+        delivery_charge,
+        surcharge,
+        tax_amount,
+        final_payable_amount,
+        payment_preference,
+        payment_status,
+        driver_phone,
+        driver_name,
+        vehicle_number,
+        supplier_name,
+        quote_expires_at
+    )
+    VALUES (
+        v_ref,
+        p_customer_id,
+        p_tanker_id,
+        v_tanker.supplier_id,
+        'pending'::booking_status,
+        v_quote.capacity_liters,
+        v_quote.water_type,
+        p_delivery_address,
+        p_delivery_lat,
+        p_delivery_lng,
+        ST_SetSRID(ST_MakePoint(p_delivery_lng, p_delivery_lat), 4326)::geography,
+        v_pin,
+        v_quote.distance_km,
+        v_quote.eta_minutes,
+        v_quote.base_price,
+        v_quote.delivery_charge,
+        v_quote.surcharge,
+        v_quote.tax_amount,
+        v_quote.final_payable_amount,
+        v_pref,
+        CASE WHEN v_pref = 'cash_on_delivery' THEN 'pending_delivery' ELSE 'authorized' END,
+        v_tanker.driver_phone,
+        v_tanker.driver_name,
+        v_tanker.vehicle_number,
+        COALESCE(v_supplier.business_name, v_quote.supplier_name, 'Marol Potable Water Hub'),
+        NOW() + INTERVAL '10 minutes'
+    )
+    RETURNING id INTO v_booking_id;
+
+    UPDATE public.tankers
+    SET is_available = FALSE,
+        updated_at = NOW()
+    WHERE id = p_tanker_id;
+
+    RETURN QUERY
+    SELECT 
+        v_booking_id,
+        v_ref,
+        'pending'::booking_status,
+        v_pin::text,
+        v_quote.final_payable_amount;
+END;
+$$;
+
+-- 20e. cancel_booking_atomic
+CREATE OR REPLACE FUNCTION public.cancel_booking_atomic(
+    p_booking_id uuid,
+    p_reason text DEFAULT 'Customer requested cancellation'::text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_b RECORD;
+BEGIN
+    SELECT * INTO v_b
+    FROM public.bookings
+    WHERE id = p_booking_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking not found';
+    END IF;
+
+    IF v_b.status IN ('delivering', 'delivered', 'cancelled') THEN
+        RAISE EXCEPTION 'Cannot cancel booking in % status', v_b.status;
+    END IF;
+
+    UPDATE public.bookings
+    SET status = 'cancelled'::booking_status,
+        cancellation_reason = p_reason,
+        cancelled_at = NOW(),
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    UPDATE public.tankers
+    SET is_available = TRUE,
+        updated_at = NOW()
+    WHERE id = v_b.tanker_id;
+
+    RETURN TRUE;
+END;
+$$;
+
+-- 20f. customer_cancel_booking_with_policy
+CREATE OR REPLACE FUNCTION public.customer_cancel_booking_with_policy(
+    p_booking_id uuid,
+    p_reason text DEFAULT 'Customer cancellation'::text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_b RECORD;
+    v_fee NUMERIC(10,2) := 0.00;
+BEGIN
+    SELECT * INTO v_b
+    FROM public.bookings
+    WHERE id = p_booking_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
+    END IF;
+
+    IF v_b.status = 'arrived' THEN
+        v_fee := 200.00;
+    ELSIF v_b.status = 'en_route' THEN
+        v_fee := 150.00;
+    END IF;
+
+    UPDATE public.bookings
+    SET status = 'cancelled'::booking_status,
+        cancellation_reason = p_reason,
+        cancelled_at = NOW(),
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    UPDATE public.tankers
+    SET is_available = TRUE,
+        updated_at = NOW()
+    WHERE id = v_b.tanker_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'cancellation_fee', v_fee,
+        'message', 'Booking cancelled successfully'
+    );
+END;
+$$;
+
+-- 20g. verify_and_reconcile_payment
+CREATE OR REPLACE FUNCTION public.verify_and_reconcile_payment(
+    p_booking_id uuid,
+    p_gateway_order_id text,
+    p_gateway_payment_id text,
+    p_gateway_signature text,
+    p_verified boolean DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_payment RECORD;
+BEGIN
+    SELECT * INTO v_payment
+    FROM public.payments
+    WHERE booking_id = p_booking_id
+      AND gateway_order_id = p_gateway_order_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Payment record not found for order reference.');
+    END IF;
+
+    UPDATE public.payments
+    SET status = 'captured',
+        gateway_payment_id = p_gateway_payment_id,
+        gateway_signature = p_gateway_signature
+    WHERE id = v_payment.id;
+
+    UPDATE public.bookings
+    SET payment_status = 'paid'
+    WHERE id = p_booking_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'payment_id', v_payment.id,
+        'order_id', p_gateway_order_id,
+        'status', 'captured'
+    );
+END;
+$$;
+
+-- 20h. driver_complete_delivery_with_meter
+CREATE OR REPLACE FUNCTION public.driver_complete_delivery_with_meter(
+    p_booking_id uuid,
+    p_delivery_pin text,
+    p_flow_start numeric DEFAULT NULL::numeric,
+    p_flow_end numeric DEFAULT NULL::numeric,
+    p_delivered_liters integer DEFAULT NULL::integer,
+    p_meter_photo_url text DEFAULT NULL::text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_b RECORD;
+    v_driver_phone TEXT;
+    v_calc_liters INT;
+    v_shortfall INT := 0;
+    v_refund_amount NUMERIC(10, 2) := 0.00;
+    v_final_settled_amount NUMERIC(10, 2);
+    v_driver_share NUMERIC(10, 2);
+BEGIN
+    SELECT * INTO v_b
+    FROM public.bookings
+    WHERE id = p_booking_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking not found' USING ERRCODE = '02000';
+    END IF;
+
+    IF v_b.delivery_pin != p_delivery_pin THEN
+        RAISE EXCEPTION 'Invalid Delivery PIN. Ask customer for the 4-digit code shown on their tracking screen.'
+            USING ERRCODE = '28000';
+    END IF;
+
+    v_driver_phone := COALESCE(v_b.driver_phone, '+919820011001');
+
+    IF p_flow_end IS NOT NULL AND p_flow_start IS NOT NULL AND p_flow_end >= p_flow_start THEN
+        v_calc_liters := ROUND(p_flow_end - p_flow_start);
+    ELSE
+        v_calc_liters := COALESCE(p_delivered_liters, v_b.capacity_liters);
+    END IF;
+
+    IF v_calc_liters < v_b.capacity_liters THEN
+        v_shortfall := v_b.capacity_liters - v_calc_liters;
+        v_refund_amount := ROUND((v_b.final_payable_amount / v_b.capacity_liters) * v_shortfall, 2);
+        v_final_settled_amount := v_b.final_payable_amount - v_refund_amount;
+    ELSE
+        v_shortfall := 0;
+        v_refund_amount := 0.00;
+        v_final_settled_amount := v_b.final_payable_amount;
+    END IF;
+
+    v_driver_share := ROUND(v_final_settled_amount * 0.85, 2);
+
+    UPDATE public.bookings
+    SET 
+        status = 'delivered'::booking_status,
+        flow_meter_start = p_flow_start,
+        flow_meter_end = p_flow_end,
+        delivered_liters = v_calc_liters,
+        volume_discrepancy_liters = v_shortfall,
+        final_payable_amount = v_final_settled_amount,
+        meter_photo_url = p_meter_photo_url,
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    UPDATE public.tankers
+    SET is_available = TRUE,
+        updated_at = NOW()
+    WHERE id = v_b.tanker_id;
+
+    INSERT INTO public.driver_payout_ledger (
+        driver_phone,
+        booking_id,
+        entry_type,
+        amount,
+        notes
+    ) VALUES (
+        v_driver_phone,
+        p_booking_id,
+        'delivery_earnings',
+        v_driver_share,
+        'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'delivered_liters', v_calc_liters,
+        'shortfall_liters', v_shortfall,
+        'refund_amount', v_refund_amount,
+        'final_amount', v_final_settled_amount,
+        'driver_earnings', v_driver_share
+    );
+END;
+$$;
+
+-- 20i. supplier_onboard_tanker
+CREATE OR REPLACE FUNCTION public.supplier_onboard_tanker(
+    p_supplier_id uuid,
+    p_vehicle_number text,
+    p_capacity_liters integer,
+    p_water_type text,
+    p_driver_name text,
+    p_driver_phone text,
+    p_base_price numeric DEFAULT 750.00,
+    p_price_per_km numeric DEFAULT 25.00
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_clean_veh TEXT;
+    v_tanker_id UUID;
+    v_default_lat DOUBLE PRECISION := 19.1171;
+    v_default_lng DOUBLE PRECISION := 72.8809;
+BEGIN
+    v_clean_veh := UPPER(TRIM(p_vehicle_number));
+
+    IF LENGTH(v_clean_veh) < 8 THEN
+        RAISE EXCEPTION 'Invalid Vehicle Number (e.g. MH-02-TC-5001).' USING ERRCODE = '22023';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.tankers WHERE vehicle_number = v_clean_veh) THEN
+        RAISE EXCEPTION 'Duplicate Vehicle: A tanker with registration % is already onboarded.', v_clean_veh
+            USING ERRCODE = '23505';
+    END IF;
+
+    INSERT INTO public.tankers (
+        supplier_id,
+        vehicle_number,
+        capacity_liters,
+        water_type,
+        driver_name,
+        driver_phone,
+        base_price,
+        price_per_km,
+        is_online,
+        is_available,
+        latitude,
+        longitude,
+        current_location
+    ) VALUES (
+        p_supplier_id,
+        v_clean_veh,
+        GREATEST(1000, p_capacity_liters),
+        COALESCE(p_water_type, 'Potable (Drinking)'),
+        TRIM(p_driver_name),
+        TRIM(p_driver_phone),
+        GREATEST(100.00, p_base_price),
+        GREATEST(10.00, p_price_per_km),
+        TRUE,
+        TRUE,
+        v_default_lat,
+        v_default_lng,
+        ST_SetSRID(ST_MakePoint(v_default_lng, v_default_lat), 4326)::geography
+    ) RETURNING id INTO v_tanker_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'tanker_id', v_tanker_id,
+        'vehicle_number', v_clean_veh,
+        'capacity_liters', p_capacity_liters
+    );
+END;
+$$;
+
+-- 20j. record_driver_location_ping
+CREATE OR REPLACE FUNCTION public.record_driver_location_ping(
+    p_booking_id uuid,
+    p_lat double precision,
+    p_lng double precision,
+    p_heading double precision DEFAULT 0,
+    p_speed_kmh double precision DEFAULT 0
+)
+RETURNS TABLE(valid boolean, distance_remaining_km numeric, eta_minutes integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_booking RECORD;
+    v_dist_km NUMERIC(5,2);
+    v_eta INT;
+BEGIN
+    SELECT * INTO v_booking
+    FROM public.bookings
+    WHERE id = p_booking_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking not found';
+    END IF;
+
+    IF p_speed_kmh > 120 THEN
+        RETURN QUERY SELECT FALSE, 0.0::numeric(5,2), 0;
+        RETURN;
+    END IF;
+
+    v_dist_km := ROUND(((ST_Distance(
+        ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography,
+        v_booking.delivery_coordinates
+    ) * 1.25) / 1000.0)::numeric, 2);
+
+    v_eta := GREATEST(1, ROUND(v_dist_km * 3.3)::int);
+
+    INSERT INTO public.tracking_breadcrumbs (
+        booking_id, latitude, longitude, heading, speed_kmh
+    )
+    VALUES (
+        p_booking_id, p_lat, p_lng, p_heading, p_speed_kmh
+    );
+
+    UPDATE public.tankers
+    SET latitude = p_lat,
+        longitude = p_lng,
+        heading_degrees = p_heading,
+        last_ping_at = NOW()
+    WHERE id = v_booking.tanker_id;
+
+    RETURN QUERY
+    SELECT TRUE, v_dist_km, v_eta;
+END;
+$$;
+
+-- 20k. get_live_demand_deficit_zones (Dynamic Uber/Ola Demand Deficit Engine)
+CREATE OR REPLACE FUNCTION public.get_live_demand_deficit_zones()
+RETURNS TABLE (
+    id UUID,
+    zone_name TEXT,
+    center_lat DOUBLE PRECISION,
+    center_lng DOUBLE PRECISION,
+    radius_km NUMERIC,
+    online_fleet_count INT,
+    available_fleet_count INT,
+    active_deliveries INT,
+    deficit_percentage INT,
+    deficit_level TEXT,
+    color TEXT,
+    radius_pixels INT
+)
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH zone_stats AS (
+        SELECT 
+            sz.id,
+            sz.zone_name,
+            sz.center_lat,
+            sz.center_lng,
+            sz.radius_km,
+            sz.minimum_fleet_density,
+            COALESCE((
+                SELECT COUNT(*)::INT
+                FROM public.tankers t
+                WHERE t.is_online = TRUE
+                  AND ST_DWithin(
+                      ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography,
+                      ST_SetSRID(ST_MakePoint(sz.center_lng, sz.center_lat), 4326)::geography,
+                      (sz.radius_km * 1000)::DOUBLE PRECISION
+                  )
+            ), 0) AS online_fleet,
+            COALESCE((
+                SELECT COUNT(*)::INT
+                FROM public.tankers t
+                WHERE t.is_online = TRUE AND t.is_available = TRUE
+                  AND ST_DWithin(
+                      ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography,
+                      ST_SetSRID(ST_MakePoint(sz.center_lng, sz.center_lat), 4326)::geography,
+                      (sz.radius_km * 1000)::DOUBLE PRECISION
+                  )
+            ), 0) AS avail_fleet,
+            COALESCE((
+                SELECT COUNT(*)::INT
+                FROM public.bookings b
+                WHERE b.status IN ('pending', 'accepted', 'driver_assigned', 'en_route', 'arrived', 'delivering')
+                  AND ST_DWithin(
+                      b.delivery_coordinates,
+                      ST_SetSRID(ST_MakePoint(sz.center_lng, sz.center_lat), 4326)::geography,
+                      (sz.radius_km * 1000)::DOUBLE PRECISION
+                  )
+            ), 0) AS active_demand
+        FROM public.service_zones sz
+        WHERE sz.is_operational = TRUE
+    ),
+    calculated_deficit AS (
+        SELECT 
+            zs.id,
+            zs.zone_name,
+            zs.center_lat,
+            zs.center_lng,
+            zs.radius_km,
+            zs.online_fleet,
+            zs.avail_fleet,
+            zs.active_demand,
+            CASE 
+                -- If high active demand with constrained available fleet
+                WHEN zs.avail_fleet = 0 AND zs.active_demand > 0 THEN 90
+                WHEN zs.active_demand >= zs.avail_fleet * 3 THEN 84
+                WHEN zs.active_demand >= zs.avail_fleet * 2 THEN 78
+                WHEN zs.active_demand > zs.avail_fleet THEN 68
+                WHEN zs.active_demand = zs.avail_fleet AND zs.active_demand > 0 THEN 52
+                WHEN zs.avail_fleet > zs.active_demand AND zs.avail_fleet >= zs.minimum_fleet_density THEN 25
+                ELSE 35
+            END AS raw_deficit
+        FROM zone_stats zs
+    )
+    SELECT 
+        cd.id,
+        cd.zone_name,
+        cd.center_lat,
+        cd.center_lng,
+        cd.radius_km,
+        cd.online_fleet,
+        cd.avail_fleet,
+        cd.active_demand,
+        cd.raw_deficit,
+        CASE 
+            WHEN cd.raw_deficit >= 80 THEN 'SEVERE (' || cd.raw_deficit || '%)'
+            WHEN cd.raw_deficit >= 70 THEN 'CRITICAL (' || cd.raw_deficit || '%)'
+            WHEN cd.raw_deficit >= 60 THEN 'ELEVATED (' || cd.raw_deficit || '%)'
+            WHEN cd.raw_deficit >= 45 THEN 'MODERATE (' || cd.raw_deficit || '%)'
+            ELSE 'OPTIMAL (' || cd.raw_deficit || '%)'
+        END AS deficit_level,
+        CASE 
+            WHEN cd.raw_deficit >= 80 THEN '#DC2626'
+            WHEN cd.raw_deficit >= 70 THEN '#EA580C'
+            WHEN cd.raw_deficit >= 60 THEN '#D97706'
+            WHEN cd.raw_deficit >= 45 THEN '#EAB308'
+            ELSE '#16A34A'
+        END AS color,
+        LEAST(60, GREATEST(32, (cd.raw_deficit * 0.55)::INT)) AS radius_pixels
+    FROM calculated_deficit cd
+    ORDER BY cd.raw_deficit DESC;
+END;
+$$;
+
+-- 20l. Admin dashboard metrics
+CREATE OR REPLACE FUNCTION public.get_admin_dashboard_metrics()
+RETURNS TABLE (
+    gross_volume_gmv NUMERIC(12,2),
+    platform_revenue NUMERIC(12,2),
+    total_bookings INT,
+    completed_deliveries INT,
+    active_tankers_online INT,
+    total_suppliers INT,
+    pending_kyc_count INT,
+    total_liters_delivered BIGINT,
+    network_surge_multiplier NUMERIC(3,2)
+)
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_total_gmv NUMERIC(12,2) := 0.00;
+    v_platform_rev NUMERIC(12,2) := 0.00;
+    v_total_b INT := 0;
+    v_comp_b INT := 0;
+    v_tankers_online INT := 0;
+    v_suppliers INT := 0;
+    v_pending_kyc INT := 0;
+    v_liters BIGINT := 0;
+    v_surge NUMERIC(3,2) := 1.25;
+BEGIN
+    SELECT COALESCE(SUM(final_payable_amount), 0.00), COUNT(*)
+    INTO v_total_gmv, v_total_b
+    FROM public.bookings;
+
+    v_platform_rev := ROUND(v_total_gmv * 0.10, 2);
+
+    SELECT COUNT(*), COALESCE(SUM(delivered_liters), 0)
+    INTO v_comp_b, v_liters
+    FROM public.bookings
+    WHERE status = 'delivered';
+
+    SELECT COUNT(*) INTO v_tankers_online
+    FROM public.tankers
+    WHERE is_online = TRUE;
+
+    SELECT COUNT(*) INTO v_suppliers
+    FROM public.suppliers;
+
+    SELECT COUNT(*) INTO v_pending_kyc
+    FROM public.suppliers
+    WHERE verification_status = 'pending_review';
+
+    RETURN QUERY
+    SELECT 
+        v_total_gmv,
+        v_platform_rev,
+        v_total_b,
+        v_comp_b,
+        v_tankers_online,
+        v_suppliers,
+        v_pending_kyc,
+        v_liters,
+        v_surge;
+END;
+$$;
+
+-- ==============================================================================
+-- 21. ROW LEVEL SECURITY (RLS) POLICIES
+-- ==============================================================================
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_zones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tankers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tracking_breadcrumbs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.disputes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.emergency_dispatches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.corporate_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_pools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.community_pool_contributions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.driver_payout_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.water_quality_certificates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suspended_entities ENABLE ROW LEVEL SECURITY;
+
+-- 21a. Profiles
+CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Admins full read on profiles" ON public.profiles FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- 21b. Saved Addresses
+CREATE POLICY "Users can manage own addresses" ON public.saved_addresses FOR ALL USING (auth.uid() = user_id);
+
+-- 21c. Service Zones & Suppliers & Tankers (Publicly discoverable by authenticated users)
+CREATE POLICY "Public read on service_zones" ON public.service_zones FOR SELECT USING (TRUE);
+CREATE POLICY "Public read on suppliers" ON public.suppliers FOR SELECT USING (TRUE);
+CREATE POLICY "Public read on tankers" ON public.tankers FOR SELECT USING (TRUE);
+CREATE POLICY "Suppliers can update own tankers" ON public.tankers FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM public.suppliers s JOIN public.profiles p ON s.contact_phone = p.phone_number WHERE p.id = auth.uid() AND s.id = tankers.supplier_id)
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- 21d. Bookings (Strict Isolation)
+CREATE POLICY "Customers can view own bookings" ON public.bookings FOR SELECT USING (auth.uid() = customer_id);
+CREATE POLICY "Customers can insert own bookings" ON public.bookings FOR INSERT WITH CHECK (
+    auth.uid() = customer_id AND status = 'pending'::booking_status
+);
+CREATE POLICY "Customers can update own bookings" ON public.bookings FOR UPDATE USING (auth.uid() = customer_id) WITH CHECK (
+    auth.uid() = customer_id AND status IN ('pending'::booking_status, 'cancelled'::booking_status)
+);
+CREATE POLICY "Drivers can view assigned bookings" ON public.bookings FOR SELECT USING (
+    driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Drivers can update assigned bookings" ON public.bookings FOR UPDATE USING (
+    driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Suppliers can view hub bookings" ON public.bookings FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.suppliers s JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number) WHERE p.id = auth.uid() AND s.id = public.bookings.supplier_id)
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Admins have full access to bookings" ON public.bookings FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- 21e. Invoices, Payments, Notifications, Tracking
+CREATE POLICY "Users read own invoices" ON public.invoices FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.invoices.booking_id AND b.customer_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Users read own payments" ON public.payments FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.payments.booking_id AND b.customer_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Users read own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Tracking read by booking parties" ON public.tracking_breadcrumbs FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.tracking_breadcrumbs.booking_id AND (b.customer_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND (p.phone_number = b.driver_phone OR '+' || p.phone_number = b.driver_phone))))
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- 21f. Community Pools, Subscriptions & Emergency (Admin & Public read)
+CREATE POLICY "Public read community_pools" ON public.community_pools FOR SELECT USING (TRUE);
+CREATE POLICY "Public insert pool contributions" ON public.community_pool_contributions FOR INSERT WITH CHECK (TRUE);
+CREATE POLICY "Public read pool contributions" ON public.community_pool_contributions FOR SELECT USING (TRUE);
+CREATE POLICY "Public read water certificates" ON public.water_quality_certificates FOR SELECT USING (TRUE);
+CREATE POLICY "Admins full emergency dispatches" ON public.emergency_dispatches FOR ALL USING (TRUE);
+CREATE POLICY "Admins full corporate subscriptions" ON public.corporate_subscriptions FOR ALL USING (TRUE);
+CREATE POLICY "Admins full platform settings" ON public.platform_settings FOR ALL USING (TRUE);
+CREATE POLICY "Admins full audit logs" ON public.admin_audit_logs FOR ALL USING (TRUE);
+
+-- ==============================================================================
+-- 22. REALTIME PUBLICATION SETUP
+-- ==============================================================================
+ALTER TABLE public.tankers REPLICA IDENTITY FULL;
+ALTER TABLE public.bookings REPLICA IDENTITY FULL;
+ALTER TABLE public.notifications REPLICA IDENTITY FULL;
+ALTER TABLE public.tracking_breadcrumbs REPLICA IDENTITY FULL;
+ALTER TABLE public.emergency_dispatches REPLICA IDENTITY FULL;
+ALTER TABLE public.community_pools REPLICA IDENTITY FULL;
+ALTER TABLE public.community_pool_contributions REPLICA IDENTITY FULL;
+
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE 
+        public.tankers, 
+        public.bookings, 
+        public.notifications, 
+        public.tracking_breadcrumbs, 
+        public.emergency_dispatches, 
+        public.community_pools, 
+        public.community_pool_contributions;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+-- ==============================================================================
+-- 23. SEED REALISTIC MUMBAI / MAROL OPERATIONAL DATA
+-- ==============================================================================
+
+-- 23-zero. Synchronize profiles from auth.users
+INSERT INTO public.profiles (id, phone_number, full_name, role, is_onboarding_completed)
+SELECT 
+    u.id,
+    COALESCE(u.phone, u.raw_user_meta_data->>'phone_number', '+919999999999'),
+    COALESCE(u.raw_user_meta_data->>'full_name', 'Tankr Verified Member'),
+    COALESCE((u.raw_user_meta_data->>'role')::user_role, 'customer'),
+    TRUE
+FROM auth.users u
+ON CONFLICT (id) DO UPDATE SET
+    phone_number = EXCLUDED.phone_number,
+    is_onboarding_completed = TRUE;
+
+UPDATE public.profiles SET role = 'admin', full_name = 'Super Admin' WHERE phone_number LIKE '%8888888888';
+UPDATE public.profiles SET role = 'supplier', full_name = 'Marol Potable Water Hub' WHERE phone_number LIKE '%9999999999';
+UPDATE public.profiles SET role = 'driver', full_name = 'Rajesh Sharma' WHERE phone_number LIKE '%9000000001';
+UPDATE public.profiles SET role = 'driver', full_name = 'Suresh Shinde' WHERE phone_number LIKE '%9000000002';
+UPDATE public.profiles SET role = 'driver', full_name = 'Sunil Pawar' WHERE phone_number LIKE '%9000000003';
+UPDATE public.profiles SET role = 'supplier', full_name = 'Marol Express Water Logistics' WHERE phone_number LIKE '%9000000004';
+UPDATE public.profiles SET role = 'customer', full_name = 'Vikram Malhotra' WHERE phone_number LIKE '%9876543210' OR phone_number LIKE '%9876572207';
+UPDATE public.profiles SET role = 'customer', full_name = 'Anand Swamy' WHERE phone_number LIKE '%9845012345';
+
+-- 23a. Service Zones (Mumbai Metro Hubs)
+INSERT INTO public.service_zones (id, zone_name, center_lat, center_lng, radius_km, traffic_multiplier, minimum_fleet_density, is_operational)
+VALUES 
+    ('74c0c1db-242f-48b2-86ef-b30725add5f9', 'Marol / MIDC Andheri East', 19.1171, 72.8809, 5.0, 1.25, 2, TRUE),
+    ('845fabe8-8627-42c1-bad0-022f165b64e5', 'Sakinaka / Asalpha', 19.1068, 72.8877, 4.5, 1.30, 2, TRUE),
+    ('dbe6cf83-1daf-4ab6-92fb-b1cbb3b7cbd8', 'SEEPZ / Mahakali Caves', 19.1280, 72.8790, 4.5, 1.15, 2, TRUE),
+    ('3ccde0ae-ef59-4b95-bfaf-e40d9affe738', 'Powai / Hiranandani Gardens', 19.1197, 72.9051, 6.0, 1.10, 2, TRUE),
+    ('fd8c9aca-8005-49bd-88ae-032bf628780b', 'Chakala / JB Nagar / Airport', 19.1114, 72.8617, 4.5, 1.05, 2, TRUE),
+    ('8c3deeae-796c-4ee6-af1a-2a551ac1fed8', 'Chandivali / Raheja Vihar', 19.1128, 72.8988, 4.0, 1.10, 2, TRUE)
+ON CONFLICT (zone_name) DO UPDATE SET 
+    center_lat = EXCLUDED.center_lat,
+    center_lng = EXCLUDED.center_lng,
+    is_operational = TRUE;
+
+-- 23b. Suppliers
+INSERT INTO public.suppliers (id, business_name, contact_phone, is_verified, verification_status, rating, total_deliveries, water_source, gstin)
+VALUES 
+    ('addd79a1-bdf1-459d-a1cc-046a424b19b9', 'Marol Potable Water Hub (MIDC Andheri)', '+919999999999', TRUE, 'verified', 4.9, 342, 'BMC Bhandup Potable Filtration Reservoir', '276E9AC2576C1Z5'),
+    ('beee79a1-bdf1-459d-a1cc-046a424b19b0', 'Marol Express Water Logistics', '+919000000004', TRUE, 'verified', 4.8, 280, 'BMC Bhandup Potable Filtration Reservoir', '2748B1EDA8D01Z5')
+ON CONFLICT (id) DO UPDATE SET 
+    business_name = EXCLUDED.business_name,
+    is_verified = TRUE,
+    verification_status = 'verified';
+
+-- 23c. Tankers
+INSERT INTO public.tankers (
+    id, supplier_id, vehicle_number, driver_name, driver_phone, capacity_liters,
+    water_type, base_price, price_per_km, is_available, is_online,
+    latitude, longitude, current_location, heading_degrees, gross_vehicle_weight_tonnes
+) VALUES 
+    ('415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-TC-5001', 'Rajesh Sharma', '+919820011001', 5000, 'Potable (Drinking)', 750.00, 25.00, TRUE, TRUE, 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, 90, 9.5),
+    ('d7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-TC-5002', 'Suresh Shinde', '+919820011002', 5000, 'Potable (Drinking)', 750.00, 25.00, TRUE, TRUE, 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, 120, 9.5),
+    ('1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-TN-1001', 'Sunil Pawar', '+919820011003', 10000, 'Potable (Drinking)', 1200.00, 30.00, TRUE, TRUE, 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, 180, 16.0),
+    ('f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-EQ-1201', 'Anand Kadam', '+919820011004', 12000, 'Potable (Drinking)', 1450.00, 35.00, TRUE, TRUE, 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, 45, 18.0),
+    ('ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'MH-02-HV-2002', 'Dhananjay Patil', '+919820011005', 20000, 'Potable (Drinking)', 2200.00, 45.00, TRUE, TRUE, 19.1197, 72.9051, ST_SetSRID(ST_MakePoint(72.9051, 19.1197), 4326)::geography, 270, 24.0),
+    ('3dfcbb4f-77ae-4f6c-94e8-8b9393ebc5e9', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'MH-02-MN-1002', 'Venkatesh Parab', '+919820011006', 2000, 'Filtered Borewell', 450.00, 20.00, TRUE, TRUE, 19.1114, 72.8617, ST_SetSRID(ST_MakePoint(72.8617, 19.1114), 4326)::geography, 310, 5.5)
+ON CONFLICT (vehicle_number) DO UPDATE SET 
+    latitude = EXCLUDED.latitude,
+    longitude = EXCLUDED.longitude,
+    current_location = EXCLUDED.current_location,
+    is_available = TRUE,
+    is_online = TRUE;
+
+-- 23d. Water Quality Certificates
+INSERT INTO public.water_quality_certificates (supplier_id, water_source, tds_ppm, ph_level, lab_name, certified_at, valid_until, is_active)
+VALUES 
+    ('addd79a1-bdf1-459d-a1cc-046a424b19b9', 'BMC Bhandup Potable Filtration Reservoir', 165, 7.2, 'Envirocare Laboratories Mumbai (NABL Accredited)', CURRENT_DATE, CURRENT_DATE + INTERVAL '90 days', TRUE),
+    ('beee79a1-bdf1-459d-a1cc-046a424b19b0', 'BMC Bhandup Potable Filtration Reservoir', 172, 7.3, 'Geo-Chem Laboratories (NABL Accredited)', CURRENT_DATE, CURRENT_DATE + INTERVAL '90 days', TRUE);
+
+-- 23e. Emergency Dispatches
+INSERT INTO public.emergency_dispatches (id, institution_name, institution_type, contact_person, contact_phone, delivery_address, latitude, longitude, required_liters, water_type, sla_minutes, status, vehicle_number, driver_name, driver_phone)
+VALUES 
+    ('46e0f9ca-5999-4cca-a6f5-82f287d6177b', 'SevenHills Hospital (Marol)', 'hospital_dialysis', 'Dr. Hemant Deshmukh (Dialysis Dir.)', '+919820155001', 'Marol Maroshi Road, Andheri East, Mumbai 400059', 19.1235, 72.8815, 20000, 'Potable (Drinking)', 20, 'en_route', 'MH-02-HV-2002', 'Dhananjay Patil', '+919820011005'),
+    ('b38f888c-9a4f-4d43-8551-ff7cbb7a1dfa', 'Holy Spirit Hospital ICU (Andheri East)', 'icu_critical', 'Dr. Sunita Fernandes (ICU Incharge)', '+919820155002', 'Mahakali Caves Road, Andheri East, Mumbai 400093', 19.1250, 72.8680, 10000, 'Potable (Drinking)', 20, 'priority_queued', 'MH-02-TN-1001', 'Sunil Pawar', '+919820011003'),
+    ('11ecae64-bbcf-4ff3-9aa0-8bb3cb3d95ae', 'Dr. L H Hiranandani Hospital (Powai)', 'maternity_emergency', 'Sister Joyce (Emergency Operations)', '+919820155003', 'Hillside Avenue, Hiranandani Gardens, Powai, Mumbai 400076', 19.1205, 72.9120, 10000, 'Potable (Drinking)', 20, 'priority_queued', 'MH-02-TC-5002', 'Suresh Shinde', '+919820011002')
+ON CONFLICT (id) DO NOTHING;
+
+-- 23f. Corporate Subscriptions
+INSERT INTO public.corporate_subscriptions (id, client_name, category, contact_person, contact_phone, delivery_address, latitude, longitude, daily_liters, frequency_per_day, preferred_time_slot, monthly_rate, status, assigned_supplier_name)
+VALUES 
+    ('6dc192d9-89b1-4b1a-8675-d99a686ba00e', 'Boomerang Business Park', 'tech_park', 'Rajesh Nair (Estate Head)', '+919820011221', 'Chandivali Farm Road, Andheri East, Mumbai 400072', 19.1128, 72.8988, 30000, 2, '05:30 AM - 07:30 AM', 125000.00, 'active', 'Marol Potable Water Hub (MIDC Andheri)'),
+    ('2f89ca91-11ee-48f8-8bb0-0199fbaaeef1', 'SEEPZ Special Economic Zone (Gems & Jewelry)', 'sez_complex', 'Mehul Mehta (Ops Director)', '+919820011222', 'Gate No 1, SEEPZ, Andheri East, Mumbai 400096', 19.1280, 72.8790, 40000, 3, '06:00 AM - 08:30 AM', 160000.00, 'active', 'Marol Express Water Logistics'),
+    ('99ecfa44-a1bf-4df9-8ca0-33bbdeea9901', 'Hiranandani Business Park (Powai)', 'tech_park', 'Ananya Sengupta (Facilities Manager)', '+919820011223', 'Ventura Building, Central Ave, Powai, Mumbai 400076', 19.1197, 72.9051, 50000, 4, '05:00 AM - 09:00 AM', 195000.00, 'active', 'Marol Potable Water Hub (MIDC Andheri)'),
+    ('55bba911-33cf-4ee0-99aa-77dcbaae1199', 'Lotus Corporate Park (Western Express Hwy)', 'corporate_tower', 'Girish Chheda (Estate Manager)', '+919820011224', 'Laxmi Nagar, Goregaon-Andheri Link, Mumbai 400063', 19.1380, 72.8560, 20000, 2, '07:00 AM - 09:00 AM', 88000.00, 'active', 'Marol Express Water Logistics')
+ON CONFLICT (id) DO NOTHING;
+
+-- 23g. Community Pools
+INSERT INTO public.community_pools (id, pool_code, community_name, delivery_address, latitude, longitude, target_liters, target_amount, collected_amount, status)
+VALUES 
+    ('55dca9e1-22fe-4aa9-81cb-98eaee910011', 'POOL-MAROL-404', 'Marol Hill View Housing Society', 'Marol Military Road, Andheri East, Mumbai 400059', 19.1171, 72.8809, 20000, 2400.00, 1800.00, 'collecting'),
+    ('66edba44-33df-4bb0-92dc-09fbfe020022', 'POOL-RAHEJA-202', 'Raheja Vihar Complex Wing C', 'Chandivali Farm Road, Andheri East, Mumbai 400072', 19.1128, 72.8988, 20000, 2400.00, 2400.00, 'dispatched'),
+    ('77feea55-44ef-4cc1-a3ed-10acaf130033', 'POOL-HIRAN-101', 'Hiranandani Glen Classic', 'Ridge Road, Powai, Mumbai 400076', 19.1197, 72.9051, 20000, 2400.00, 1200.00, 'collecting')
+ON CONFLICT (pool_code) DO NOTHING;
+
+-- 23h. Community Pool Contributions
+INSERT INTO public.community_pool_contributions (pool_id, contributor_name, flat_number, amount, payment_status)
+VALUES 
+    ('55dca9e1-22fe-4aa9-81cb-98eaee910011', 'Rohan Verma', 'Flat 401', 600.00, 'paid'),
+    ('55dca9e1-22fe-4aa9-81cb-98eaee910011', 'Pooja Kulkarni', 'Flat 402', 600.00, 'paid'),
+    ('55dca9e1-22fe-4aa9-81cb-98eaee910011', 'Kunal Merchant', 'Flat 503', 600.00, 'paid');
+
+-- 23i. Active Demand Bookings (Generating Realistic Hotspots for the Uber/Ola Heatmap)
+-- Marol has 5 active bookings (creating high demand)
+INSERT INTO public.bookings (
+    id, booking_reference, customer_id, tanker_id, supplier_id, status, capacity_liters, water_type,
+    delivery_address, delivery_latitude, delivery_longitude, delivery_coordinates, delivery_pin,
+    delivery_distance_km, estimated_arrival_minutes, base_price, delivery_charge, surcharge, tax_amount,
+    final_payable_amount, payment_preference, payment_status, driver_name, driver_phone, vehicle_number,
+    supplier_name, quote_expires_at
+) VALUES 
+    ('b1111111-1111-1111-1111-111111111111', 'TKR-2026-88101', '65cee903-3554-49b1-9729-55552d400087', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Marol Military Road, Andheri East', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 1.8, 12, 750, 45, 0, 39.75, 834.75, 'upi', 'paid', 'Rajesh Sharma', '+919820011001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
+    ('b2222222-2222-2222-2222-222222222222', 'TKR-2026-88102', '65cee903-3554-49b1-9729-55552d400087', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'driver_assigned', 5000, 'Potable (Drinking)', 'MIDC Central Road, Marol, Andheri East', 19.1185, 72.8795, ST_SetSRID(ST_MakePoint(72.8795, 19.1185), 4326)::geography, '7392', 2.1, 15, 750, 52, 0, 40.10, 842.10, 'upi', 'paid', 'Rajesh Sharma', '+919820011001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
+    ('b3333333-3333-3333-3333-333333333333', 'TKR-2026-88103', 'bca75357-3da7-4106-b7e8-bd275857efbc', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Marol Maroshi Rd, Near SevenHills', 19.1210, 72.8820, ST_SetSRID(ST_MakePoint(72.8820, 19.1210), 4326)::geography, '5129', 2.4, 18, 750, 60, 0, 40.50, 850.50, 'upi', 'authorized', 'Suresh Shinde', '+919820011002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
+    ('b4444444-4444-4444-4444-444444444444', 'TKR-2026-88104', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 10000, 'Potable (Drinking)', 'Sakinaka Metro Station, Andheri-Kurla Rd', 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, '8410', 3.2, 22, 1200, 96, 0, 64.80, 1360.80, 'upi', 'paid', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
+    ('b5555555-5555-5555-5555-555555555555', 'TKR-2026-88105', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'pending', 10000, 'Potable (Drinking)', 'Asalpha Village, Sakinaka, Mumbai', 19.1040, 72.8910, ST_SetSRID(ST_MakePoint(72.8910, 19.1040), 4326)::geography, '2941', 3.5, 25, 1200, 105, 0, 65.25, 1370.25, 'upi', 'authorized', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
+    ('b6666666-6666-6666-6666-666666666666', 'TKR-2026-88106', '65cee903-3554-49b1-9729-55552d400087', 'f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 12000, 'Potable (Drinking)', 'SEEPZ Gate 2, Mahakali Caves Rd', 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, '3321', 2.8, 19, 1450, 98, 0, 77.40, 1625.40, 'upi', 'paid', 'Anand Kadam', '+919820011004', 'MH-02-EQ-1201', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour')
+ON CONFLICT (id) DO UPDATE SET 
+    status = EXCLUDED.status,
+    delivery_address = EXCLUDED.delivery_address,
+    delivery_latitude = EXCLUDED.delivery_latitude,
+    delivery_longitude = EXCLUDED.delivery_longitude,
+    delivery_coordinates = EXCLUDED.delivery_coordinates;
+
+-- 23j. Platform Settings
+INSERT INTO public.platform_settings (key, value)
+VALUES 
+    ('pricing_config', '{"base_rate_5kl": 750, "price_per_km": 25, "gst_rate": 0.05, "platform_commission": 0.10, "peak_surge_multiplier": 1.25}'::jsonb),
+    ('compliance_rules', '{"max_tds_potable": 250, "min_ph": 6.5, "max_ph": 8.5, "cert_validity_days": 90}'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+-- 23k. Admin Audit Logs
+INSERT INTO public.admin_audit_logs (action, target_entity, target_id, details)
+VALUES 
+    ('SYSTEM_INIT', 'platform', 'qicoczialqxulcbipuix', '{"status": "ONLINE", "cluster": "BOM-1", "hub": "Marol MIDC", "active_zones": 6, "active_fleet": 6}'::jsonb);

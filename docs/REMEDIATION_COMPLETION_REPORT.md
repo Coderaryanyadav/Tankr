@@ -94,3 +94,4 @@ npx expo export --platform web
 **STAGING READY**
 
 All core architectural, security, RLS, and logic vulnerabilities identified during the audit have been remediated, verified against the live PostgreSQL database, and backed by automated regression tests.
+

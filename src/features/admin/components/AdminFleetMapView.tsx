@@ -51,7 +51,17 @@ function projectToTileCoords(lat: number, lng: number, zoom: number) {
 }
 
 // HTML Generator for Interactive Leaflet Web Map
-function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: number, cartoKey: string): string {
+function buildLeafletHtml(
+  initialLat: number,
+  initialLng: number,
+  initialZoom: number,
+  cartoKey: string,
+  initialFleet: any[] = [],
+  initialZones: any[] = [],
+  initialShowHeatmap: boolean = true,
+  initialSelectedCapacity: number | null = null,
+  initialSelectedTankerId: string | null = null
+): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -60,7 +70,7 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #map { width: 100%; height: 100%; background: #0F172A; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body, #map { width: 100%; height: 100%; background: #F1F5F9; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     
     /* Uber/Ola Surge Heatmap Glow & Pulse */
     .surge-heat-halo {
@@ -79,16 +89,16 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
       align-items: center;
       gap: 6px;
       padding: 5px 12px;
-      background: rgba(15, 23, 42, 0.94);
+      background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      border: 1.5px solid rgba(255, 255, 255, 0.3);
       border-radius: 24px;
       color: #FFFFFF;
       font-size: 11px;
       font-weight: 700;
       white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
       cursor: pointer;
       user-select: none;
       transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
@@ -111,7 +121,7 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
       font-weight: 700;
     }
 
-    /* Tanker Vehicle Markers */
+    /* Tanker Vehicle Markers Matching Mobile/Web Fleet Spec */
     .tanker-marker-wrap {
       display: flex;
       flex-direction: column;
@@ -132,7 +142,7 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
       border-radius: 16px;
       color: #FFFFFF;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
       border: 2px solid #FFFFFF;
     }
@@ -148,11 +158,11 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
       transform: scale(1.1);
     }
     .radar-pulse-dot {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: #FFFFFF;
-      box-shadow: 0 0 8px #FFFFFF;
+      box-shadow: 0 0 6px #FFFFFF;
     }
     .plate-chip {
       margin-top: 3px;
@@ -195,26 +205,15 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    var map = L.map('map', {
-      zoomControl: true,
-      attributionControl: false,
-      minZoom: 10,
-      maxZoom: 18,
-    }).setView([${initialLat}, ${initialLng}], ${initialZoom});
+    var map = null;
+    var heatmapGroup = null;
+    var tankersGroup = null;
 
-    L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${cartoKey}', {
-      subdomains: 'abcd',
-      maxZoom: 19,
-    }).addTo(map);
-
-    var heatmapGroup = L.layerGroup().addTo(map);
-    var tankersGroup = L.layerGroup().addTo(map);
-
-    var currentFleet = [];
-    var currentZones = [];
-    var currentShowHeatmap = true;
-    var currentSelectedCapacity = null;
-    var currentSelectedTankerId = null;
+    var currentFleet = ${JSON.stringify(initialFleet)};
+    var currentZones = ${JSON.stringify(initialZones)};
+    var currentShowHeatmap = ${initialShowHeatmap ? 'true' : 'false'};
+    var currentSelectedCapacity = ${initialSelectedCapacity !== null ? initialSelectedCapacity : 'null'};
+    var currentSelectedTankerId = ${initialSelectedTankerId ? `'${initialSelectedTankerId}'` : 'null'};
 
     function getZoneSurgeData(deficitPct) {
       if (deficitPct >= 80) return { multiplier: '⚡ 2.2x', label: 'CRISIS SURGE', color: '#DC2626', radius: 1400 };
@@ -225,19 +224,23 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
     }
 
     function renderHeatmap() {
+      if (!heatmapGroup) return;
       heatmapGroup.clearLayers();
       if (!currentShowHeatmap) return;
 
       currentZones.forEach(function(zone) {
-        var pct = zone.deficit_level ? parseInt(zone.deficit_level.replace(/[^0-9]/g, ''), 10) || 50 : 50;
+        var pct = zone.deficit_percentage !== undefined 
+          ? zone.deficit_percentage 
+          : (parseInt(String(zone.deficit_level || '').replace(/[^0-9]/g, ''), 10) || 50);
         var surge = getZoneSurgeData(pct);
-        var lat = zone.center_lat;
-        var lng = zone.center_lng;
+        var lat = parseFloat(zone.center_lat);
+        var lng = parseFloat(zone.center_lng);
+        var color = zone.color || surge.color;
 
         // 1. Outer Thermal Halo
         L.circle([lat, lng], {
           radius: surge.radius,
-          fillColor: surge.color,
+          fillColor: color,
           fillOpacity: 0.16,
           stroke: false,
           interactive: false,
@@ -246,20 +249,20 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
         // 2. Mid Density Ring
         L.circle([lat, lng], {
           radius: surge.radius * 0.55,
-          fillColor: surge.color,
+          fillColor: color,
           fillOpacity: 0.28,
-          color: surge.color,
+          color: color,
           weight: 1.5,
           dashArray: '5, 5',
           interactive: false,
         }).addTo(heatmapGroup);
 
         // 3. Floating Uber/Ola Surge Pill Marker
-        var shortName = zone.zone_name.split('/')[0].trim();
+        var shortName = (zone.zone_name || '').split('/')[0].trim();
         var pillHtml = '<div class="uber-surge-pill" onclick="onZoneClick(' + lat + ',' + lng + ')">' +
-          '<span class="surge-mult-badge" style="background:' + surge.color + '; color:#FFF;">' + surge.multiplier + '</span>' +
+          '<span class="surge-mult-badge" style="background:' + color + '; color:#FFF;">' + surge.multiplier + '</span>' +
           '<span>' + shortName + '</span>' +
-          '<span class="surge-deficit-tag" style="color:' + surge.color + ';">' + pct + '%</span>' +
+          '<span class="surge-deficit-tag" style="color:' + color + ';">' + pct + '%</span>' +
           '</div>';
 
         var surgeIcon = L.divIcon({
@@ -274,6 +277,7 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
     }
 
     function renderTankers() {
+      if (!tankersGroup) return;
       tankersGroup.clearLayers();
 
       currentFleet.forEach(function(tanker) {
@@ -282,7 +286,7 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
 
         var isSelected = tanker.id === currentSelectedTankerId;
         var isAvail = tanker.is_available;
-        var capText = tanker.capacity_liters >= 1000 ? (tanker.capacity_liters / 1000) + 'kL' : tanker.capacity_liters + 'L';
+        var capText = tanker.capacity_liters >= 1000 ? (tanker.capacity_liters / 1000) + 'k' : tanker.capacity_liters + 'L';
         var bubbleClass = isSelected ? 'bubble-selected' : (isAvail ? 'bubble-available' : 'bubble-busy');
 
         var markerHtml = '<div class="tanker-marker-wrap" onclick="onTankerClick(\'' + tanker.id + '\')">' +
@@ -301,7 +305,7 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
           iconAnchor: [45, 24],
         });
 
-        L.marker([tanker.latitude, tanker.longitude], {
+        L.marker([parseFloat(tanker.latitude), parseFloat(tanker.longitude)], {
           icon: tankerIcon,
           zIndexOffset: isSelected ? 2000 : 1000,
         }).addTo(tankersGroup);
@@ -313,14 +317,62 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
     };
 
     window.onZoneClick = function(lat, lng) {
-      map.flyTo([lat, lng], 15, { duration: 1.2 });
+      if (map) map.flyTo([lat, lng], 15, { duration: 1.2 });
     };
 
-    map.on('click', function(e) {
-      if (e.originalEvent.target.id === 'map' || (e.originalEvent.target.classList && e.originalEvent.target.classList.contains('leaflet-container'))) {
-        window.parent.postMessage({ type: 'DESELECT_TANKER' }, '*');
+    function initMap() {
+      if (typeof L === 'undefined') {
+        setTimeout(initMap, 50);
+        return;
       }
-    });
+      if (map) return;
+
+      try {
+        map = L.map('map', {
+          zoomControl: true,
+          attributionControl: false,
+          minZoom: 10,
+          maxZoom: 18,
+        }).setView([${initialLat}, ${initialLng}], ${initialZoom});
+
+        var cartoUrl = 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${cartoKey}';
+        var cartoLayer = L.tileLayer(cartoUrl, {
+          subdomains: 'abcd',
+          maxZoom: 19,
+        }).addTo(map);
+
+        cartoLayer.on('tileerror', function() {
+          if (!window._fallbackTriggered) {
+            window._fallbackTriggered = true;
+            console.warn('Carto tile error, fallback to OpenStreetMap');
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+          }
+        });
+
+        heatmapGroup = L.layerGroup().addTo(map);
+        tankersGroup = L.layerGroup().addTo(map);
+
+        map.on('click', function(e) {
+          if (e.originalEvent && (e.originalEvent.target.id === 'map' || (e.originalEvent.target.classList && e.originalEvent.target.classList.contains('leaflet-container')))) {
+            window.parent.postMessage({ type: 'DESELECT_TANKER' }, '*');
+          }
+        });
+
+        renderHeatmap();
+        renderTankers();
+
+        window.parent.postMessage({ type: 'MAP_READY' }, '*');
+      } catch (err) {
+        console.error('Failed to init Leaflet map:', err);
+      }
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      initMap();
+    } else {
+      window.addEventListener('load', initMap);
+    }
+    setTimeout(initMap, 100);
 
     window.addEventListener('message', function(event) {
       if (!event.data || typeof event.data !== 'object') return;
@@ -335,9 +387,9 @@ function buildLeafletHtml(initialLat: number, initialLng: number, initialZoom: n
         renderHeatmap();
         renderTankers();
       } else if (data.type === 'FLY_TO') {
-        map.flyTo([data.lat, data.lng], data.zoom || 15, { duration: 1.2 });
+        if (map) map.flyTo([data.lat, data.lng], data.zoom || 15, { duration: 1.2 });
       } else if (data.type === 'RECENTER') {
-        map.flyTo([${initialLat}, ${initialLng}], 13, { duration: 1 });
+        if (map) map.flyTo([${initialLat}, ${initialLng}], 13, { duration: 1 });
       }
     });
   </script>
@@ -405,6 +457,22 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
         }
       } else if (event.data.type === 'DESELECT_TANKER') {
         setSelectedTanker(null);
+      } else if (event.data.type === 'MAP_READY') {
+        try {
+          iframeRef.current?.contentWindow?.postMessage(
+            {
+              type: 'UPDATE_DATA',
+              fleetTankers: filteredTankers,
+              deficitZones,
+              showHeatmap,
+              selectedCapacity,
+              selectedTankerId: selectedTanker?.id,
+            },
+            '*'
+          );
+        } catch {
+          // Non-blocking sync
+        }
       }
     };
 
@@ -481,7 +549,17 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
 
   // Memoized HTML for Web Leaflet map
   const leafletHtml = useMemo(() => {
-    return buildLeafletHtml(centerLat, centerLng, zoom, CARTO_KEY);
+    return buildLeafletHtml(
+      centerLat,
+      centerLng,
+      zoom,
+      CARTO_KEY,
+      filteredTankers,
+      deficitZones,
+      showHeatmap,
+      selectedCapacity,
+      selectedTanker?.id || null
+    );
   }, [CARTO_KEY]);
 
   return (
@@ -989,7 +1067,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
     height: 520,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
   },
   mapWrapperDesktop: {
     height: 640,
@@ -1002,10 +1080,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
   },
   nativeNotice: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 13,
   },
 
@@ -1014,12 +1092,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     left: 20,
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#E2E8F0',
     ...shadows.floating,
     zIndex: 100,
   },
@@ -1032,19 +1110,22 @@ const styles = StyleSheet.create({
   legendTitle: {
     fontSize: 10,
     fontWeight: fontWeights.bold,
-    color: '#CBD5E1',
+    color: '#64748B',
     letterSpacing: 0.5,
   },
   legendScaleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   legendFleetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   legendScaleItem: {
     flexDirection: 'row',
@@ -1058,7 +1139,7 @@ const styles = StyleSheet.create({
   },
   legendItemText: {
     fontSize: 11,
-    color: '#E2E8F0',
+    color: '#334155',
     fontWeight: fontWeights.medium,
   },
 

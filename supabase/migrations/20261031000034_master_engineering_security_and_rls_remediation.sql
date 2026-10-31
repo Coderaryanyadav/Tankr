@@ -695,3 +695,4 @@ BEGIN
     SELECT TRUE, v_dist_km, v_eta;
 END;
 $$;
+

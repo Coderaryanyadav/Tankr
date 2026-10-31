@@ -187,7 +187,7 @@ export const AdminDashboardScreen: React.FC = () => {
           {/* System Status Pill */}
           <View style={styles.systemStatusPill}>
             <View style={styles.statusDotGreen} />
-            <Text style={styles.systemStatusText}>Cluster: BLR-1 (Production)</Text>
+            <Text style={styles.systemStatusText}>Cluster: BOM-1 (Mumbai Metro)</Text>
           </View>
 
           {/* Navigation Links (Scrollable for 10 items) */}
@@ -832,7 +832,7 @@ const styles = StyleSheet.create({
 
   // 1. LEFT SIDEBAR STYLES
   sidebar: {
-    width: 270,
+    width: 295,
     backgroundColor: '#0F172A',
     borderRightWidth: 1,
     borderRightColor: '#1E293B',
@@ -908,7 +908,7 @@ const styles = StyleSheet.create({
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 10,
     borderRadius: borderRadius.md,
     marginBottom: 4,
@@ -918,7 +918,7 @@ const styles = StyleSheet.create({
   },
   navItemText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: fontWeights.medium,
     color: '#94A3B8',
   },
@@ -928,9 +928,11 @@ const styles = StyleSheet.create({
   },
   navBadge: {
     backgroundColor: '#334155',
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
+    flexShrink: 0,
+    marginLeft: 6,
   },
   navBadgeActive: {
     backgroundColor: colors.primary,
