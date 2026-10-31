@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,12 +10,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { BottomSheet } from '../../../components/common/Overlay/BottomSheet';
 import { SavedAddress, useLocationStore } from '../../../stores/locationStore';
+import { AddAddressModal } from './AddAddressModal';
+import { confirmAction, notify } from '../../../utils/alertUtils';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
 interface SavedAddressesSheetProps {
   visible: boolean;
   onClose: () => void;
-  onAddNewAddress: () => void;
+  onAddNewAddress?: () => void;
   onSelectAddress: (address: SavedAddress) => void;
 }
 
@@ -26,7 +27,14 @@ export const SavedAddressesSheet: React.FC<SavedAddressesSheetProps> = ({
   onAddNewAddress,
   onSelectAddress,
 }) => {
-  const { savedAddresses, deleteSavedAddress, locateUserViaGps, isLocating } = useLocationStore();
+  const {
+    savedAddresses,
+    deleteSavedAddress,
+    locateUserViaGps,
+    setActiveLocation,
+    isLocating,
+  } = useLocationStore();
+  const [addModalVisible, setAddModalVisible] = useState(false);
 
   const getLabelIcon = (label: string) => {
     switch (label.toLowerCase()) {
@@ -44,7 +52,7 @@ export const SavedAddressesSheet: React.FC<SavedAddressesSheetProps> = ({
     if (res) {
       onClose();
     } else {
-      Alert.alert(
+      notify(
         'GPS Unavailable',
         'Could not fetch your GPS location. Please ensure location permissions are enabled or choose a saved address.'
       );
@@ -52,18 +60,32 @@ export const SavedAddressesSheet: React.FC<SavedAddressesSheetProps> = ({
   };
 
   const handleDelete = (addr: SavedAddress) => {
-    Alert.alert(
+    confirmAction(
       'Delete Address',
       `Are you sure you want to delete ${addr.flat_or_building}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteSavedAddress(addr.id),
-        },
-      ]
+      async () => {
+        await deleteSavedAddress(addr.id);
+      },
+      'Delete'
     );
+  };
+
+  const handleOpenAdd = () => {
+    if (onAddNewAddress) {
+      onAddNewAddress();
+    } else {
+      setAddModalVisible(true);
+    }
+  };
+
+  const handleSelect = (addr: SavedAddress) => {
+    setActiveLocation(
+      `${addr.flat_or_building}, ${addr.street_address}`,
+      { latitude: addr.latitude, longitude: addr.longitude },
+      addr.label.toUpperCase()
+    );
+    onSelectAddress(addr);
+    onClose();
   };
 
   return (
@@ -98,7 +120,7 @@ export const SavedAddressesSheet: React.FC<SavedAddressesSheetProps> = ({
 
         <View style={styles.savedSectionHeader}>
           <Text style={styles.sectionTitle}>Saved Addresses</Text>
-          <Pressable onPress={onAddNewAddress}>
+          <Pressable onPress={handleOpenAdd}>
             <Text style={styles.addText}>+ Add New</Text>
           </Pressable>
         </View>
@@ -117,10 +139,7 @@ export const SavedAddressesSheet: React.FC<SavedAddressesSheetProps> = ({
               key={addr.id}
               accessibilityRole="button"
               accessibilityLabel={`${addr.label}: ${addr.flat_or_building}`}
-              onPress={() => {
-                onSelectAddress(addr);
-                onClose();
-              }}
+              onPress={() => handleSelect(addr)}
               style={({ pressed }) => [styles.addressCard, pressed && styles.cardPressed]}
             >
               <View style={styles.iconCircle}>
@@ -164,11 +183,17 @@ export const SavedAddressesSheet: React.FC<SavedAddressesSheetProps> = ({
             title="Add Another Delivery Address"
             variant="outline"
             size="md"
-            onPress={onAddNewAddress}
+            onPress={handleOpenAdd}
             leftIcon={<Ionicons name="add" size={20} color={colors.primary} />}
           />
         </View>
       </ScrollView>
+
+      {/* Embedded Add Address Modal */}
+      <AddAddressModal
+        visible={addModalVisible}
+        onClose={() => setAddModalVisible(false)}
+      />
     </BottomSheet>
   );
 };

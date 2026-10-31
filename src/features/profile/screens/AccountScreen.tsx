@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
-  Linking,
   Pressable,
   ScrollView,
   StatusBar,
@@ -15,6 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
+import { SignOutConfirmModal } from '../components/SignOutConfirmModal';
+import { SupportDeskModal } from '../components/SupportDeskModal';
+import { WaterQualityModal } from '../components/WaterQualityModal';
+import { FairMeteringModal } from '../components/FairMeteringModal';
+import { PrivacyTermsModal } from '../components/PrivacyTermsModal';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useLocationStore } from '../../../stores/locationStore';
@@ -28,7 +31,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
   const { user, profile, signOut } = useAuthStore();
   const { savedAddresses } = useLocationStore();
   const { userBookings } = useBookingStore();
+
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
+  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
+  const [qualityModalVisible, setQualityModalVisible] = useState(false);
+  const [meteringModalVisible, setMeteringModalVisible] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
 
   const displayName = profile?.full_name || (user?.phone ? `Customer (${user.phone.slice(-4)})` : 'Valued Customer');
   const displayPhone = user?.phone || profile?.phone_number || 'Phone verified';
@@ -36,45 +45,23 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
   const roleName = (profile?.role || 'Customer').toUpperCase();
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of TANKR?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
-    ]);
+    setSignOutModalVisible(true);
   };
 
   const handleEmergencyCall = () => {
-    Alert.alert(
-      '24/7 Water Support Desk',
-      'Need immediate tanker delivery assistance or dispatch inquiry?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Call Support (1800-826-57)', onPress: () => Linking.openURL('tel:180082657') },
-      ]
-    );
+    setSupportModalVisible(true);
   };
 
   const handleQualityStandard = () => {
-    Alert.alert(
-      'BIS-10500 Potable Water Quality Standard',
-      'TANKR fleet partners deliver water compliant with Indian Standard BIS-10500.\n\n• Certified drinking source testing\n• Mandatory periodic tank sanitization\n• Digital flow-meter verification\n• Instant UPI refund on shortfall',
-      [{ text: 'Understood', style: 'default' }]
-    );
+    setQualityModalVisible(true);
   };
 
   const handleTermsAndPrivacy = () => {
-    Alert.alert(
-      'Privacy & Terms of Service',
-      'Your location, delivery PIN, and order history are securely encrypted. Delivery PINs are strictly revealed only during live tanker dispatch to ensure verified handoffs.',
-      [{ text: 'OK', style: 'default' }]
-    );
+    setPrivacyModalVisible(true);
   };
 
   const handleDisputeResolution = () => {
-    Alert.alert(
-      'Dispute Resolution & Fair Meter Guarantee',
-      'Every tanker is fitted with digital flow meters. If delivered water volume is less than quoted, your booking is automatically prorated and refunded within minutes.',
-      [{ text: 'OK', style: 'default' }]
-    );
+    setMeteringModalVisible(true);
   };
 
   return (
@@ -270,11 +257,42 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
       <SavedAddressesSheet
         visible={addressSheetVisible}
         onClose={() => setAddressSheetVisible(false)}
-        onAddNewAddress={() => {
-          setAddressSheetVisible(false);
-          Alert.alert('Add Address', 'Pin your delivery sump directly from the discovery map.');
-        }}
         onSelectAddress={() => setAddressSheetVisible(false)}
+      />
+
+      {/* 24/7 Water Support Desk Modal */}
+      <SupportDeskModal
+        visible={supportModalVisible}
+        onClose={() => setSupportModalVisible(false)}
+        userPhone={displayPhone}
+      />
+
+      {/* BIS-10500 Potable Water Quality Certificate Modal */}
+      <WaterQualityModal
+        visible={qualityModalVisible}
+        onClose={() => setQualityModalVisible(false)}
+      />
+
+      {/* Fair Metering & Instant Dispute Guarantee Modal */}
+      <FairMeteringModal
+        visible={meteringModalVisible}
+        onClose={() => setMeteringModalVisible(false)}
+      />
+
+      {/* Privacy Policy & Terms of Service Modal */}
+      <PrivacyTermsModal
+        visible={privacyModalVisible}
+        onClose={() => setPrivacyModalVisible(false)}
+      />
+
+      {/* In-App Sign Out Confirmation Modal */}
+      <SignOutConfirmModal
+        visible={signOutModalVisible}
+        onClose={() => setSignOutModalVisible(false)}
+        onConfirmSignOut={async () => {
+          setSignOutModalVisible(false);
+          await signOut();
+        }}
       />
     </SafeAreaView>
   );
