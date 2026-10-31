@@ -51,6 +51,20 @@ export const DisputeService = {
       }
 
       // 2. Resilient Fallback: Insert into public.disputes directly
+      const { data: existingDisp } = await supabase
+        .from('disputes')
+        .select('id, status')
+        .eq('booking_id', payload.bookingId)
+        .in('status', ['pending_review', 'open', 'under_review'])
+        .maybeSingle();
+
+      if (existingDisp) {
+        return {
+          success: false,
+          error: 'A dispute has already been filed and is currently under active review for this booking.',
+        };
+      }
+
       const { data: b, error: bErr } = await supabase
         .from('bookings')
         .select('customer_id')

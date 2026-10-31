@@ -238,25 +238,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <SavedAddressesSheet
         visible={addressSheetVisible}
         onClose={() => setAddressSheetVisible(false)}
-        onAddNewAddress={() => {
-          setAddressSheetVisible(false);
-          Alert.prompt
-            ? Alert.prompt('Add Address', 'Enter apartment or society name', async (text) => {
-                if (text && user?.id) {
-                  await addSavedAddress(user.id, {
-                    label: 'home',
-                    flat_or_building: text,
-                    street_address: activeAddressText || 'Delivery Point',
-                    city: profile?.city || 'Mumbai',
-                    pincode: '560001',
-                    latitude: activeCoordinates.latitude,
-                    longitude: activeCoordinates.longitude,
-                    is_default: false,
-                  });
-                }
-              })
-            : Alert.alert('Add Address', 'Enter your address in the profile settings.');
-        }}
         onSelectAddress={(addr) => {
           setActiveLocation(
             `${addr.flat_or_building}, ${addr.street_address}`,

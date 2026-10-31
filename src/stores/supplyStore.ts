@@ -328,7 +328,11 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       });
 
       if (error) {
-        return { success: false, error: error.message };
+        const errorMsg =
+          error.message.includes('already onboarded') || error.message.includes('unique') || error.message.includes('Duplicate')
+            ? `Vehicle ${payload.vehicleNumber} is already registered in the TANKR fleet network.`
+            : error.message;
+        return { success: false, error: errorMsg };
       }
 
       if (data?.success) {

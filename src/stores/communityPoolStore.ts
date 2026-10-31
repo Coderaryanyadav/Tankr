@@ -106,6 +106,14 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
   },
 
   contributeToPool: async (poolCode, contributorName, flatNumber, amount) => {
+    if (!amount || amount <= 0 || isNaN(amount)) {
+      return { success: false, error: 'Contribution amount must be a positive amount greater than ₹0.' };
+    }
+
+    if (!contributorName.trim() || !flatNumber.trim()) {
+      return { success: false, error: 'Contributor name and flat number are required.' };
+    }
+
     set({ isContributing: true });
     try {
       // 1. Attempt authoritative RPC
@@ -132,6 +140,11 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
       if (pErr || !pool) {
         set({ isContributing: false });
         return { success: false, error: pErr?.message || 'Pool not found' };
+      }
+
+      if (pool.status === 'funded' || pool.status === 'dispatched') {
+        set({ isContributing: false });
+        return { success: false, error: 'This community pool is already 100% funded and locked for delivery.' };
       }
 
       await supabase.from('community_pool_contributions').insert({

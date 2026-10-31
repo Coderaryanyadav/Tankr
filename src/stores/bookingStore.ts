@@ -64,6 +64,14 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   setActiveBooking: (booking) => set({ activeBooking: booking }),
 
   requestPriceQuote: async (tanker, deliveryLat, deliveryLng) => {
+    if (isNaN(deliveryLat) || isNaN(deliveryLng) || Math.abs(deliveryLat) < 0.01 || Math.abs(deliveryLng) < 0.01) {
+      set({
+        isLoadingQuote: false,
+        bookingError: 'Invalid delivery coordinates. Please select a valid delivery address on the map.',
+      });
+      return null;
+    }
+
     set({ isLoadingQuote: true, bookingError: null });
 
     try {
@@ -239,16 +247,31 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
   cancelBooking: async (bookingId, reason = 'Customer requested cancellation') => {
     try {
+      const target = get().userBookings.find((b) => b.id === bookingId) || get().activeBooking;
+      if (target && (target.status === 'delivering' || target.status === 'delivered' || target.status === 'cancelled')) {
+        return {
+          success: false,
+          error: `Cannot cancel a delivery in '${target.status}' status. Water pumping has already commenced or completed.`,
+        };
+      }
+
       const { data, error } = await supabase.rpc('customer_cancel_booking_with_policy', {
         p_booking_id: bookingId,
         p_reason: reason,
       });
 
+      if (data && data.success === false) {
+        return { success: false, error: data.error || 'Cancellation policy rejected request.' };
+      }
+
       if (error) {
-        await supabase.rpc('cancel_booking_atomic', {
+        const { error: atomicErr } = await supabase.rpc('cancel_booking_atomic', {
           p_booking_id: bookingId,
           p_reason: reason,
         });
+        if (atomicErr) {
+          return { success: false, error: atomicErr.message };
+        }
       }
 
       const updated = get().userBookings.map((b) =>

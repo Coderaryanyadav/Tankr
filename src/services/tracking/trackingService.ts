@@ -86,6 +86,15 @@ export const TrackingService = {
           distanceInterval: 15,
         },
         async (loc) => {
+          // Reject cold / un-acquired Null Island (0,0) or out-of-bounds coordinates
+          if (
+            (Math.abs(loc.coords.latitude) < 0.001 && Math.abs(loc.coords.longitude) < 0.001) ||
+            Math.abs(loc.coords.latitude) > 90 ||
+            Math.abs(loc.coords.longitude) > 180
+          ) {
+            return;
+          }
+
           const pingData: DriverPingData = {
             bookingId,
             latitude: loc.coords.latitude,

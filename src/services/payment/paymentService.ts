@@ -174,7 +174,7 @@ class PaymentService {
       }
 
       // 2. Resilient Fallback: Reconcile payments and bookings tables directly
-      const { error: pUpdateErr } = await supabase
+      const { data: updatedPay, error: pUpdateErr } = await supabase
         .from('payments')
         .update({
           status: 'captured',
@@ -182,12 +182,20 @@ class PaymentService {
           gateway_signature: signature,
         })
         .eq('booking_id', bookingId)
-        .eq('gateway_order_id', orderId);
+        .eq('gateway_order_id', orderId)
+        .select();
 
       if (pUpdateErr) {
         return {
           success: false,
           error: `Payment reconciliation failed: ${pUpdateErr.message}`,
+        };
+      }
+
+      if (!updatedPay || updatedPay.length === 0) {
+        return {
+          success: false,
+          error: 'Payment reconciliation rejected: No matching pending payment order found for this booking reference.',
         };
       }
 

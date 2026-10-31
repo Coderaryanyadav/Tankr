@@ -118,6 +118,15 @@ TaskManager.defineTask(DRIVER_BACKGROUND_LOCATION_TASK, async ({ data, error }) 
   const latest = locations[locations.length - 1];
   const { coords, timestamp } = latest;
 
+  // Reject cold / un-acquired Null Island (0,0) or out-of-bounds coordinates
+  if (
+    (Math.abs(coords.latitude) < 0.001 && Math.abs(coords.longitude) < 0.001) ||
+    Math.abs(coords.latitude) > 90 ||
+    Math.abs(coords.longitude) > 180
+  ) {
+    return;
+  }
+
   const pingData: QueuedLocationPing = {
     bookingId: currentBooking,
     latitude: coords.latitude,
