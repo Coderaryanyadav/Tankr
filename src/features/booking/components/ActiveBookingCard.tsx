@@ -89,38 +89,48 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
       {/* Driver & Tanker Details */}
       <View style={styles.driverSection}>
         <View style={styles.driverAvatar}>
-          <Ionicons name="person" size={20} color={colors.primary} />
+          <Ionicons
+            name={booking.status === 'pending' ? 'hourglass-outline' : 'person'}
+            size={20}
+            color={colors.primary}
+          />
         </View>
 
         <View style={styles.driverDetailsCol}>
           <Text style={styles.driverName}>
-            {booking.driver_name || 'Assigned Driver'}
+            {booking.status === 'pending'
+              ? 'Assigning Driver...'
+              : (booking.driver_name || 'Assigned Driver')}
           </Text>
           <Text style={styles.vehicleDetails}>
-            {booking.vehicle_number || 'MH-02-TC-5001'} • {booking.supplier_name}
+            {booking.status === 'pending'
+              ? `Awaiting dispatch confirmation from ${booking.supplier_name}`
+              : `${booking.vehicle_number || 'Vehicle Assigned'} • ${booking.supplier_name}`}
           </Text>
         </View>
 
         {/* Contact Actions */}
-        <View style={styles.contactActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Call Driver"
-            onPress={handleCallDriver}
-            style={styles.iconCircle}
-          >
-            <Ionicons name="call" size={18} color={colors.primary} />
-          </Pressable>
+        {booking.status !== 'pending' && (
+          <View style={styles.contactActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Call Driver"
+              onPress={handleCallDriver}
+              style={styles.iconCircle}
+            >
+              <Ionicons name="call" size={18} color={colors.primary} />
+            </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Message Driver"
-            onPress={() => Alert.alert('Chat', 'Opening chat with driver...')}
-            style={styles.iconCircle}
-          >
-            <Ionicons name="chatbubble" size={18} color={colors.primary} />
-          </Pressable>
-        </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Message Driver"
+              onPress={() => notify('Driver Chat', 'In-app driver chat is available once tanker is en route.')}
+              style={styles.iconCircle}
+            >
+              <Ionicons name="chatbubble" size={18} color={colors.primary} />
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* Action Buttons Row */}
@@ -149,11 +159,11 @@ export const ActiveBookingCard: React.FC<ActiveBookingCardProps> = ({
           <View style={{ flex: 1, flexDirection: 'row' }}>
             <View style={{ flex: 1, marginRight: spacing.sm }}>
               <Button
-                title={booking.driver_name ? 'Contact Driver' : 'Order Details'}
+                title={booking.status === 'pending' ? 'Track Status' : 'Contact Driver'}
                 variant="secondary"
                 size="md"
-                onPress={booking.driver_name ? handleCallDriver : () => onViewDetails?.()}
-                rightIcon={<Ionicons name={booking.driver_name ? "call-outline" : "document-text-outline"} size={16} color={colors.primary} />}
+                onPress={booking.status === 'pending' ? () => onViewDetails?.() : handleCallDriver}
+                rightIcon={<Ionicons name={booking.status === 'pending' ? "navigate-circle-outline" : "call-outline"} size={16} color={colors.primary} />}
               />
             </View>
 

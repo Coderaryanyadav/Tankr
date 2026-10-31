@@ -22,8 +22,10 @@ import { supabase } from '../../../services/supabase/client';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
-import { BOOKING_STATUS_CONFIG } from '../../../types/booking';
+import { BOOKING_STATUS_CONFIG, BookingStatus } from '../../../types/booking';
 import { confirmAction, notify } from '../../../utils/alertUtils';
+import { InvoiceViewModal } from '../../orders/components/InvoiceViewModal';
+import { invoiceService, InvoiceRecord } from '../../../services/invoice/invoiceService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -52,10 +54,66 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
   } = useBookingStore();
 
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
+  const [invoiceData, setInvoiceData] = useState<InvoiceRecord | null>(null);
   const [layoutWidth, setLayoutWidth] = useState<number>(() => {
     const w = Dimensions.get('window').width;
     return w > 520 ? 430 : w;
   });
+
+  const isPending = activeBooking?.status === 'pending' || activeBooking?.status === 'supplier_assigned';
+  const isAccepted = activeBooking?.status === 'accepted' || activeBooking?.status === 'driver_assigned';
+  const isEnRoute = activeBooking?.status === 'en_route';
+  const isArrived = activeBooking?.status === 'arrived';
+  const isDelivering = activeBooking?.status === 'delivering';
+  const isDelivered = activeBooking?.status === 'delivered';
+
+  const handleSimulateNextStep = async () => {
+    if (!activeBooking) return;
+    let nextStatus: BookingStatus = 'driver_assigned';
+    if (isPending) {
+      nextStatus = 'driver_assigned';
+    } else if (isAccepted) {
+      nextStatus = 'en_route';
+    } else if (isEnRoute) {
+      nextStatus = 'arrived';
+    } else if (isArrived) {
+      nextStatus = 'delivering';
+    } else if (isDelivering) {
+      nextStatus = 'delivered';
+    }
+
+    try {
+      await supabase
+        .from('bookings')
+        .update({
+          status: nextStatus,
+          driver_name: activeBooking.driver_name || 'Sunil Pawar',
+          driver_phone: activeBooking.driver_phone || '+91 98200 11003',
+          vehicle_number: activeBooking.vehicle_number || 'MH-02-TN-1001',
+          supplier_name: activeBooking.supplier_name || 'Marol Express Water Logistics',
+        })
+        .eq('id', activeBooking.id);
+
+      setActiveBooking({
+        ...activeBooking,
+        status: nextStatus,
+        driver_name: activeBooking.driver_name || 'Sunil Pawar',
+        driver_phone: activeBooking.driver_phone || '+91 98200 11003',
+        vehicle_number: activeBooking.vehicle_number || 'MH-02-TN-1001',
+        supplier_name: activeBooking.supplier_name || 'Marol Express Water Logistics',
+      });
+    } catch (e) {
+      console.warn('Simulation progression error:', e);
+    }
+  };
+
+  const handleViewInvoice = async () => {
+    if (!activeBooking) return;
+    const inv = await invoiceService.getInvoiceByBookingId(activeBooking.id);
+    setInvoiceData(inv);
+    setInvoiceModalVisible(true);
+  };
 
   const activeTrips = useMemo(
     () => userBookings.filter((b) => b.status !== 'delivered' && b.status !== 'cancelled'),
@@ -406,24 +464,28 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
           ))}
         </View>
 
-        {/* Tanker Marker (Moving with Heading Bearing) */}
-        <View
-          style={[
-            styles.tankerVehiclePin,
-            {
-              left: tankerCoords.left,
-              top: tankerCoords.top,
-              transform: [{ rotate: `${trackingState?.heading || 0}deg` }],
-            },
-          ]}
-        >
-          <View style={styles.vehicleCabIcon}>
-            <Ionicons name="water" size={18} color={colors.white} />
+        {/* Tanker Marker (Moving with Heading Bearing) - Only rendered when assigned and active */}
+        {!isPending && !isDelivered && (
+          <View
+            style={[
+              styles.tankerVehiclePin,
+              {
+                left: isArrived || isDelivering ? layoutWidth / 2 - 40 : tankerCoords.left,
+                top: isArrived || isDelivering ? 135 : tankerCoords.top,
+                transform: [{ rotate: `${trackingState?.heading || 0}deg` }],
+              },
+            ]}
+          >
+            <View style={styles.vehicleCabIcon}>
+              <Ionicons name="water" size={18} color={colors.white} />
+            </View>
+            <View style={styles.speedPill}>
+              <Text style={styles.speedText}>
+                {isArrived || isDelivering ? 'Docked' : `${trackingState?.speedKmh || 24} km/h`}
+              </Text>
+            </View>
           </View>
-          <View style={styles.speedPill}>
-            <Text style={styles.speedText}>{trackingState?.speedKmh || 22} km/h</Text>
-          </View>
-        </View>
+        )}
 
         {/* Customer Destination Sump Marker (Centered on Map) */}
         <View
@@ -433,18 +495,37 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
           ]}
         >
           <View style={styles.beaconRing} />
-          <View style={styles.sumpPinCore}>
-            <Ionicons name="home" size={14} color={colors.white} />
+          <View style={[styles.sumpPinCore, isDelivered && { backgroundColor: '#16A34A' }]}>
+            <Ionicons name={isDelivered ? "checkmark" : "home"} size={14} color={colors.white} />
           </View>
           <View style={styles.sumpCallout}>
             <Text style={styles.sumpCalloutText}>Your Sump</Text>
           </View>
         </View>
 
-        {/* Live GPS Signal Pill */}
+        {/* Contextual Status / Live GPS Signal Pill */}
         <View style={styles.gpsSignalBadge}>
-          <View style={styles.greenPulse} />
-          <Text style={styles.gpsSignalText}>Live GPS Connected</Text>
+          <View
+            style={[
+              styles.greenPulse,
+              isPending && { backgroundColor: '#F59E0B' },
+              isAccepted && { backgroundColor: '#0284C7' },
+              (isArrived || isDelivered) && { backgroundColor: '#16A34A' },
+            ]}
+          />
+          <Text style={styles.gpsSignalText}>
+            {isPending
+              ? 'Connecting Supplier Dispatch Desk...'
+              : isAccepted
+              ? 'Driver Staging at Supplier Depot'
+              : isEnRoute
+              ? `Live GPS Connected • ${trackingState?.speedKmh || 24} km/h`
+              : isArrived
+              ? 'Tanker Docked at Your Sump 📍'
+              : isDelivering
+              ? 'Ultrasonic Flow-Meter Active ⚡️'
+              : 'Delivery Completed & Audited ✅'}
+          </Text>
         </View>
       </View>
 
@@ -454,14 +535,34 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.bottomTripScrollContent}
         >
-          {/* ETA & Distance Header */}
+          {/* Contextual ETA & Status Header */}
           <View style={styles.etaHeaderRow}>
-            <View>
+            <View style={{ flex: 1, paddingRight: spacing.sm }}>
               <Text style={styles.etaTitle}>
-                Arriving in ~{trackingState?.etaMinutes || activeBooking.estimated_arrival_minutes} mins
+                {isPending
+                  ? 'Connecting with Supplier...'
+                  : isAccepted
+                  ? 'Driver Assigned • Staging Tanker'
+                  : isEnRoute
+                  ? `Arriving in ~${trackingState?.etaMinutes || activeBooking.estimated_arrival_minutes || 8} mins`
+                  : isArrived
+                  ? 'Tanker Arrived at Sump!'
+                  : isDelivering
+                  ? 'Water Discharge in Progress 💧'
+                  : 'Water Delivery Completed! 🎉'}
               </Text>
               <Text style={styles.etaDistanceText}>
-                {trackingState?.distanceRemainingKm || activeBooking.delivery_distance_km} km away • {activeBooking.delivery_address}
+                {isPending
+                  ? `Request sent to ${activeBooking.supplier_name || 'verified supplier'} • Awaiting confirmation`
+                  : isAccepted
+                  ? `${activeBooking.driver_name || 'Sunil Pawar'} is inspecting tanker for dispatch`
+                  : isEnRoute
+                  ? `${trackingState?.distanceRemainingKm || activeBooking.delivery_distance_km || 1.8} km away • ${activeBooking.delivery_address}`
+                  : isArrived
+                  ? `Parked outside • Ready to connect discharge hose`
+                  : isDelivering
+                  ? `Ultrasonic flow-meter measuring pumping rate (~350 L/min)`
+                  : `${activeBooking.capacity_liters.toLocaleString()} L Potable Water filled to sump.`}
               </Text>
             </View>
 
@@ -474,147 +575,199 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
           <View style={styles.divider} />
 
-          {/* Driver & Vehicle Profile */}
-          <View style={styles.driverProfileRow}>
-            <View style={styles.driverAvatarCircle}>
-              <Ionicons name="person" size={24} color={colors.primary} />
-            </View>
-
-            <View style={styles.driverDetails}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.driverName}>
-                  {activeBooking.driver_name || 'Assigned Driver'}
+          {/* Pending Notice OR Driver & Vehicle Profile */}
+          {isPending ? (
+            <View style={styles.pendingNoticeCard}>
+              <Ionicons name="time" size={24} color="#D97706" />
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <Text style={styles.pendingNoticeTitle}>Awaiting Driver Acceptance</Text>
+                <Text style={styles.pendingNoticeSub}>
+                  Assigned driver name, live GPS telemetry and vehicle registration will appear once accepted.
                 </Text>
-                <View style={styles.verifiedBadge}>
-                  <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
-                  <Text style={styles.verifiedBadgeText}>Verified Partner</Text>
-                </View>
               </View>
-              <Text style={styles.vehicleRegText}>
-                {activeBooking.vehicle_number || 'Vehicle Assigned'} • {activeBooking.supplier_name || 'Verified Supplier'}
-              </Text>
             </View>
+          ) : (
+            <View style={styles.driverProfileRow}>
+              <View style={styles.driverAvatarCircle}>
+                <Ionicons name="person" size={24} color={colors.primary} />
+              </View>
 
-            {/* Actions: Call & Share */}
-            <View style={styles.driverActions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Call Driver"
-                onPress={handleCallDriver}
-                style={styles.actionBtn}
-              >
-                <Ionicons name="call" size={20} color={colors.primary} />
-              </Pressable>
+              <View style={styles.driverDetails}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.driverName}>
+                    {activeBooking.driver_name || 'Sunil Pawar'}
+                  </Text>
+                  <View style={styles.verifiedBadge}>
+                    <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
+                    <Text style={styles.verifiedBadgeText}>Verified Partner</Text>
+                  </View>
+                </View>
+                <Text style={styles.vehicleRegText}>
+                  {activeBooking.vehicle_number || 'MH-02-TN-1001'} • {activeBooking.supplier_name || 'Marol Express Water Logistics'}
+                </Text>
+              </View>
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Share Live Trip"
-                onPress={handleShareTrip}
-                style={styles.actionBtn}
-              >
-                <Ionicons name="share-social-outline" size={20} color={colors.primary} />
-              </Pressable>
+              <View style={styles.driverActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Call Driver"
+                  onPress={handleCallDriver}
+                  style={styles.actionBtn}
+                >
+                  <Ionicons name="call" size={20} color={colors.primary} />
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Share Live Trip"
+                  onPress={handleShareTrip}
+                  style={styles.actionBtn}
+                >
+                  <Ionicons name="share-social-outline" size={20} color={colors.primary} />
+                </Pressable>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* TWO-WAY DIGITAL FLOW-METER HANDSHAKE DISPLAY */}
-          {(activeBooking.status === 'delivering' || activeBooking.status === 'arrived') && (
+          {(isDelivering || isArrived) && (
             <View style={styles.meterStatusCard}>
               <View style={styles.meterHeaderRow}>
                 <Ionicons name="speedometer" size={18} color="#0284C7" />
                 <Text style={styles.meterTitle}>Two-Way Digital Flow-Meter Handshake</Text>
                 <View style={styles.pumpingBadge}>
-                  <Text style={styles.pumpingBadgeText}>PUMPING ACTIVE</Text>
+                  <Text style={styles.pumpingBadgeText}>
+                    {isDelivering ? 'PUMPING ACTIVE' : 'CALIBRATED & READY'}
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.meterProgressRow}>
                 <Text style={styles.meterLitersText}>
-                  {Math.round(activeBooking.capacity_liters * 0.96).toLocaleString('en-IN')} L /{' '}
-                  {activeBooking.capacity_liters.toLocaleString('en-IN')} L
+                  {isDelivering
+                    ? `${Math.round(activeBooking.capacity_liters * 0.78).toLocaleString('en-IN')} L / ${activeBooking.capacity_liters.toLocaleString('en-IN')} L`
+                    : `0 L / ${activeBooking.capacity_liters.toLocaleString('en-IN')} L`}
                 </Text>
-                <Text style={styles.meterPctText}>96% pumped</Text>
+                <Text style={styles.meterPctText}>{isDelivering ? '78% pumped' : 'Pending start'}</Text>
               </View>
 
               <View style={styles.meterBarTrack}>
-                <View style={[styles.meterBarFill, { width: '96%' }]} />
+                <View style={[styles.meterBarFill, { width: isDelivering ? '78%' : '0%' }]} />
               </View>
 
               <View style={styles.meterReadoutsRow}>
                 <Text style={styles.readoutText}>Start Meter: 12,450.0 L</Text>
-                <Text style={styles.readoutText}>Current: 17,250.0 L</Text>
-                <Text style={styles.readoutText}>Rate: ~350 L/min</Text>
-              </View>
-            </View>
-          )}
-
-          {/* AUTOMATED PRORATED REFUND CARD (IF SHORTFALL OCCURRED) */}
-          {(activeBooking.volume_discrepancy_liters || 0) > 0 && (
-            <View style={styles.refundNotificationCard}>
-              <View style={styles.refundIconCircle}>
-                <Ionicons name="wallet" size={20} color="#16A34A" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.refundCardTitle}>Automated Prorated Refund Applied 💧</Text>
-                <Text style={styles.refundCardSub}>
-                  Flow-meter registered {activeBooking.capacity_liters - (activeBooking.volume_discrepancy_liters || 200)}L delivered. A shortfall of {activeBooking.volume_discrepancy_liters}L was detected and instantly refunded to your UPI account.
-                </Text>
+                <Text style={styles.readoutText}>Current: {isDelivering ? '20,250.0 L' : '12,450.0 L'}</Text>
+                <Text style={styles.readoutText}>Rate: {isDelivering ? '~350 L/min' : '0 L/min'}</Text>
               </View>
             </View>
           )}
 
           {/* Delivery Hand-off Security Instructions */}
-          <View style={styles.handoffNotice}>
-            <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-            <Text style={styles.handoffText}>
-              Share your 4-digit PIN with the driver only after the tanker is parked at your sump and ready to pump.
-            </Text>
-          </View>
+          {(isEnRoute || isArrived) && (
+            <View style={styles.handoffNotice}>
+              <Ionicons name="shield-checkmark" size={16} color={colors.success} />
+              <Text style={styles.handoffText}>
+                Share your 4-digit PIN ({activeBooking.delivery_pin}) with the driver only after the tanker is parked at your sump and ready to pump.
+              </Text>
+            </View>
+          )}
 
-          {/* Driver Contact & Cancellation */}
+          {/* Action Row */}
           <View style={styles.footerButtonsRow}>
-            <View style={{ flex: 1, marginRight: spacing.xs }}>
-              <Button
-                title="Call Driver"
-                variant="secondary"
-                size="md"
-                onPress={() => {
-                  if (activeBooking.driver_phone) {
-                    Linking.openURL(`tel:${activeBooking.driver_phone}`);
-                  } else {
-                    notify('Driver Contact', 'Calling driver: +91 98451 10001');
-                  }
-                }}
-                rightIcon={<Ionicons name="call-outline" size={16} color={colors.primary} />}
-              />
-            </View>
+            {isDelivered ? (
+              <View style={{ flex: 1, flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    title="View Tax Invoice"
+                    variant="primary"
+                    size="md"
+                    onPress={handleViewInvoice}
+                    leftIcon={<Ionicons name="receipt-outline" size={16} color="#FFFFFF" />}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    title="Book Again"
+                    variant="outline"
+                    size="md"
+                    onPress={onBack ? onBack : () => {}}
+                  />
+                </View>
+              </View>
+            ) : (
+              <>
+                <View style={{ flex: 1, marginRight: spacing.xs }}>
+                  <Button
+                    title={isPending ? "Contact Supplier" : "Call Driver"}
+                    variant="secondary"
+                    size="md"
+                    onPress={handleCallDriver}
+                    rightIcon={<Ionicons name="call-outline" size={16} color={colors.primary} />}
+                  />
+                </View>
 
-            <View style={{ width: 110 }}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                size="md"
-                onPress={() => {
-                  confirmAction(
-                    'Cancel Delivery?',
-                    'Are you sure you want to cancel this water delivery?',
-                    async () => {
-                      const res = await cancelBooking(activeBooking.id, 'Customer cancelled trip');
-                      if (res && !res.success) {
-                        notify('Cancellation Notice', res.error || 'Could not cancel delivery.');
-                      } else {
-                        notify('Trip Cancelled', 'Your water tanker delivery has been cancelled.');
-                        if (onBack) onBack();
-                      }
-                    },
-                    'Cancel Delivery'
-                  );
-                }}
-              />
-            </View>
+                <View style={{ width: 110 }}>
+                  <Button
+                    title={isPending ? "Cancel Request" : "Cancel"}
+                    variant="outline"
+                    size="md"
+                    onPress={() => {
+                      confirmAction(
+                        'Cancel Delivery?',
+                        'Are you sure you want to cancel this water delivery?',
+                        async () => {
+                          const res = await cancelBooking(activeBooking.id, 'Customer cancelled trip');
+                          if (res && !res.success) {
+                            notify('Cancellation Notice', res.error || 'Could not cancel delivery.');
+                          } else {
+                            notify('Trip Cancelled', 'Your water tanker delivery has been cancelled.');
+                            if (onBack) onBack();
+                          }
+                        },
+                        'Cancel'
+                      );
+                    }}
+                  />
+                </View>
+              </>
+            )}
           </View>
+
+          {/* Interactive Delivery Lifecycle Stepper (Simulate / Test Controller) */}
+          {!isDelivered && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Advance trip lifecycle stage"
+              onPress={handleSimulateNextStep}
+              style={styles.simStepperPill}
+            >
+              <Ionicons name="play-forward" size={13} color={colors.primary} />
+              <Text style={styles.simStepperText}>
+                {isPending
+                  ? 'Simulate: Driver Acceptance ➔'
+                  : isAccepted
+                  ? 'Simulate: Tanker En Route ➔'
+                  : isEnRoute
+                  ? 'Simulate: Tanker Arrival at Sump ➔'
+                  : isArrived
+                  ? 'Simulate: Start Pumping Water ➔'
+                  : 'Simulate: Complete Delivery ➔'}
+              </Text>
+            </Pressable>
+          )}
         </ScrollView>
       </View>
+
+      {/* Invoice View Modal */}
+      {invoiceModalVisible && (
+        <InvoiceViewModal
+          visible={invoiceModalVisible}
+          onClose={() => setInvoiceModalVisible(false)}
+          booking={activeBooking}
+          invoice={invoiceData}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1074,6 +1227,45 @@ const styles = StyleSheet.create({
     color: '#15803D',
     marginTop: 2,
     lineHeight: 16,
+  },
+  pendingNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  pendingNoticeTitle: {
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+    color: '#92400E',
+  },
+  pendingNoticeSub: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  simStepperPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: borderRadius.full,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+  },
+  simStepperText: {
+    fontSize: 11,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
   },
 });
 
