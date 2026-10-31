@@ -1,0 +1,32 @@
+sequenceDiagram
+    autonumber
+    actor Customer as Customer
+    participant App as TANKR Checkout Screen
+    participant PayService as paymentService.ts
+    participant Gateway as Razorpay / UPI Gateway
+    participant Backend as Supabase RPC (verify_and_reconcile_payment)
+    participant DB as PostgreSQL Tables (payments, invoices, bookings, ledger)
+
+    Customer->>App: Confirms Tanker Order (Base Price + Dynamic Surge + GST)
+    App->>PayService: processBookingPayment(bookingId, amount, method)
+    
+    alt Online Payment (UPI / Credit Card / Debit Card)
+        PayService->>Gateway: Create Order & Open Native/Web Checkout
+        Gateway-->>Customer: Render UPI QR / Intent / Card Form
+        Customer->>Gateway: Authorizes Payment
+        Gateway-->>PayService: Return { razorpay_payment_id, razorpay_signature }
+        PayService->>Backend: verify_and_reconcile_payment(booking_id, amount, 'captured', payment_id)
+    else Cash on Delivery (COD) / Post-Delivery UPI
+        PayService->>Backend: verify_and_reconcile_payment(booking_id, amount, 'pending_delivery', 'cod_ref')
+    end
+
+    critical Database Atomic Settlement
+        Backend->>DB: INSERT INTO payments (status = 'captured', gateway_payment_id)
+        Backend->>DB: UPDATE bookings SET payment_status = 'settled', status = 'delivered'
+        Backend->>DB: INSERT INTO invoices (invoice_number, final_amount, status = 'PAID')
+        Backend->>DB: INSERT INTO driver_payout_ledger (driver_phone, amount = 85% fare, status = 'pending')
+        Backend->>DB: INSERT INTO admin_audit_logs (action = 'SETTLE_PAYMENT')
+    end
+
+    Backend-->>PayService: { success: true, invoice_id, payment_id }
+    PayService-->>App: Display Order Confirmation & PDF Invoice Receipt

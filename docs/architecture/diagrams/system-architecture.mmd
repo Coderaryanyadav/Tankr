@@ -1,0 +1,88 @@
+graph TB
+    subgraph Users["Users & Stakeholders"]
+        Customer["👤 Consumer Customer<br>(Apartment / Commercial Sump)"]
+        Supplier["🏢 Water Supplier<br>(Fleet & Source Owner)"]
+        Driver["🚛 Fleet Driver<br>(Water Tanker Operator)"]
+        Admin["🛡️ Operations Super Admin<br>(Dispatch & Compliance)"]
+    end
+
+    subgraph Client["TANKR Unified Cross-Platform Application (Expo / React Native Web)"]
+        Nav["🧭 RootNavigator.tsx<br>(Authoritative Server-Driven Role Routing)"]
+        
+        subgraph CustomerFlow["Customer Portal"]
+            AppTabs["AppTabs & Discovery<br>(Nearby Tanker Radar)"]
+            BookingScreen["Booking & Checkout<br>(Capacity, Surge, Flow Rate)"]
+            TrackingScreen["Live Tracking Screen<br>(Realtime Telemetry & Arrival ETA)"]
+            DisputeUI["Disputes & Invoicing"]
+        end
+
+        subgraph SupplierFlow["Supplier Portal"]
+            SupplierDash["SupplierDashboardScreen<br>(Fleet Capacity & Onboarding)"]
+            TankerMgr["Tanker Fleet Manager"]
+        end
+
+        subgraph DriverFlow["Driver Console"]
+            DriverDash["DriverDashboardScreen<br>(Order Dispatch & Route Guidance)"]
+            BGTask["Expo Background Location Task<br>(Continuous GPS Telemetry Pings)"]
+            DeliveryFlowMeter["Flow Meter Calibration & Drop Verification"]
+        end
+
+        subgraph AdminFlow["Admin Operations Command (10 Live Desks)"]
+            AdminDash["AdminDashboardScreen<br>(Operations, Heatmap, SLA, Payouts, Lab Audits)"]
+            FleetMap["Mumbai Geospatial Fleet Map<br>(Anti-Collision Radar Dispersion)"]
+        end
+    end
+
+    subgraph Backend["Supabase Backend Platform (Managed PostgreSQL 15 + PostGIS)"]
+        AuthService["🔐 Supabase Auth<br>(Phone Number SMS OTP Service)"]
+        PostgresDB[("🗄️ PostgreSQL Database<br>21 Tables • 19 Security Definer RPCs • Full RLS")]
+        RealtimePub["⚡ Supabase Realtime Engine<br>(WebSockets: tankers, bookings, breadcrumbs, dispatches)"]
+        StorageEngine["📁 Supabase Storage<br>(Lab Certificates & KYC Documents)"]
+    end
+
+    subgraph External["External Ecosystem Integrations"]
+        MapsAPI["🗺️ Mappls (MapmyIndia) & Carto<br>(Geocoding, Routing, Road Snapping)"]
+        PaymentGW["💳 Razorpay / UPI Gateway<br>(Instant Escrow & Payout Reconciliation)"]
+        DeviceSensors["📡 Device Hardware<br>(GPS Receiver, Bluetooth Flow Meter)"]
+    end
+
+    %% User to Navigation
+    Customer --> Nav
+    Supplier --> Nav
+    Driver --> Nav
+    Admin --> Nav
+
+    %% Router to Views
+    Nav -->|role = 'customer'| AppTabs
+    AppTabs --> BookingScreen
+    BookingScreen --> TrackingScreen
+    TrackingScreen --> DisputeUI
+
+    Nav -->|role = 'supplier'| SupplierDash
+    SupplierDash --> TankerMgr
+
+    Nav -->|role = 'driver'| DriverDash
+    DriverDash --> DeliveryFlowMeter
+    DriverDash --> BGTask
+
+    Nav -->|role = 'admin'| AdminDash
+    AdminDash --> FleetMap
+
+    %% Client to Backend
+    Nav --> AuthService
+    CustomerFlow --> PostgresDB
+    SupplierFlow --> PostgresDB
+    DriverFlow --> PostgresDB
+    AdminFlow --> PostgresDB
+
+    BGTask -->|record_driver_location_ping| PostgresDB
+    PostgresDB --> RealtimePub
+    RealtimePub -.->|live stream| TrackingScreen
+    RealtimePub -.->|live telemetry| FleetMap
+
+    %% External Connections
+    BookingScreen --> PaymentGW
+    TrackingScreen --> MapsAPI
+    FleetMap --> MapsAPI
+    BGTask --> DeviceSensors
+    DeliveryFlowMeter --> DeviceSensors

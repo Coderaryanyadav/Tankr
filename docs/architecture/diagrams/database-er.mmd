@@ -1,0 +1,224 @@
+erDiagram
+    PROFILES ||--o{ SAVED_ADDRESSES : "has many"
+    PROFILES ||--o| DRIVER_PROFILES : "extends"
+    PROFILES ||--o{ BOOKINGS : "places"
+    PROFILES ||--o{ DISPUTES : "raises"
+    PROFILES ||--o{ NOTIFICATIONS : "receives"
+    
+    SUPPLIERS ||--o{ TANKERS : "owns fleet"
+    SUPPLIERS ||--o{ BOOKINGS : "fulfills"
+    
+    TANKERS ||--o| DRIVER_PROFILES : "assigned to"
+    TANKERS ||--o{ BOOKINGS : "dispatched on"
+    TANKERS ||--o{ TRACKING_BREADCRUMBS : "streams"
+    TANKERS ||--o{ EMERGENCY_DISPATCHES : "allocated to"
+    
+    BOOKINGS ||--o| PAYMENTS : "paid via"
+    BOOKINGS ||--o| INVOICES : "billed via"
+    BOOKINGS ||--o{ TRACKING_BREADCRUMBS : "records route"
+    BOOKINGS ||--o{ DISPUTES : "contested via"
+    BOOKINGS ||--o{ DRIVER_PAYOUT_LEDGER : "accrues"
+
+    COMMUNITY_POOLS ||--o{ COMMUNITY_POOL_CONTRIBUTIONS : "funded by"
+
+    PROFILES {
+        uuid id PK "references auth.users"
+        text phone_number UK "E.164 formatted"
+        text full_name
+        user_role role "customer | driver | supplier | admin"
+        text preferred_address
+        text city
+        text pincode
+        boolean is_onboarding_completed
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    SAVED_ADDRESSES {
+        uuid id PK
+        uuid user_id FK
+        text label "HOME | WORK | OTHER"
+        text flat_or_building
+        text street_address
+        text landmark
+        text city
+        text pincode
+        float latitude
+        float longitude
+        geography coordinates "POINT(lng, lat)"
+        boolean is_default
+    }
+
+    SERVICE_ZONES {
+        uuid id PK
+        text zone_name UK
+        float center_lat
+        float center_lng
+        geography boundary "POLYGON 4326"
+        float radius_km
+        numeric traffic_multiplier
+        int minimum_fleet_density
+        boolean is_operational
+    }
+
+    SUPPLIERS {
+        uuid id PK
+        text business_name
+        text contact_person
+        text contact_phone
+        text gstin
+        text water_source
+        int fleet_size
+        boolean is_verified
+        supplier_verification_status verification_status "pending_review | verified | rejected | suspended"
+        numeric rating
+        int total_deliveries
+    }
+
+    TANKERS {
+        uuid id PK
+        uuid supplier_id FK
+        text vehicle_number UK
+        text driver_name
+        text driver_phone
+        int capacity_liters "2000 | 5000 | 10000 | 20000"
+        text water_type
+        numeric base_price
+        numeric price_per_km
+        boolean is_available
+        boolean is_online
+        float latitude
+        float longitude
+        geography current_location
+        float heading_degrees
+    }
+
+    DRIVER_PROFILES {
+        uuid id PK
+        uuid profile_id FK
+        text full_name
+        text license_number
+        uuid assigned_tanker_id FK
+        boolean is_active
+    }
+
+    BOOKINGS {
+        uuid id PK
+        text booking_reference UK
+        uuid customer_id FK
+        uuid supplier_id FK
+        uuid tanker_id FK
+        text delivery_address
+        float delivery_latitude
+        float delivery_longitude
+        int capacity_liters
+        text water_type
+        text delivery_pin "4-digit verification code"
+        numeric base_price
+        numeric delivery_charge
+        numeric surcharge
+        numeric tax_amount
+        numeric final_payable_amount
+        payment_preference payment_preference
+        booking_status status "requested | accepted | en_route | arrived | delivered | cancelled"
+        timestamptz quote_expires_at
+    }
+
+    PAYMENTS {
+        uuid id PK
+        uuid booking_id FK
+        numeric amount
+        payment_method method "upi | credit_card | debit_card | net_banking | cod"
+        payment_status status "pending | authorized | captured | refunded | failed"
+        text gateway_payment_id
+    }
+
+    INVOICES {
+        uuid id PK
+        uuid booking_id FK
+        text invoice_number UK
+        numeric final_amount
+        text payment_status
+        text customer_name
+        text supplier_business_name
+    }
+
+    TRACKING_BREADCRUMBS {
+        uuid id PK
+        uuid booking_id FK
+        uuid tanker_id FK
+        float latitude
+        float longitude
+        geography coordinates
+        float speed_kmh
+        float heading_degrees
+        timestamptz recorded_at
+    }
+
+    DISPUTES {
+        uuid id PK
+        uuid booking_id FK
+        uuid raised_by FK
+        text reason
+        dispute_status status "open | under_investigation | refunded | dismissed"
+        numeric refund_amount
+        text notes
+    }
+
+    EMERGENCY_DISPATCHES {
+        uuid id PK
+        text institution_name
+        text institution_type "hospital | dialysis_center | critical_care"
+        text delivery_address
+        int required_liters
+        int sla_minutes "typically 20"
+        uuid tanker_id FK
+        text status "en_route | delivered | cancelled"
+    }
+
+    DRIVER_PAYOUT_LEDGER {
+        uuid id PK
+        text driver_phone
+        uuid booking_id FK
+        text entry_type "delivery_earnings | tip_credit | fuel_allowance"
+        numeric amount
+        text status "pending | settled | cancelled"
+        timestamptz created_at
+    }
+
+    WATER_QUALITY_CERTIFICATES {
+        uuid id PK
+        text source_name
+        text facility_name
+        text report_number
+        int tds_level_ppm
+        numeric ph_balance
+        numeric turbidity_ntu
+        text coliform_status
+        date certification_date
+        date expiry_date
+        text status "certified_potable | suspended | expired"
+    }
+
+    CORPORATE_CONTRACTS {
+        uuid id PK
+        text client_name
+        text category
+        text contact_person
+        text contact_phone
+        text delivery_address
+        int daily_liters
+        text scheduled_time_window
+        numeric monthly_contract_value
+        text contract_status "active | review_due | suspended"
+    }
+
+    ADMIN_AUDIT_LOGS {
+        uuid id PK
+        uuid admin_id
+        text action
+        text target_entity
+        text target_id
+        jsonb details
+        timestamptz created_at
+    }

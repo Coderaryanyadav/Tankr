@@ -1,0 +1,32 @@
+stateDiagram-v2
+    [*] --> QuoteGenerated: Customer selects capacity (2k/5k/10k/20k) & Location
+    
+    QuoteGenerated --> BookingRequested: Customer Confirms (create_booking_atomic)
+    QuoteGenerated --> QuoteExpired: 15-minute TTL elapsed without confirmation
+    
+    BookingRequested --> Accepted: Supplier or Auto-Dispatch Engine Accepts
+    BookingRequested --> CancelledByCustomer: Customer cancels before driver assignment
+    BookingRequested --> AutoCancelledNoSupply: No tanker available within SLA window
+
+    Accepted --> DriverAssigned: Supplier designates driver & tanker
+    
+    DriverAssigned --> EnRoute: Driver accepts order and starts trip
+    
+    EnRoute --> Arrived: Driver arrives at sump GPS coordinate
+    
+    Arrived --> Dispensing: Delivery PIN verified (4-digit code entered)
+    
+    Dispensing --> Delivered: Flow meter confirms volume (driver_complete_delivery_with_meter)
+    
+    Delivered --> Settled: Funds released from escrow; driver payout credited
+    Delivered --> Disputed: Customer contests volume, quality or contamination
+    
+    Disputed --> ResolvedRefund: Admin issues full or partial refund
+    Disputed --> ResolvedDismissed: Admin validates sensor logs and dismisses dispute
+
+    CancelledByCustomer --> [*]
+    AutoCancelledNoSupply --> [*]
+    QuoteExpired --> [*]
+    Settled --> [*]
+    ResolvedRefund --> [*]
+    ResolvedDismissed --> [*]

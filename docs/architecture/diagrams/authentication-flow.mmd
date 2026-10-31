@@ -1,0 +1,38 @@
+sequenceDiagram
+    autonumber
+    actor User as User (Customer / Driver / Supplier / Admin)
+    participant App as TANKR App (LoginScreen)
+    participant AuthStore as Zustand authStore
+    participant SupaAuth as Supabase Auth (SMS OTP)
+    participant PGTrigger as Postgres Trigger (handle_new_user)
+    participant Profiles as public.profiles Table
+    participant Navigator as RootNavigator.tsx
+
+    User->>App: Enters 10-digit mobile number (+91 XXXXXXXXXX)
+    App->>AuthStore: sendOtp(rawPhoneDigits)
+    AuthStore->>SupaAuth: signInWithOtp({ phone: '+91' + digits })
+    SupaAuth-->>AuthStore: { error: null } (SMS dispatched / Test OTP ready)
+    AuthStore-->>App: Navigate to VerifyOtpScreen
+
+    User->>App: Enters 6-digit OTP code (e.g. 123456)
+    App->>AuthStore: verifyOtp(token)
+    AuthStore->>SupaAuth: verifyOtp({ phone, token, type: 'sms' })
+    SupaAuth->>PGTrigger: Fires on_auth_user_created (if first-time user)
+    PGTrigger->>Profiles: Inserts profile row with role & phone
+    SupaAuth-->>AuthStore: { session, user }
+    
+    AuthStore->>Profiles: fetchProfile(user.id)
+    Profiles-->>AuthStore: { full_name, role, is_onboarding_completed }
+    AuthStore->>Navigator: State updated (session, profile)
+
+    alt is_onboarding_completed == false
+        Navigator-->>User: Render OnboardingScreen (Name & Delivery Address)
+    else role == 'admin'
+        Navigator-->>User: Render AdminDashboardScreen (10 Operations Desks)
+    else role == 'supplier'
+        Navigator-->>User: Render SupplierDashboardScreen (Fleet Manager)
+    else role == 'driver'
+        Navigator-->>User: Render DriverDashboardScreen (Telemetry & Orders)
+    else role == 'customer'
+        Navigator-->>User: Render AppTabs (Discovery, Tankers, Tracking)
+    end

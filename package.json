@@ -36,7 +36,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "test:ci": "jest --watchAll=false",
+    "typecheck": "tsc --noEmit",
+    "setup": "./scripts/setup.sh",
+    "verify": "./scripts/verify-project.sh"
   },
   "private": true
 }

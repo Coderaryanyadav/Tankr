@@ -2,294 +2,360 @@
 
 > **Water delivery, just a tap away.**
 
-[![React Native](https://img.shields.io/badge/React_Native-0.88-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo_SDK-58.0-000020?logo=expo&logoColor=white)](https://expo.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
-[![PostGIS](https://img.shields.io/badge/PostGIS-3.3_Spatial-blue?logo=postgresql&logoColor=white)](https://postgis.net/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-**TANKR** is an on-demand water tanker booking, fleet dispatch, and live GPS tracking platform inspired by the interaction patterns of ride-hailing applications like Uber and Ola. It features passwordless mobile OTP authentication, a map-first discovery interface with PostGIS spatial radial queries, atomic transaction locking, multi-role dispatch portals (Customer, Supplier, Driver, Operations Admin), sub-200ms real-time telemetry streaming, and automated GST tax invoicing.
-
----
-
-## 📑 Table of Contents
-
-- [Visual Identity & Design System](#-visual-identity--design-system)
-- [System Architecture & Data Flow](#-system-architecture--data-flow)
-- [Platform Roles & User Journeys](#-platform-roles--user-journeys)
-- [Deep-Dive Documentation Catalog](#-deep-dive-documentation-catalog)
-- [Key Features by Phase](#-key-features-by-phase)
-- [Technology Stack](#-technology-stack)
-- [Project Directory Structure](#-project-directory-structure)
-- [Getting Started & Local Development](#-getting-started--local-development)
-- [Database Migrations & Supabase Deployment](#-database-migrations--supabase-deployment)
-- [Quality Assurance & Diagnostics](#-quality-assurance--diagnostics)
+[![Expo SDK 58](https://img.shields.io/badge/Expo-v58.0.21-000020.svg?style=flat&logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native 0.88](https://img.shields.io/badge/React_Native-v0.88.1-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://reactnative.dev/)
+[![React 19](https://img.shields.io/badge/React-v19.3.0-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Supabase Backend](https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E.svg?style=flat&logo=supabase&logoColor=white)](https://supabase.com/)
+[![PostGIS Spatial](https://img.shields.io/badge/PostGIS-3.3_Spatial_Engine-blue.svg?style=flat&logo=postgresql&logoColor=white)](https://postgis.net/)
+[![Zustand State](https://img.shields.io/badge/State-Zustand_5.0-brown.svg?style=flat)](https://github.com/pmndrs/zustand)
+[![Jest Test Coverage](https://img.shields.io/badge/Tests-Jest_30_Passing-brightgreen.svg?style=flat&logo=jest&logoColor=white)](https://jestjs.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
 
 ---
 
-## 🎨 Visual Identity & Design System
+## 📖 Table of Contents
 
-TANKR uses a crisp, high-contrast, accessibility-first utility palette designed for outdoor mobile readability in bright daylight:
-
-```text
-#0B64C0  ██████  Primary Brand Blue
-#2688E8  ██████  Secondary Action Blue
-#EAF4FF  ██████  App Canvas & Background
-#16395E  ██████  Dark Navy Headings
-#FFFFFF  ██████  Surface Cards & Elevated Modals
-#18283B  ██████  Body Typography
-#16A36A  ██████  Success Green (Delivered / Paid)
-#F59E0B  ██████  Warning Amber (Approaching / Surge)
-#DC3545  ██████  Alert Red (Cancelled / Crisis)
-```
+- [1. Introduction & Mission](#1-introduction--mission)
+- [2. System Architecture](#2-system-architecture)
+- [3. Platform Roles & User Experiences](#3-platform-roles--user-experiences)
+- [4. Operational Features & Verification Status](#4-operational-features--verification-status)
+- [5. Technology Stack](#5-technology-stack)
+- [6. Prerequisites](#6-prerequisites)
+- [7. Automated Quick Start (One-Command Setup)](#7-automated-quick-start-one-command-setup)
+- [8. Genuine Local Demo Credentials](#8-genuine-local-demo-credentials)
+- [9. Environment Configuration](#9-environment-configuration)
+- [10. Testing & Verification Gates](#10-testing--verification-gates)
+- [11. Operations Command Admin Portal (10 Desks)](#11-operations-command-admin-portal-10-desks)
+- [12. Deployment](#12-deployment)
+- [13. Contributing & Code of Conduct](#13-contributing--code-of-conduct)
+- [14. Security Policy](#14-security-policy)
+- [15. Troubleshooting](#15-troubleshooting)
+- [16. Complete Documentation Index](#16-complete-documentation-index)
 
 ---
 
-## 🔄 System Architecture & Data Flow
+## 1. Introduction & Mission
+
+**TANKR** is an on-demand, geospatial water logistics and deficit dispatch platform engineered to solve urban water insecurity across high-deficit metropolitan areas (specifically calibrated for Mumbai Metro — Marol, Sakinaka, SEEPZ, Powai, Chakala, and Chandivali).
+
+### The Problem It Solves:
+In expanding metropolitan centers, municipal piped infrastructure frequently experiences low-pressure deficits, contamination shutdowns, or sudden main bursts. Residential apartment societies, commercial complexes, and healthcare facilities (dialysis centers and ICUs) rely on unorganized, opaque private water tankers plagued by predatory surge pricing, delivery delays, unverified water purity, and lack of accountability.
+
+### How TANKR Works:
+1. **Consumer Discovery & Sump Pinpointing**: Customers drop a pin on their building sump, select required water capacity (2,000L to 20,000L) and grade (Potable BIS 10500, Filtered Borewell, or Construction Utility), and receive an atomic 15-minute guaranteed price quote.
+2. **Guaranteed Anti-Double-Booking**: PostgreSQL row-level locks prevent concurrent order placement on the same physical vehicle.
+3. **Live Telemetry & Handover Verification**: High-frequency GPS tracking streams vehicle progress. Upon arrival, the driver cannot open the valve or mark delivery complete without entering the customer's secure 4-digit PIN and verifying volume with a calibrated digital flow meter.
+4. **Automated Escrow & Regulatory Compliance**: Payments are held in escrow and disbursed automatically (85% driver, 5% vehicle maintenance, 10% platform fee), while water sources undergo automated BIS 10500 laboratory sensor surveillance.
+
+---
+
+## 2. System Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Client ["Mobile Client (React Native + Expo SDK 58)"]
-        UI["Modern UI / Design System Tokens"]
-        Zustand["Zustand Global State Stores<br/>(Auth, Location, Booking, Supply, Admin)"]
-        SecureStore["expo-secure-store<br/>(Hardware Encrypted Keychain)"]
+graph TB
+    subgraph Users["Platform Stakeholders"]
+        Customer["👤 Consumer Customer<br>(Apartment Society / Commercial Sump)"]
+        Supplier["🏢 Water Supplier<br>(Fleet Owner & Water Source Operator)"]
+        Driver["🚛 Fleet Driver<br>(Water Tanker Operator)"]
+        Admin["🛡️ Operations Super Admin<br>(Dispatch & Compliance)"]
     end
 
-    subgraph Network ["Transport Gateway"]
-        REST["PostgREST API<br/>(JWT Bearer)"]
-        Realtime["Supabase Realtime WebSockets<br/>(Live Telemetry & Channels)"]
+    subgraph Client["TANKR Unified Cross-Platform Application (Expo / React Native Web)"]
+        Nav["🧭 RootNavigator.tsx<br>(Authoritative Server-Driven Role Routing)"]
+        
+        subgraph Portals["Role Portals"]
+            CustomerApp["AppTabs & Discovery<br>(Radar, Booking, Live Tracking)"]
+            SupplierPortal["SupplierDashboardScreen<br>(Fleet Inventory, Drivers, Revenue)"]
+            DriverPortal["DriverDashboardScreen<br>(Turn-by-Turn, Telemetry, PIN Handover)"]
+            AdminPortal["AdminDashboardScreen<br>(10 Operations Desks & Mumbai Heatmap)"]
+        end
     end
 
-    subgraph Database ["Database Layer (Supabase / PostgreSQL 15)"]
-        PostGIS["PostGIS Spatial Engine<br/>(ST_DWithin, ST_Distance)"]
-        RLS["Row-Level Security (RLS)"]
-        RPCs["Authoritative PL/pgSQL RPCs<br/>(Atomic Locking & Invoices)"]
+    subgraph Backend["Supabase Backend Platform (Managed PostgreSQL 15 + PostGIS)"]
+        AuthService["🔐 Supabase Auth<br>(Phone Number SMS OTP Service)"]
+        PostgresDB[("🗄️ PostgreSQL Database<br>21 Tables • 19 Security Definer RPCs • Full RLS")]
+        RealtimePub["⚡ Supabase Realtime Engine<br>(WebSockets: tankers, bookings, breadcrumbs, dispatches)"]
     end
 
-    UI --> Zustand
-    Zustand --> SecureStore
-    Zustand --> REST
-    Zustand --> Realtime
-    REST --> RLS
-    Realtime --> RPCs
-    RLS --> PostGIS
-    RPCs --> PostGIS
+    subgraph External["External Ecosystem Integrations"]
+        MapsAPI["🗺️ Mappls & Carto Maps<br>(Geocoding, Routing, Radar Tiles)"]
+        PaymentGW["💳 Razorpay / UPI Gateway<br>(Instant Escrow & Payout Reconciliation)"]
+    end
+
+    Customer --> Nav
+    Supplier --> Nav
+    Driver --> Nav
+    Admin --> Nav
+
+    Nav -->|role = 'customer'| CustomerApp
+    Nav -->|role = 'supplier'| SupplierPortal
+    Nav -->|role = 'driver'| DriverPortal
+    Nav -->|role = 'admin'| AdminPortal
+
+    Nav --> AuthService
+    Portals --> PostgresDB
+    PostgresDB --> RealtimePub
+    RealtimePub -.->|live stream| Client
+
+    CustomerApp --> PaymentGW
+    Client --> MapsAPI
 ```
 
----
-
-## 👥 Platform Roles & User Journeys
-
-TANKR provides dedicated experiences across four distinct operational roles:
-
-```mermaid
-flowchart LR
-    Customer["🧑 Customer"] --> C1["Map Discovery & Capacity Filters (1kL - 20kL)"]
-    Customer --> C2["Itemized Quote (Base + Distance + Surge + GST)"]
-    Customer --> C3["Receive 4-Digit Handover PIN"]
-    Customer --> C4["Real-Time Live Tanker Tracking"]
-    Customer --> C5["GST Tax Invoice Sharing (PDF/Text)"]
-
-    Supplier["🏢 Water Supplier"] --> S1["Accept/Decline Incoming Dispatches"]
-    Supplier --> S2["Fleet Vehicle Status & Driver Roster"]
-    Supplier --> S3["Daily Volume & Revenue Metrics"]
-
-    Driver["🚛 Tanker Driver"] --> D1["On-Duty / Off-Duty Toggle"]
-    Driver --> D2["Google Maps Navigation Intent"]
-    Driver --> D3["Direct One-Touch Customer Call"]
-    Driver --> D4["Verify 4-Digit Delivery PIN at Valve"]
-
-    Admin["🛡️ Operations Admin"] --> A1["Executive KPI Dashboard (GMV, Volume)"]
-    Admin --> A2["Supplier KYC & Water Quality Approval"]
-    Admin --> A3["Dynamic Surge Pricing (1.0x - 2.0x)"]
-    Admin --> A4["Crisis Drought Emergency Override"]
-```
+For complete technical specifications, see:
+- [System Architecture Specification](docs/architecture/ARCHITECTURE.md)
+- [Database ER Diagram & 21-Table Schema](docs/architecture/DATABASE_ARCHITECTURE.md)
+- [Booking State Machine Lifecycle](docs/architecture/BOOKING_LIFECYCLE.md)
 
 ---
 
-## 📚 Deep-Dive Documentation Catalog
+## 3. Platform Roles & User Experiences
 
-Detailed technical documentation and architecture artifacts are located in the [`docs/`](docs/) directory:
+TANKR strictly avoids client-side role switching. The authenticated user profile row in `public.profiles` dictates what interface is rendered by [`RootNavigator.tsx`](src/navigation/RootNavigator.tsx):
 
-| Document | Description |
-| :--- | :--- |
-| 🗺️ **[`docs/REMEDIATION_ROADMAP.md`](docs/REMEDIATION_ROADMAP.md)** | **6-Sprint Remediation & Production Launch Roadmap** (Security, Fleet, Bookings, Payments, Admin, Testing). |
-| 📊 **[`docs/FLOW_DIAGRAMS.md`](docs/FLOW_DIAGRAMS.md)** | Sequence diagrams, PIN verification flowchart, tracking pipeline, and booking state machines. |
-| 🏗️ **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** | Multi-tier system blueprint, pessimistic row locking (`FOR UPDATE`), and PostGIS winding formulas. |
-| 🗄️ **[`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md)** | Full Mermaid Entity-Relationship (ER) diagram, table schemas, and RPC function catalog. |
-| ✅ **[`docs/QA_AUDIT_REPORT.md`](docs/QA_AUDIT_REPORT.md)** | Comprehensive test verification matrices covering all authentication, booking, and dispatch edge cases. |
-| 🔒 **[`docs/SECURITY_AUDIT_REPORT.md`](docs/SECURITY_AUDIT_REPORT.md)** | Threat model, Row-Level Security (RLS) enforcement, price manipulation safeguards, and velocity filters. |
-| 🚀 **[`docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md`](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md)** | Google Play & Apple App Store readiness, permissions, and EAS cloud build commands. |
-
----
-
-## 🌟 Key Features by Phase
-
-### 🔐 1. Mobile OTP Authentication & Profiles (Phases 1–3)
-* Passwordless Indian 10-digit mobile login with automated 30s resend cooldown.
-* Hardware-encrypted session persistence via `expo-secure-store`.
-* Onboarding workflow with photo avatar selection (`expo-image-picker`), automatic GPS geocoding (`expo-location`), and saved address slots (`Home`, `Work`, `Other`).
-
-### 🗺️ 2. Map-First Discovery & PostGIS Spatial Engine (Phase 4)
-* Full-screen interactive map with animated radar scanning, tanker capacity markers, and live distance calculations.
-* Capacity filtering chips for **1kL, 2kL, 5kL, 10kL, 12kL, and 20kL** tankers with potable/domestic water classification.
-* PostGIS spatial radial search (`ST_DWithin` & `ST_Distance`) with urban traffic route ETA estimations.
-
-### 💰 3. Server-Authoritative Pricing & Atomic Booking (Phase 5)
-* PostgreSQL RPC `calculate_booking_quote` computes itemized quotes (base fare, distance fare, peak surcharge, 5% GST).
-* Concurrency row-locking (`SELECT ... FOR UPDATE`) prevents double-booking collisions.
-* Cryptographic 4-digit Delivery Handover PIN generated for secure water transfer.
-
-### 🚛 4. Multi-Role Dispatch Dashboards (Phase 6)
-* **Supplier Portal:** Incoming dispatch request review, vehicle availability management, and depot metrics.
-* **Driver Console:** On-duty/off-duty switch, native Google Maps turn-by-turn navigation intent, protected customer calling, and PIN verification.
-
-### 📍 5. Real-Time Telemetry & Anti-Spoofing (Phase 7)
-* Sub-200ms location streaming over Supabase Realtime broadcast channels (`booking:tracking:<id>`).
-* Smooth heading rotation, live route polyline, and arrival countdown.
-* Database velocity filter (`ST_Distance / delta_t`) rejecting unrealistic telemetry (>100 km/h).
-
-### 🧾 6. Idempotent Payments, Invoices & Notifications (Phase 8)
-* UPI & card payment processing with RFC-4122 idempotency protection preventing duplicate debits.
-* Automated GST Tax Invoice generation (`generate_invoice_for_booking`) with digital share intent.
-* Real-time notifications for all 8 dispatch lifecycle events.
-
-### 🛡️ 7. Executive Operations & Command Center (Phase 9)
-* Live KPI aggregation: Gross Merchandise Value (GMV), platform commission take rate, fleet utilization.
-* Supplier compliance verification queue with document approval/rejection workflows.
-* Real-time network surge pricing controls (1.0x to 2.0x) and Crisis Drought Emergency toggle.
-
----
-
-## 🛠️ Technology Stack
-
-| Layer | Component | Version / Technology |
+| Role | Target Screen | Operational Scope |
 | :--- | :--- | :--- |
-| **Frontend** | Mobile Framework | React Native 0.88 + Expo SDK 58 |
-| **Language** | Static Typing | TypeScript 5.9 (Strict Mode) |
-| **Backend** | BaaS Engine | Supabase (Phone OTP, Storage, Realtime) |
-| **Database** | Spatial Relational DB | PostgreSQL 15+ with PostGIS 3.3+ |
-| **State** | Global Store | Zustand 5.0 |
-| **Schemas** | Form & Data Validation | Zod 3.24 |
-| **Mapping** | Geospatial Client | `react-native-maps`, `expo-location` |
-| **Storage** | Secure Storage | `expo-secure-store` (AES-256 Keychain/Keystore) |
+| **`customer`** | [`AppTabs.tsx`](src/navigation/AppTabs.tsx) | Sump pinpointing, nearby tanker radar, atomic checkout, live GPS tracking, 4-digit PIN verification, GST invoice receipt. |
+| **`supplier`** | [`SupplierDashboardScreen.tsx`](src/features/supply/screens/SupplierDashboardScreen.tsx) | Fleet status monitoring, tanker onboarding (license, capacity, source), driver assignment, revenue tracking. |
+| **`driver`** | [`DriverDashboardScreen.tsx`](src/features/supply/screens/DriverDashboardScreen.tsx) | GPS telemetry transmission (foreground/background task), turn-by-turn route guidance, flow meter drop confirmation. |
+| **`admin`** | [`AdminDashboardScreen.tsx`](src/features/admin/screens/AdminDashboardScreen.tsx) | 10 live operational desks: Mumbai fleet map, hospital emergency dispatches, driver payouts, lab audits, disputes, service zones. |
 
 ---
 
-## 📂 Project Directory Structure
+## 4. Operational Features & Verification Status
 
-```text
-TANKR/
-├── src/
-│   ├── components/            # Reusable atomic & composite components
-│   │   ├── common/
-│   │   │   ├── Button/        # Primary, Secondary, Outline, Danger buttons
-│   │   │   ├── Card/          # TankerCard, StatusBadge, Base Card
-│   │   │   ├── Feedback/      # Skeletons, EmptyState, ErrorBanner
-│   │   │   ├── Input/         # PhoneInput, OtpInput, SearchBar, TextInput
-│   │   │   ├── Navigation/    # BottomNav, HeaderBar, LocationPill
-│   │   │   └── Overlay/       # BottomSheet, Modal dialogs
-│   ├── features/
-│   │   ├── admin/             # Operations command center & KYC approval
-│   │   ├── auth/              # Mobile OTP login & verification
-│   │   ├── booking/           # Price quote reviews, active trip overlays
-│   │   ├── discovery/         # Full-screen interactive map & tanker filters
-│   │   ├── location/          # Saved addresses & reverse geocoding
-│   │   ├── notifications/     # Real-time lifecycle alerts modal
-│   │   ├── onboarding/        # Customer profile setup & PIN code
-│   │   ├── orders/            # Official GST Tax Invoice viewer & sharing
-│   │   ├── supply/            # Supplier & Driver operations portals
-│   │   └── tracking/          # Real-time WebSocket tanker tracking screen
-│   ├── navigation/            # RootNavigator & role-based routing
-│   ├── services/
-│   │   ├── invoice/           # PostgreSQL invoice RPC client
-│   │   ├── location/          # Expo Location & reverse geocoder
-│   │   ├── notification/      # Realtime alert dispatch service
-│   │   ├── payment/           # Idempotent payment gateway service
-│   │   ├── supabase/          # Supabase client with SecureStore adapter
-│   │   └── tracking/          # High-frequency GPS tracking publisher/subscriber
-│   ├── stores/                # Zustand global stores (auth, booking, admin, supply)
-│   ├── theme/                 # Design tokens (colors, typography, shadows, spacing)
-│   └── utils/                 # Zod validation schemas
-├── supabase/
-│   ├── full_schema.sql        # Consolidated 1,234-line single-run database schema
-│   └── migrations/            # 8 sequential PostGIS & RLS migrations
-└── docs/                      # Production QA, Security & Architecture documentation
-    ├── ARCHITECTURE.md
-    ├── DATABASE_SCHEMA.md
-    ├── FLOW_DIAGRAMS.md
-    ├── PRODUCTION_DEPLOYMENT_CHECKLIST.md
-    ├── QA_AUDIT_REPORT.md
-    └── SECURITY_AUDIT_REPORT.md
-```
+| Feature Domain | Operational Capability | Implementation Status |
+| :--- | :--- | :---: |
+| **Authentication** | Passwordless SMS OTP authentication backed by Supabase Auth and test credentials | **VERIFIED WORKING** |
+| **Onboarding** | Profile setup, sump location geocoding, and default address storage | **VERIFIED WORKING** |
+| **Discovery** | PostGIS spatial queries locating nearest available tankers by capacity and grade | **VERIFIED WORKING** |
+| **Quoting Engine** | 15m binding price quotes (`calculate_booking_quote`) with dynamic surge multipliers | **VERIFIED WORKING** |
+| **Concurrency Lock**| Row-level `FOR UPDATE` vehicle locking preventing double bookings | **VERIFIED WORKING** |
+| **Tracking** | Real-time GPS breadcrumb streaming over Supabase WebSocket CDC | **VERIFIED WORKING** |
+| **Handover** | 4-digit customer PIN verification required for delivery completion | **VERIFIED WORKING** |
+| **Escrow & Payouts**| Automated 85/5/10 earnings breakdown, driver ledger, and batch settlement | **VERIFIED WORKING** |
+| **Fleet Radar Map** | Anti-collision Fermat spiral dispersion, perimeter zone badges, live vehicle CRUD | **VERIFIED WORKING** |
+| **Emergency SLA** | 20-minute priority override dispatch for hospitals and critical care units | **VERIFIED WORKING** |
+| **Lab Safety Audit** | Bureau of Indian Standards (BIS 10500) compliance monitoring (TDS < 250 ppm) | **VERIFIED WORKING** |
+| **Hardware Sensors** | Digital flow meter calibration reading (simulated BLE sensor payload) | **PARTIALLY IMPLEMENTED** |
+
+See [Features Catalog](docs/project/FEATURES.md) for the complete capability matrix.
 
 ---
 
-## ⚡ Getting Started & Local Development
+## 5. Technology Stack
 
-### 1. Prerequisites
-* Node.js LTS (v20+ recommended)
-* Expo CLI
-* Git
+### Frontend & Client Applications
+- **Core Framework**: [React Native 0.88.1](https://reactnative.dev/) with [React 19.3.0](https://react.dev/)
+- **Application Tooling**: [Expo SDK 58.0.21](https://expo.dev/) with [Expo Router pattern](https://docs.expo.dev/router/introduction/)
+- **Web Support**: [react-native-web 0.21.4](https://necolas.github.io/react-native-web/)
+- **State Management**: [Zustand 5.0.16](https://github.com/pmndrs/zustand)
+- **Data Validation**: [Zod 4.6.7](https://zod.dev/)
+- **Sensors & Hardware**: `expo-location 58.0.20`, `expo-task-manager 58.0.12`, `expo-secure-store 58.0.2`
+- **Iconography & Theming**: `@expo/vector-icons 15.0.2` (Ionicons)
 
-### 2. Environment Configuration
-Create a `.env` file in the project root:
-```env
-EXPO_PUBLIC_SUPABASE_URL=https://qicoczialqxulcbipuix.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
+### Backend, Database & Cloud
+- **Database**: [PostgreSQL 15](https://www.postgresql.org/) with [PostGIS Spatial Extension](https://postgis.net/)
+- **Backend as a Service**: [Supabase](https://supabase.com/) (`@supabase/supabase-js 2.118.0`)
+- **Authentication**: Supabase Auth (SMS OTP with `[auth.sms.test_otp]`)
+- **Real-Time Engine**: Supabase Realtime (Phoenix / Elixir WebSockets CDC)
 
-### 3. Installation & Verification
+### Third-Party Services
+- **Mapping & Geocoding**: [Mappls / MapmyIndia](https://about.mappls.com/) & [Carto Basemaps](https://carto.com/)
+- **Payment Processing**: [Razorpay Payment Gateway](https://razorpay.com/) (Test sandbox & live webhook escrow)
+
+### Quality Assurance & Tooling
+- **Testing Engine**: [Jest 30.5.2](https://jestjs.io/) with [ts-jest 29.4.15](https://kulshekhar.github.io/ts-jest/)
+- **Static Typing**: [TypeScript 6.0.3](https://www.typescriptlang.org/) (Strict mode enabled)
+
+---
+
+## 6. Prerequisites
+
+Before setting up TANKR, ensure your host machine has:
+- **Node.js**: `>= v18.0.0` (Node.js `v20+` LTS recommended). Run `node -v` to check.
+- **npm**: `>= v9.0.0` or `v10+`. Run `npm -v` to check.
+- **Git**: `>= v2.30.0`. Run `git --version` to check.
+- **Docker Engine** *(Optional)*: Required only if running the local Supabase container stack.
+- **Supabase CLI** *(Optional)*: Available globally or automatically via `npx supabase`.
+
+---
+
+## 7. Automated Quick Start (One-Command Setup)
+
+To bootstrap your development environment in a single command:
+
 ```bash
-# Clone the repository
+# 1. Clone repository
 git clone https://github.com/Coderaryanyadav/Tankr.git
 cd Tankr
 
-# Install SDK-compatible dependencies
-npx expo install
+# 2. Make automation scripts executable
+chmod +x scripts/*.sh
 
-# Run TypeScript compilation check
-npx tsc --noEmit
-
-# Run Expo Doctor health check (20/20 checks)
-npx expo-doctor
-
-# Start development server
-npx expo start
+# 3. Run automated one-command setup
+./scripts/setup.sh
 ```
 
----
+### What `./scripts/setup.sh` Automates:
+1. Verifies host OS, architecture, Node version, and required tools.
+2. Generates `.env` from template if missing.
+3. Installs exact dependencies using `npm install`.
+4. Runs `./scripts/validate-env.sh` to check configuration validity without leaking secrets.
+5. Runs static type compilation (`npx tsc --noEmit`) to verify 0 errors.
+6. Executes all 28 automated unit and regression tests.
+7. Prints copy-paste launch commands and demo login accounts.
 
-## 🗄️ Database Migrations & Supabase Deployment
-
-The repository includes all 8 versioned migrations in `supabase/migrations/` as well as a single consolidated schema file:
-
-👉 **[`supabase/full_schema.sql`](supabase/full_schema.sql)**
-
-### Applying to Supabase Cloud:
-1. Open the [Supabase SQL Editor](https://supabase.com/dashboard/project/qicoczialqxulcbipuix/sql/new).
-2. Copy and paste the contents of `supabase/full_schema.sql`.
-3. Click **Run** (or `Cmd + Enter`).
-
-Alternatively, deploy using the Supabase CLI:
+### Launching the Application:
 ```bash
-npx supabase db push --db-url "postgresql://postgres:[PASSWORD]@db.qicoczialqxulcbipuix.supabase.co:5432/postgres"
+./scripts/start-dev.sh web       # Opens in Web Browser at http://localhost:8081
+./scripts/start-dev.sh ios       # Launches in iOS Simulator
+./scripts/start-dev.sh android   # Launches in Android Emulator
 ```
 
 ---
 
-## 🧪 Quality Assurance & Diagnostics
+## 8. Genuine Local Demo Credentials
+
+TANKR includes genuine local demo accounts configured with fixed test OTP **`123456`**. These accounts authenticate directly against Supabase and load their verified database roles:
+
+| Persona | Mobile Number (10 digits) | Fixed OTP | Target Portal | Test Data & Assigned Fleet |
+| :--- | :--- | :---: | :--- | :--- |
+| **Super Admin** | `8888888888` | `123456` | **Operations Command** | Full access to all 10 desks, live Mumbai fleet map, and CRUD actions. |
+| **Water Supplier** | `9999999999` | `123456` | **Supplier Dashboard** | Marol Potable Water Hub, fleet size: 6 tankers, revenue overview. |
+| **Fleet Driver** | `9000000001` | `123456` | **Driver Console** | Driver: Rajesh Sharma, assigned tanker: `MH-02-TC-5001` (5,000L). |
+| **Consumer Customer** | `9876543210` | `123456` | **Customer App** | Vikram Malhotra, saved address: Ruby Apts, Marol, Mumbai. |
+
+> [!NOTE]
+> Enter the 10-digit number on the login screen. On the verification screen, enter `123456`. You will be instantly authenticated and routed to the corresponding role dashboard.
+
+---
+
+## 9. Environment Configuration
+
+TANKR uses a single `.env` file at the repository root. Copy the template:
+
+```bash
+cp .env.example .env
+```
+
+### Key Variables:
+```env
+# Supabase Backend (Required)
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-publishable-anon-key
+
+# Payment Gateway (Optional Sandbox)
+EXPO_PUBLIC_RAZORPAY_KEY_ID=rzp_test_your_key_id
+
+# Maps & Geospatial (Optional Fallback to OpenStreetMap)
+EXPO_PUBLIC_MAPPLS_REST_KEY=your_mappls_api_key
+EXPO_PUBLIC_CARTO_API_KEY=your_carto_key
+```
+
+Validate your configuration safely at any time:
+```bash
+./scripts/validate-env.sh
+```
+
+See [Environment Setup Guide](docs/setup/ENVIRONMENT_SETUP.md) for full details.
+
+---
+
+## 10. Testing & Verification Gates
+
+TANKR adheres to rigorous quality assurance standards. Run the following verification commands:
+
+```bash
+# 1. Static Typecheck (Strict TypeScript 6.0)
+npm run typecheck
+
+# 2. Automated Jest Test Suite (28 unit and regression tests)
+npm run test:ci
+
+# 3. Complete Pre-Release Verification Gate (Types, Tests, Schema, Secrets)
+./scripts/verify-project.sh
+```
+
+---
+
+## 11. Operations Command Admin Portal (10 Desks)
+
+The Administrator Command Portal (`role = 'admin'`) provides 10 dedicated operational desks with live CRUD mutations:
 
 ```text
-$ npx expo-doctor
-20/20 checks passed. No issues detected!
-
-$ npx tsc --noEmit
-0 errors detected.
+Admin Operations Command
+├── 1. Operations Desk            -> Live GMV, revenue, delivery rates, dynamic surge multiplier
+├── 2. Fleet Map & Heatmap       -> Anti-collision radar dispersion, live telemetry, tanker CRUD
+├── 3. Hospital Dispatch (20m)   -> Priority emergency routing for dialysis units & ICUs
+├── 4. Financial & Payouts       -> 85/5/10 fee split, driver ledger inspection, batch settlement
+├── 5. Water Quality Audit Desk  -> Sensor tracking for TDS (<250 ppm), pH, and lab certificates
+├── 6. Corporate Contracts Desk  -> Commercial B2B recurring delivery agreements and volume SLAs
+├── 7. Supplier KYC Approvals    -> Vendor verification queue with approve/reject actions
+├── 8. Disputes & Escrow Desk    -> Customer arbitration, evidence inspection, atomic refunds
+├── 9. PostGIS Service Zones     -> Spatial zone boundaries, minimum fleet density, liquidity
+└── 10. System Audit Trail       -> Real-time immutable event log of administrative actions
 ```
 
 ---
 
-## 📄 License
-MIT License. Built for TANKR Technologies.
+## 12. Deployment
+
+- **Web Deployment**: Build the web static distribution via `npx expo export --platform web`. Output in `dist/` can be deployed to Vercel, Netlify, or Cloudflare Pages.
+- **Mobile Builds**: Distributed via EAS (Expo Application Services) to Google Play Store and Apple App Store (`eas build --profile production`).
+- **Database Migrations**: Applied forward via `./scripts/run-migrations.sh` or through the Supabase Cloud SQL Editor.
+
+See [Production Deployment Guide](docs/deployment/DEPLOYMENT.md) and [Production Checklist](docs/deployment/PRODUCTION_CHECKLIST.md).
+
+---
+
+## 13. Contributing & Code of Conduct
+
+We welcome contributions! Please review our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Before opening a pull request, ensure:
+1. `npm run typecheck` passes with **0 errors**.
+2. `npm run test:ci` passes all test suites.
+3. `./scripts/verify-project.sh` passes all 6 verification gates.
+
+---
+
+## 14. Security Policy
+
+Security reports are taken with utmost seriousness. Please report vulnerabilities to **`security@tankr.in`**. Do not open public GitHub issues for security matters. Review our [Security Policy](SECURITY.md) for details on responsible disclosure.
+
+---
+
+## 15. Troubleshooting
+
+If you encounter issues during installation or runtime:
+- **`permission denied for table profiles`**: Run [`supabase/admin_fixes.sql`](supabase/admin_fixes.sql) in your Supabase SQL Editor.
+- **Port 8081 already in use**: Run `./scripts/clean.sh` to clear stale Metro processes.
+- **Missing environment variables**: Run `./scripts/validate-env.sh`.
+
+See [Troubleshooting Guide](docs/setup/TROUBLESHOOTING.md) for detailed diagnostics and solutions.
+
+---
+
+## 16. Complete Documentation Index
+
+| Guide | Description |
+| :--- | :--- |
+| [Architecture Reference](docs/architecture/ARCHITECTURE.md) | Foundational design principles and high-level structure. |
+| [System Overview](docs/architecture/SYSTEM_OVERVIEW.md) | Comprehensive functional breakdown across all 4 personas. |
+| [Frontend Architecture](docs/architecture/FRONTEND_ARCHITECTURE.md) | Component hierarchy, design tokens, and state management. |
+| [Backend Architecture](docs/architecture/BACKEND_ARCHITECTURE.md) | Supabase integration, 19 stored procedures, and triggers. |
+| [Database Architecture](docs/architecture/DATABASE_ARCHITECTURE.md) | 21-table schema, PostGIS spatial indexing, and constraints. |
+| [Installation Guide](docs/setup/INSTALLATION.md) | Automated one-command setup and manual installation. |
+| [Environment Setup](docs/setup/ENVIRONMENT_SETUP.md) | Environment variables catalog and security guidelines. |
+| [Database Setup](docs/setup/DATABASE_SETUP.md) | PostgreSQL 15, PostGIS extension, and migration instructions. |
+| [API Reference](docs/api/API_REFERENCE.md) | Client Zustand store interfaces and action signatures. |
+| [Database Functions](docs/api/DATABASE_FUNCTIONS.md) | Exhaustive documentation for all 19 PostgreSQL RPCs. |
+| [Testing Architecture](docs/development/TESTING.md) | Jest test catalog and regression testing. |
+| [Features & Roadmap](docs/project/FEATURES.md) | Implementation status and upcoming engineering milestones. |
+
+---
+
+<p align="center">
+  <b>TANKR</b> — Engineered for Urban Water Resilience 💧
+</p>

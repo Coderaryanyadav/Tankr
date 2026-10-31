@@ -1,0 +1,39 @@
+name: 💡 Feature Request
+description: Propose an enhancement, architectural extension, or new operational capability
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome proposals to improve TANKR's municipal logistics, routing algorithms, water safety compliance, or user experience.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Operational Need
+      description: Is your feature request related to a specific operational challenge or bottleneck?
+      placeholder: "e.g. In high-density industrial zones, multi-tanker dropoffs require synchronized valve dispatch..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution / Architecture
+      description: Detailed description of what you want to happen and how it fits into the current system.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Approaches Considered
+      description: Describe any alternative solutions or features you have considered.
+  - type: dropdown
+    id: target_role
+    attributes:
+      label: Target Persona
+      options:
+        - "Customer"
+        - "Water Supplier"
+        - "Fleet Driver"
+        - "Super Administrator"
+        - "Developer / DevOps"

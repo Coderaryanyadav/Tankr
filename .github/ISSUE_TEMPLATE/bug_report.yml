@@ -1,0 +1,66 @@
+name: 🐛 Bug Report
+description: Report a reproducible defect, error, or unexpected behavior in TANKR
+title: "[BUG]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide sufficient detail so we can reproduce and verify the problem quickly.
+  - type: input
+    id: version
+    attributes:
+      label: TANKR Version / Commit
+      description: What version or Git commit hash are you running?
+      placeholder: e.g. 1.0.0 or commit 040524e
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which part of the system is failing?
+      options:
+        - "Customer Mobile App (Booking / Discovery)"
+        - "Admin Operations Portal (10 Desks)"
+        - "Supplier Dashboard"
+        - "Driver Console & GPS Telemetry"
+        - "Supabase Backend / PostgreSQL RPC"
+        - "Maps & Geospatial Services (Mappls / Carto)"
+        - "Developer Setup & Scripts"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem Description
+      description: Clear and concise description of what happened versus what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Run './scripts/start-dev.sh web'
+        2. Log in with phone '9000000001'
+        3. Attempt to record telemetry ping
+        4. See error...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Logs / Error Messages
+      description: Paste relevant terminal logs, stack traces, or console outputs (mask any secret keys!).
+      render: shell
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Verification Checklist
+      options:
+        - label: I verified that this issue does not contain private production credentials or API keys.
+          required: true
+        - label: I checked existing GitHub issues and confirmed this is not a duplicate.
+          required: true

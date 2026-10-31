@@ -1,0 +1,23 @@
+sequenceDiagram
+    autonumber
+    actor Driver as Driver Device
+    participant Task as Expo Background Location Task
+    participant LocationService as locationService.ts
+    participant RPC as record_driver_location_ping RPC
+    participant DB as public.tankers & public.tracking_breadcrumbs
+    participant Realtime as Supabase Realtime Engine (WebSocket)
+    participant CustomerMap as Customer Live Tracking Screen
+
+    Note over Driver,Task: Tanker is active on delivery trip
+    Task->>Task: Receives GPS Fix (lat, lng, speed, heading)
+    Task->>LocationService: Queue GPS ping (with offline retry queue)
+    LocationService->>RPC: record_driver_location_ping(p_tanker_id, p_booking_id, p_lat, p_lng, p_speed, p_heading)
+
+    critical PostGIS Location Ingestion
+        RPC->>DB: UPDATE tankers SET latitude = p_lat, longitude = p_lng, current_location = ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
+        RPC->>DB: INSERT INTO tracking_breadcrumbs (booking_id, tanker_id, coordinates, speed_kmh, heading_degrees)
+    end
+
+    DB-->>Realtime: Trigger PostgreSQL CDC event on tankers & breadcrumbs
+    Realtime-->>CustomerMap: Broadcast { new: { latitude, longitude, heading } }
+    CustomerMap->>CustomerMap: Smooth interpolation of tanker pin along road network

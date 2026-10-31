@@ -1,0 +1,61 @@
+graph TB
+    subgraph LocalDev["1. Local Development Environment"]
+        DevHost["Developer Workstation (macOS / Linux)"]
+        LocalExpo["Expo Dev Server (Metro Bundler)<br>http://localhost:8081"]
+        LocalDocker["Docker Engine"]
+        LocalSupabase["Supabase Local Stack<br>Postgres (54322) • Kong (54321) • Inbucket (54324)"]
+        
+        DevHost --> LocalExpo
+        DevHost --> LocalDocker
+        LocalDocker --> LocalSupabase
+        LocalExpo -.->|REST / WebSocket| LocalSupabase
+    end
+
+    subgraph CI["2. GitHub Actions CI/CD Pipeline"]
+        PR["Pull Request / Push to main"]
+        LintJob["Typecheck & Secrets Scan<br>(tsc --noEmit & secret scanner)"]
+        TestJob["Automated Test Suites<br>(Jest regression & domain tests)"]
+        BuildJob["Application Build Gate"]
+
+        PR --> LintJob
+        PR --> TestJob
+        PR --> BuildJob
+    end
+
+    subgraph Production["3. Production Infrastructure (Cloud)"]
+        subgraph MobileClients["Mobile App Distribution"]
+            EAS["Expo Application Services (EAS)"]
+            AppStore["Apple App Store (iOS IPA)"]
+            PlayStore["Google Play Store (Android AAB)"]
+            EAS --> AppStore
+            EAS --> PlayStore
+        end
+
+        subgraph WebHosting["Admin & Web Portal"]
+            Vercel["Web Hosting (Vercel / Cloudflare)<br>Production Single-Page Application"]
+        end
+
+        subgraph CloudBackend["Supabase Managed Cloud"]
+            CloudDB[("Managed PostgreSQL 15 + PostGIS<br>Daily Backups • Point-in-Time Recovery")]
+            CloudAuth["Supabase Auth (SMS OTP Gateway)"]
+            CloudRealtime["Realtime Engine (Elixir / Phoenix WebSockets)"]
+            CloudStorage["S3-Compatible Document Storage"]
+        end
+
+        subgraph ExternalSaaS["Third-Party Cloud APIs"]
+            RazorpayCloud["Razorpay Payment Gateway"]
+            MapplsCloud["Mappls / MapmyIndia Enterprise API"]
+            CartoCloud["Carto Basemaps CDN"]
+        end
+
+        PlayStore --> CloudBackend
+        AppStore --> CloudBackend
+        Vercel --> CloudBackend
+
+        CloudBackend --> RazorpayCloud
+        CloudBackend --> MapplsCloud
+        Vercel --> CartoCloud
+    end
+
+    BuildJob -.-> EAS
+    BuildJob -.-> Vercel
