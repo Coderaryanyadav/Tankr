@@ -13,6 +13,7 @@ import { Button } from '../../../components/common/Button/Button';
 import { Card } from '../../../components/common/Card/Card';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
+import { TankerCardSkeleton } from '../../../components/common/Feedback/Skeleton';
 import { WaterQualityBadge } from './WaterQualityBadge';
 import {
   NearbyTanker,
@@ -197,9 +198,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
         contentContainerStyle={styles.tankersScrollContent}
       >
         {isLoading ? (
-          <View style={styles.loadingWrapper}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Searching nearby water tankers...</Text>
+          <View style={{ paddingVertical: spacing.sm }}>
+            <TankerCardSkeleton />
+            <TankerCardSkeleton />
+            <TankerCardSkeleton />
           </View>
         ) : tankers.length === 0 ? (
           <EmptyState
@@ -232,7 +234,7 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                   >
                     <Ionicons
                       name="water"
-                      size={26}
+                      size={22}
                       color={isSelected ? colors.primary : colors.secondary}
                     />
                     <Text style={styles.avatarCapacityText}>
@@ -248,13 +250,13 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                       </Text>
                       <Ionicons
                         name="checkmark-circle"
-                        size={16}
+                        size={15}
                         color={colors.primary}
                       />
                     </View>
 
                     <Text style={styles.vehicleSubtitle}>
-                      {tanker.vehicle_number} • Driver: {tanker.driver_name}
+                      {tanker.vehicle_number} {tanker.driver_name ? `• ${tanker.driver_name}` : ''}
                     </Text>
 
                     <View style={styles.metricsRow}>
@@ -266,9 +268,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                       <Text style={styles.distanceMetricText}>
                         {tanker.distance_km} km away
                       </Text>
-                      <View style={styles.ratingBadge}>
-                        <Ionicons name="star" size={11} color="#F59E0B" />
-                        <Text style={styles.ratingText}>{tanker.rating}</Text>
+                      <View style={styles.verifiedGradePill}>
+                        <Text style={styles.verifiedGradeText}>
+                          {tanker.water_type.includes('Potable') ? 'Potable BIS-10500' : 'Filtered Utility'}
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -558,11 +561,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   distanceMetricText: {
     fontSize: 11,
     color: colors.textSecondary,
     fontWeight: fontWeights.medium,
+  },
+  verifiedGradePill: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  verifiedGradeText: {
+    fontSize: 10,
+    fontWeight: fontWeights.semibold,
+    color: '#15803D',
   },
   ratingBadge: {
     flexDirection: 'row',

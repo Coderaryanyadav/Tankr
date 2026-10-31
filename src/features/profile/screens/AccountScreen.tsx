@@ -16,6 +16,7 @@ import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
 import { useAuthStore } from '../../../stores/authStore';
+import { useBookingStore } from '../../../stores/bookingStore';
 import { useLocationStore } from '../../../stores/locationStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 
@@ -26,6 +27,7 @@ interface AccountScreenProps {
 export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookings }) => {
   const { user, profile, signOut } = useAuthStore();
   const { savedAddresses } = useLocationStore();
+  const { userBookings } = useBookingStore();
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
 
   const displayName = profile?.full_name || (user?.phone ? `Customer (${user.phone.slice(-4)})` : 'Valued Customer');
@@ -42,12 +44,36 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
 
   const handleEmergencyCall = () => {
     Alert.alert(
-      '24/7 Water Helpline',
-      'Need urgent community tanker dispatch for apartment or hospital?',
+      '24/7 Water Support Desk',
+      'Need immediate tanker delivery assistance or dispatch inquiry?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Call Ops Desk (1800-TANKR)', onPress: () => Linking.openURL('tel:180082657') },
+        { text: 'Call Support (1800-826-57)', onPress: () => Linking.openURL('tel:180082657') },
       ]
+    );
+  };
+
+  const handleQualityStandard = () => {
+    Alert.alert(
+      'BIS-10500 Potable Water Quality Standard',
+      'TANKR fleet partners deliver water compliant with Indian Standard BIS-10500.\n\n• Certified drinking source testing\n• Mandatory periodic tank sanitization\n• Digital flow-meter verification\n• Instant UPI refund on shortfall',
+      [{ text: 'Understood', style: 'default' }]
+    );
+  };
+
+  const handleTermsAndPrivacy = () => {
+    Alert.alert(
+      'Privacy & Terms of Service',
+      'Your location, delivery PIN, and order history are securely encrypted. Delivery PINs are strictly revealed only during live tanker dispatch to ensure verified handoffs.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
+  const handleDisputeResolution = () => {
+    Alert.alert(
+      'Dispute Resolution & Fair Meter Guarantee',
+      'Every tanker is fitted with digital flow meters. If delivered water volume is less than quoted, your booking is automatically prorated and refunded within minutes.',
+      [{ text: 'OK', style: 'default' }]
     );
   };
 
@@ -66,128 +92,187 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* User Identity Card */}
-        <Card variant="elevated" style={styles.profileCard}>
-          <View style={styles.avatarRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {displayName.charAt(0).toUpperCase()}
-              </Text>
+        {/* Compact Profile Header Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {displayName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.profileInfo}>
+            <View style={styles.nameRow}>
+              <Text numberOfLines={1} style={styles.profileName}>{displayName}</Text>
+              <Ionicons name="checkmark-circle" size={17} color={colors.primary} />
             </View>
-            <View style={styles.profileInfo}>
-              <View style={styles.nameRow}>
-                <Text style={styles.profileName}>{displayName}</Text>
-                <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
-              </View>
-              <Text style={styles.profilePhone}>{displayPhone}</Text>
-              <Text style={styles.profileCity}>📍 {displayCity}, Maharashtra</Text>
+            <Text style={styles.profilePhone}>{displayPhone}</Text>
+            <View style={styles.locationPill}>
+              <Ionicons name="location-outline" size={11} color={colors.textSecondary} />
+              <Text style={styles.profileCity}>{displayCity}, Maharashtra</Text>
             </View>
           </View>
-        </Card>
+        </View>
 
-        {/* Account Menu Sections */}
+        {/* Section 1: Preferences and Addresses */}
         <Text style={styles.sectionHeader}>PREFERENCES & ADDRESSES</Text>
-
-        <Card variant="outlined" style={styles.menuCard}>
+        <View style={styles.menuCard}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Saved delivery addresses"
             style={styles.menuItem}
             onPress={() => setAddressSheetVisible(true)}
           >
             <View style={[styles.menuIconWrap, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="location" size={20} color={colors.primary} />
+              <Ionicons name="location" size={18} color={colors.primary} />
             </View>
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Saved Delivery Addresses</Text>
               <Text style={styles.menuSubtitle}>
                 {savedAddresses.length > 0
-                  ? `${savedAddresses.length} saved address${savedAddresses.length > 1 ? 'es' : ''} configured`
-                  : 'No delivery addresses added yet'}
+                  ? `${savedAddresses.length} saved location${savedAddresses.length > 1 ? 's' : ''}`
+                  : 'Add home, sump or society address'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
 
           <View style={styles.divider} />
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Past orders and GST invoices"
             style={styles.menuItem}
             onPress={onNavigateToBookings}
           >
             <View style={[styles.menuIconWrap, { backgroundColor: '#EDE9FE' }]}>
-              <Ionicons name="receipt" size={20} color="#7C3AED" />
+              <Ionicons name="receipt" size={18} color="#7C3AED" />
             </View>
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Past Orders & GST Invoices</Text>
-              <Text style={styles.menuSubtitle}>View flow-meter verified deliveries</Text>
+              <Text style={styles.menuSubtitle}>
+                {userBookings.length > 0
+                  ? `${userBookings.length} order${userBookings.length > 1 ? 's' : ''} on record`
+                  : 'View invoices and delivery receipts'}
+              </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
-        </Card>
+        </View>
 
+        {/* Section 2: Support & Compliance */}
         <Text style={styles.sectionHeader}>SUPPORT & COMPLIANCE</Text>
-
-        <Card variant="outlined" style={styles.menuCard}>
-          <Pressable style={styles.menuItem} onPress={handleEmergencyCall}>
+        <View style={styles.menuCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="24/7 Water Support Desk"
+            style={styles.menuItem}
+            onPress={handleEmergencyCall}
+          >
             <View style={[styles.menuIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="call" size={20} color="#D97706" />
+              <Ionicons name="headset" size={18} color="#D97706" />
             </View>
             <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>24/7 Water Emergency Hotline</Text>
-              <Text style={styles.menuSubtitle}>Priority dispatch for hospitals & sumps</Text>
+              <Text style={styles.menuTitle}>24/7 Water Support Desk</Text>
+              <Text style={styles.menuSubtitle}>Instant resolution for tankers & dispatches</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
 
           <View style={styles.divider} />
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Water quality standard"
             style={styles.menuItem}
-            onPress={() => {
-              Alert.alert(
-                'Water Quality Guarantee',
-                'All TANKR fleet partners use BMC / certified potable sources with TDS testing conducted weekly.'
-              );
-            }}
+            onPress={handleQualityStandard}
           >
             <View style={[styles.menuIconWrap, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+              <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
             </View>
             <View style={styles.menuContent}>
-              <Text style={styles.menuTitle}>Water Quality & Meter Standard</Text>
-              <Text style={styles.menuSubtitle}>TDS standards, certified clean tankers</Text>
+              <Text style={styles.menuTitle}>BIS-10500 Potable Water Quality</Text>
+              <Text style={styles.menuSubtitle}>TDS standards & certified sanitization</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </Pressable>
-        </Card>
 
-        {/* Sign Out Button */}
-        <Pressable
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-        >
-          <Ionicons name="log-out-outline" size={20} color={colors.error} />
-          <Text style={styles.signOutText}>Sign Out of TANKR</Text>
-        </Pressable>
+          <View style={styles.divider} />
 
-        {/* Version Footer */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dispute resolution guarantee"
+            style={styles.menuItem}
+            onPress={handleDisputeResolution}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: '#F0F9FF' }]}>
+              <Ionicons name="scale-outline" size={18} color="#0284C7" />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>Fair Metering & Dispute Guarantee</Text>
+              <Text style={styles.menuSubtitle}>Digital meter audit & instant refund policy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+
+          <View style={styles.divider} />
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Privacy policy and terms"
+            style={styles.menuItem}
+            onPress={handleTermsAndPrivacy}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: '#F1F5F9' }]}>
+              <Ionicons name="lock-closed-outline" size={18} color="#475569" />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>Privacy Policy & Terms of Service</Text>
+              <Text style={styles.menuSubtitle}>Encrypted data & secure PIN protection</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Section 3: Account Security */}
+        <Text style={styles.sectionHeader}>ACCOUNT SECURITY</Text>
+        <View style={styles.menuCard}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign out of account"
+            style={styles.signOutMenuItem}
+            onPress={handleSignOut}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="log-out-outline" size={18} color={colors.error} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.signOutTitle}>Sign Out of TANKR</Text>
+              <Text style={styles.menuSubtitle}>Secure session termination</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.error} />
+          </Pressable>
+        </View>
+
+        {/* Professional Footer */}
         <View style={styles.footer}>
           <Image
             source={require('../../../../assets/images/logo.png')}
             style={styles.footerLogo}
             resizeMode="contain"
           />
-          <Text style={styles.footerText}>TANKR v1.0.0 • Mumbai Metropolitan Ops (Marol HQ)</Text>
-          <Text style={styles.footerSubtext}>Encrypted • BMC Compliant • PostGIS Live Radar</Text>
+          <Text style={styles.footerText}>TANKR v1.0.0 (Production Release)</Text>
+          <Text style={styles.footerSubtext}>
+            © 2024 TANKR Technologies. All rights reserved.
+          </Text>
         </View>
       </ScrollView>
 
-      {/* Saved Addresses Modal */}
+      {/* Saved Addresses Sheet */}
       <SavedAddressesSheet
         visible={addressSheetVisible}
         onClose={() => setAddressSheetVisible(false)}
         onAddNewAddress={() => {
           setAddressSheetVisible(false);
-          Alert.alert('Add Address', 'Pin your delivery sump directly from the map screen.');
+          Alert.alert('Add Address', 'Pin your delivery sump directly from the discovery map.');
         }}
         onSelectAddress={() => setAddressSheetVisible(false)}
       />
@@ -206,45 +291,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: '#E2E8F0',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
+    letterSpacing: -0.3,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing['4xl'],
   },
   profileCard: {
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-  },
-  avatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: spacing.lg,
+    ...shadows.subtle,
   },
   avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: fontWeights.bold,
-    color: colors.white,
+    color: '#FFFFFF',
   },
   profileInfo: {
     flex: 1,
@@ -252,48 +339,63 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 5,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
   },
   profilePhone: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginBottom: 2,
+    marginTop: 1,
+  },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 4,
   },
   profileCity: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textMuted,
+    fontWeight: fontWeights.medium,
   },
   sectionHeader: {
     fontSize: 11,
     fontWeight: fontWeights.semibold,
-    color: colors.textMuted,
+    color: '#64748B',
     letterSpacing: 0.8,
     marginBottom: spacing.xs,
-    marginLeft: spacing.xs,
+    marginLeft: 4,
     marginTop: spacing.xs,
   },
   menuCard: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     marginBottom: spacing.lg,
     overflow: 'hidden',
+    ...shadows.subtle,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+  },
+  signOutMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
   },
   menuIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -302,49 +404,39 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: fontWeights.semibold,
     color: colors.darkNavy,
-    marginBottom: 2,
   },
-  menuSubtitle: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.divider,
-    marginLeft: 66,
-  },
-  signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  signOutText: {
-    fontSize: 15,
+  signOutTitle: {
+    fontSize: 14,
     fontWeight: fontWeights.semibold,
     color: colors.error,
   },
+  menuSubtitle: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 56,
+  },
   footer: {
     alignItems: 'center',
-    paddingBottom: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   footerLogo: {
-    width: 100,
-    height: 50,
+    width: 90,
+    height: 38,
     marginBottom: spacing.xs,
+    opacity: 0.8,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textMuted,
-    fontWeight: fontWeights.medium,
+    fontWeight: fontWeights.semibold,
   },
   footerSubtext: {
     fontSize: 10,

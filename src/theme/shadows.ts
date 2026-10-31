@@ -1,6 +1,6 @@
 /**
  * TANKR Design System — Shadow System
- * Multi-layer diffuse shadows tailored for light, clean card surfaces.
+ * Clean, multi-layer diffuse shadows tailored for crisp surfaces.
  */
 
 import { Platform, ViewStyle } from 'react-native';
@@ -14,79 +14,79 @@ export const shadows = {
     elevation: 0,
   } as ViewStyle,
 
-  // Subtle elevation for unselected cards & text inputs
+  // Subtle elevation for cards & unselected items
   subtle: Platform.select<ViewStyle>({
     ios: {
-      shadowColor: '#16395E',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
     },
     android: {
-      elevation: 2,
+      elevation: 1,
     },
     default: {
-      shadowColor: '#16395E',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
     },
   }) as ViewStyle,
 
   // Standard elevation for cards, buttons, dialogs
   card: Platform.select<ViewStyle>({
     ios: {
-      shadowColor: '#16395E',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
     },
     android: {
-      elevation: 4,
+      elevation: 2,
     },
     default: {
-      shadowColor: '#16395E',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
     },
   }) as ViewStyle,
 
   // Floating elevation for bottom navigation, floating search pills, selected cards
   floating: Platform.select<ViewStyle>({
     ios: {
-      shadowColor: '#0B64C0',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.14,
-      shadowRadius: 20,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1,
+      shadowRadius: 16,
     },
     android: {
-      elevation: 8,
+      elevation: 6,
     },
     default: {
-      shadowColor: '#0B64C0',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.14,
-      shadowRadius: 20,
+      shadowColor: '#0F172A',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1,
+      shadowRadius: 16,
     },
   }) as ViewStyle,
 
   // High elevation for bottom sheets & modal overlays
   modal: Platform.select<ViewStyle>({
     ios: {
-      shadowColor: '#16395E',
+      shadowColor: '#0F172A',
       shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.16,
-      shadowRadius: 24,
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
     },
     android: {
-      elevation: 16,
+      elevation: 12,
     },
     default: {
-      shadowColor: '#16395E',
+      shadowColor: '#0F172A',
       shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.16,
-      shadowRadius: 24,
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
     },
   }) as ViewStyle,
 };

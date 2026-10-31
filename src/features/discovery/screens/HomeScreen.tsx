@@ -24,6 +24,7 @@ import { useBookingStore } from '../../../stores/bookingStore';
 import { useDiscoveryStore } from '../../../stores/discoveryStore';
 import { useLocationStore } from '../../../stores/locationStore';
 import { useNotificationStore } from '../../../stores/notificationStore';
+import { useCommunityPoolStore } from '../../../stores/communityPoolStore';
 import { colors } from '../../../theme';
 import { NearbyTanker } from '../../../types/discovery';
 
@@ -79,6 +80,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [tankerToBook, setTankerToBook] = useState<NearbyTanker | null>(null);
 
   const { notifications, unreadCount, fetchNotifications, subscribeToNotifications } = useNotificationStore();
+  const { pools, fetchCommunityPools, subscribeToLivePools } = useCommunityPoolStore();
 
   // Initialize live customer location from database or GPS
   useEffect(() => {
@@ -89,6 +91,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   useEffect(() => {
     fetchNearbyTankers(activeCoordinates.latitude, activeCoordinates.longitude);
   }, [activeCoordinates.latitude, activeCoordinates.longitude, fetchNearbyTankers]);
+
+  // Fetch real community sump pools from Supabase
+  useEffect(() => {
+    fetchCommunityPools();
+    const unsubPools = subscribeToLivePools();
+    return () => {
+      unsubPools();
+    };
+  }, [fetchCommunityPools, subscribeToLivePools]);
 
   // Subscribe to live Realtime tanker movement and availability updates from Supabase
   useEffect(() => {
@@ -127,6 +138,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     setReviewModalVisible(true);
   };
 
+  const activePool = pools.find((p) => p.status === 'collecting' || p.status === 'funded');
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
@@ -163,17 +176,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           isLocating={isLocating}
         />
 
-        {/* Floating Community Sump Pooling Pill */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open Community Sump Pooling"
-          onPress={() => setCommunityPoolModalVisible(true)}
-          style={styles.communityPoolPill}
-        >
-          <Ionicons name="people" size={15} color="#FFFFFF" />
-          <Text style={styles.communityPoolPillText}>Community Sump Pool (20kL)</Text>
-          <Ionicons name="chevron-forward" size={12} color="#FFFFFF" />
-        </Pressable>
+        {/* Floating Contextual Community Sump Pooling Map Overlay (Only if active in DB) */}
+        {activePool && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open Community Sump Pooling for ${activePool.society_name}`}
+            onPress={() => setCommunityPoolModalVisible(true)}
+            style={styles.communityPoolPill}
+          >
+            <View style={styles.communityPoolDot} />
+            <Ionicons name="people" size={13} color="#FFFFFF" />
+            <Text style={styles.communityPoolPillText} numberOfLines={1}>
+              {activePool.society_name} ({Math.round(activePool.target_liters / 1000)}kL)
+            </Text>
+            <View style={styles.communityPoolPercentBadge}>
+              <Text style={styles.communityPoolPercentText}>
+                {Math.round((activePool.collected_amount / Math.max(1, activePool.target_amount)) * 100)}%
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.7)" />
+          </Pressable>
+        )}
       </View>
 
       {/* Active Live Booking Card (Uber/Ola in-trip card) */}
@@ -300,6 +323,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 16,
+    maxWidth: 240,
     backgroundColor: '#0F172A',
     flexDirection: 'row',
     alignItems: 'center',
@@ -310,11 +334,34 @@ const styles = StyleSheet.create({
     zIndex: 25,
     borderWidth: 1,
     borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  communityPoolDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
   },
   communityPoolPillText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
+    flexShrink: 1,
+  },
+  communityPoolPercentBadge: {
+    backgroundColor: '#0369A1',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+  },
+  communityPoolPercentText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#E0F2FE',
   },
   activeBookingWrapper: {
     position: 'absolute',

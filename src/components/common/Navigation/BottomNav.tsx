@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius } from '../../../theme/borderRadius';
 import { colors } from '../../../theme/colors';
@@ -34,8 +35,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onTabPress,
   tabs = DEFAULT_TABS,
 }) => {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 10);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: bottomPad }]}>
       <View style={styles.content}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -47,13 +51,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               accessibilityLabel={tab.label}
               accessibilityState={{ selected: isActive }}
               onPress={() => onTabPress(tab.id)}
-              style={styles.tabButton}
+              style={({ pressed }) => [
+                styles.tabButton,
+                pressed && { opacity: 0.8 },
+              ]}
             >
               <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
                 <Ionicons
                   name={tab.iconName}
-                  size={22}
-                  color={isActive ? colors.primary : colors.textMuted}
+                  size={20}
+                  color={isActive ? colors.primary : colors.textSecondary}
                 />
                 {Boolean(tab.badgeCount) && (
                   <View style={styles.badgePill}>
@@ -67,6 +74,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   styles.tabLabel,
                   isActive ? styles.tabLabelActive : styles.tabLabelInactive,
                 ]}
+                numberOfLines={1}
               >
                 {tab.label}
               </Text>
@@ -83,25 +91,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardSurface,
     borderTopWidth: 1,
     borderTopColor: colors.cardBorder,
-    paddingBottom: 24, // Safe area pad
     paddingTop: spacing.xs,
-    ...shadows.card,
+    zIndex: 50,
+    ...shadows.subtle,
   },
   content: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 54,
+    height: 52,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    height: 50,
+    paddingHorizontal: 4,
   },
   iconContainer: {
     width: 36,
-    height: 32,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: borderRadius.md,
@@ -115,7 +124,7 @@ const styles = StyleSheet.create({
     right: -4,
     backgroundColor: colors.error,
     borderRadius: borderRadius.full,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1,
   },
   badgeText: {
@@ -124,7 +133,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeights.bold,
   },
   tabLabel: {
-    fontSize: fontSizes.xs - 1,
+    fontSize: fontSizes.xs,
     marginTop: 2,
     fontWeight: fontWeights.medium,
   },
