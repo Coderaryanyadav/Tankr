@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius } from '../../../theme/borderRadius';
 import { colors } from '../../../theme/colors';
@@ -19,7 +19,11 @@ export const FullScreenError: React.FC<FullScreenErrorProps> = ({
   onRetry,
 }) => {
   return (
-    <View style={styles.fullScreenContainer}>
+    <View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
+      style={styles.fullScreenContainer}
+    >
       <View style={styles.errorIconCircle}>
         <Ionicons name="alert-circle" size={48} color={colors.error} />
       </View>
@@ -48,17 +52,23 @@ export interface ErrorBannerProps {
 
 export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss }) => {
   return (
-    <View style={styles.bannerContainer}>
-      <Ionicons name="warning" size={20} color={colors.error} style={{ marginRight: spacing.sm }} />
+    <View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
+      style={styles.bannerContainer}
+    >
+      <Ionicons name="warning" size={20} color="#B91C1C" style={{ marginRight: spacing.sm }} />
       <Text style={styles.bannerText}>{message}</Text>
       {onDismiss && (
-        <Ionicons
-          name="close"
-          size={18}
-          color={colors.error}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss error"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           onPress={onDismiss}
-          style={{ marginLeft: spacing.sm }}
-        />
+          style={{ marginLeft: spacing.sm, padding: 4 }}
+        >
+          <Ionicons name="close" size={18} color="#B91C1C" />
+        </Pressable>
       )}
     </View>
   );
@@ -112,8 +122,8 @@ const styles = StyleSheet.create({
   bannerText: {
     flex: 1,
     fontSize: fontSizes.sm,
-    color: colors.error,
-    fontWeight: fontWeights.medium,
+    color: '#991B1B', // Red 800: WCAG AA 5.9:1 on errorLight
+    fontWeight: fontWeights.semibold,
   },
 });
 

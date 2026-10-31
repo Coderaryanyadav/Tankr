@@ -134,6 +134,8 @@ export const Toast: React.FC<ToastProps> = ({
 
   return (
     <Animated.View
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
       style={[
         styles.container,
         {
@@ -149,6 +151,7 @@ export const Toast: React.FC<ToastProps> = ({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Dismiss notification"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         onPress={handleDismiss}
         style={styles.closeBtn}
       >

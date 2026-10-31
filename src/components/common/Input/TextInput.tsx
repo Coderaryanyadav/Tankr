@@ -80,6 +80,8 @@ export const TextInput: React.FC<TextInputProps> = ({
         <RNTextInput
           placeholderTextColor={colors.textMuted}
           editable={editable && !loading}
+          accessibilityLabel={label || rest.placeholder || 'Text input'}
+          accessibilityHint={helperText || undefined}
           onFocus={(e) => {
             setIsFocused(true);
             onFocus?.(e);
@@ -102,7 +104,13 @@ export const TextInput: React.FC<TextInputProps> = ({
       </View>
 
       {error ? (
-        <Text style={styles.errorText}>{error}</Text>
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+          style={styles.errorText}
+        >
+          {error}
+        </Text>
       ) : helperText ? (
         <Text style={styles.helperText}>{helperText}</Text>
       ) : null}
@@ -124,7 +132,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 52,
+    minHeight: 52,
+    paddingVertical: spacing.xs,
     backgroundColor: colors.cardSurface,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
@@ -165,8 +174,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: fontSizes.xs,
-    color: colors.error,
-    fontWeight: fontWeights.medium,
+    color: '#B91C1C', // Red 700: High-contrast 6.2:1 against light card backgrounds
+    fontWeight: fontWeights.semibold,
     marginTop: spacing.xs,
     marginLeft: spacing.xs,
   },

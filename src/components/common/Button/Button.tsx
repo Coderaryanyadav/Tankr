@@ -123,6 +123,7 @@ export const Button: React.FC<ButtonProps> = ({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel || title}
         accessibilityState={{ disabled: disabled || loading, busy: loading }}
+        hitSlop={size === 'sm' ? { top: 6, bottom: 6, left: 6, right: 6 } : undefined}
         disabled={disabled || loading}
         onPress={onPress}
         onPressIn={handlePressIn}
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
   },
   // Sizes
   size_sm: {
-    height: 40,
+    minHeight: 44,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
   },

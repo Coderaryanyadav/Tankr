@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -100,22 +102,27 @@ export const CustomerDisputeModal: React.FC<CustomerDisputeModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Report Delivery Issue</Text>
-              <Text style={styles.subtitle}>Order {bookingReference} • {capacityLiters.toLocaleString('en-IN')} L</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%', justifyContent: 'flex-end' }}
+        >
+          <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>Report Delivery Issue</Text>
+                <Text style={styles.subtitle}>Order {bookingReference} • {capacityLiters.toLocaleString('en-IN')} L</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close dispute modal"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={onClose}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </Pressable>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close dispute modal"
-              onPress={onClose}
-              style={styles.closeBtn}
-            >
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </Pressable>
-          </View>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
             {/* Category Selector */}
@@ -193,8 +200,9 @@ export const CustomerDisputeModal: React.FC<CustomerDisputeModalProps> = ({
             />
           </View>
         </View>
-      </View>
-    </Modal>
+      </KeyboardAvoidingView>
+    </View>
+  </Modal>
   );
 };
 

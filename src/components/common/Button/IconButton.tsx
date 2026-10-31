@@ -91,6 +91,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ disabled: disabled || loading, busy: loading }}
+        hitSlop={size === 'xs' ? { top: 8, bottom: 8, left: 8, right: 8 } : size === 'sm' ? { top: 6, bottom: 6, left: 6, right: 6 } : undefined}
         disabled={disabled || loading}
         onPress={onPress}
         onPressIn={handlePressIn}

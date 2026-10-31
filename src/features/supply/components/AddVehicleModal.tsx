@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -76,17 +78,27 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <View style={styles.dialog}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Onboard New Tanker</Text>
-              <Text style={styles.subtitle}>Register vehicle to your supplier fleet</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%', justifyContent: 'flex-end' }}
+        >
+          <View style={styles.dialog}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>Onboard New Tanker</Text>
+                <Text style={styles.subtitle}>Register vehicle to your supplier fleet</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close add vehicle modal"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={onClose}
+                style={{ padding: spacing.xs }}
+              >
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </Pressable>
             </View>
-            <Pressable onPress={onClose} style={{ padding: spacing.xs }}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </Pressable>
-          </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
             {/* Vehicle Number */}
@@ -185,8 +197,9 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({
             />
           </View>
         </View>
-      </View>
-    </Modal>
+      </KeyboardAvoidingView>
+    </View>
+  </Modal>
   );
 };
 

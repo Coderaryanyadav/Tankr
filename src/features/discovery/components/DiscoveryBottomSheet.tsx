@@ -189,6 +189,7 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Expand fleet options"
+          accessibilityHint="Tap to expand available tanker fleet and booking details"
           onPress={() => animateToSnap('intermediate')}
           style={styles.collapsedSummaryCard}
         >
@@ -342,7 +343,9 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                   <Pressable
                     key={tanker.tanker_id}
                     accessibilityRole="button"
-                    accessibilityLabel={`${tanker.supplier_name}, ${tanker.capacity_liters} Litres, ₹${tanker.estimated_total_price}`}
+                    accessibilityLabel={`${tanker.supplier_name}, ${tanker.capacity_liters} Litres, ₹${tanker.estimated_total_price}, Arriving in ${tanker.eta_minutes} minutes`}
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityHint={isSelected ? 'Currently selected for delivery' : 'Double tap to select this tanker'}
                     onPress={() => {
                       haptics.selection();
                       onSelectTanker(tanker.tanker_id);

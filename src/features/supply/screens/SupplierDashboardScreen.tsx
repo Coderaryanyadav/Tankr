@@ -65,9 +65,22 @@ export const SupplierDashboardScreen: React.FC<SupplierDashboardScreenProps> = (
     }
   };
 
-  const handleReject = async (id: string) => {
-    await rejectSupplierBooking(id);
-    Alert.alert('Order Declined', 'Order was returned to dispatch pool.');
+  const handleReject = async (id: string, ref: string) => {
+    Alert.alert(
+      'Decline Booking Dispatch?',
+      `Are you sure you want to decline booking #${ref}? The dispatch desk will reassign the order to an alternate fleet in the cluster.`,
+      [
+        { text: 'Keep Order', style: 'cancel' },
+        {
+          text: 'Decline Dispatch',
+          style: 'destructive',
+          onPress: async () => {
+            await rejectSupplierBooking(id);
+            Alert.alert('Order Declined', 'Order was returned to dispatch pool.');
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -110,7 +123,11 @@ export const SupplierDashboardScreen: React.FC<SupplierDashboardScreenProps> = (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Daily Revenue Cards */}
         <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
+          <View
+            accessibilityRole="text"
+            accessibilityLabel={`Today's revenue: ₹${supplierMetrics.todayRevenue.toLocaleString('en-IN')}, with ${supplierMetrics.activeDeliveriesCount} active deliveries`}
+            style={styles.metricCard}
+          >
             <Text style={styles.metricLabel}>TODAY'S REVENUE</Text>
             <Text style={styles.metricValue}>
               ₹{supplierMetrics.todayRevenue.toLocaleString('en-IN')}
@@ -118,7 +135,11 @@ export const SupplierDashboardScreen: React.FC<SupplierDashboardScreenProps> = (
             <Text style={styles.metricGrowth}>{supplierMetrics.activeDeliveriesCount} active deliveries</Text>
           </View>
 
-          <View style={styles.metricCard}>
+          <View
+            accessibilityRole="text"
+            accessibilityLabel={`Water delivered: ${(supplierMetrics.todayLiters / 1000).toFixed(0)} thousand litres across ${supplierMetrics.completedCount} completed deliveries`}
+            style={styles.metricCard}
+          >
             <Text style={styles.metricLabel}>WATER DELIVERED</Text>
             <Text style={styles.metricValue}>
               {(supplierMetrics.todayLiters / 1000).toFixed(0)}k Litres
@@ -185,7 +206,7 @@ export const SupplierDashboardScreen: React.FC<SupplierDashboardScreenProps> = (
                       title="Decline"
                       variant="outline"
                       size="md"
-                      onPress={() => handleReject(req.id)}
+                      onPress={() => handleReject(req.id, req.booking_reference)}
                     />
                   </View>
                 </View>

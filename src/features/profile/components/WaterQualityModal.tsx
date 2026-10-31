@@ -89,14 +89,26 @@ export const WaterQualityModal: React.FC<WaterQualityModalProps> = ({
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close water quality certificate"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={onClose}
+            style={styles.closeBtn}
+          >
             <Ionicons name="close" size={24} color={colors.darkNavy} />
           </Pressable>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>BIS-10500 Water Quality</Text>
             <Text style={styles.headerSubtitle}>NABL Lab Certified • Standard BIS-10500:2012</Text>
           </View>
-          <Pressable onPress={handleShareCertificate} style={styles.shareBtn}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Share official certificate"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={handleShareCertificate}
+            style={styles.shareBtn}
+          >
             <Ionicons name="share-social-outline" size={20} color={colors.primary} />
           </Pressable>
         </View>

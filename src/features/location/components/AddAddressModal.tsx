@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -91,7 +93,13 @@ export const AddAddressModal: React.FC<AddAddressModalProps> = ({
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeBtn}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close add address modal"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={onClose}
+            style={styles.closeBtn}
+          >
             <Ionicons name="close" size={24} color={colors.darkNavy} />
           </Pressable>
           <View style={styles.headerTitleWrap}>
@@ -100,11 +108,16 @@ export const AddAddressModal: React.FC<AddAddressModalProps> = ({
           </View>
         </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
         >
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
           {/* Label selector */}
           <Text style={styles.inputLabel}>ADDRESS TYPE</Text>
           <View style={styles.labelChips}>
@@ -205,9 +218,13 @@ export const AddAddressModal: React.FC<AddAddressModalProps> = ({
           </Pressable>
 
           {errorText && (
-            <View style={styles.errorBanner}>
-              <Ionicons name="alert-circle" size={16} color={colors.error} />
-              <Text style={styles.errorText}>{errorText}</Text>
+            <View
+              accessibilityRole="alert"
+              accessibilityLiveRegion="assertive"
+              style={styles.errorBanner}
+            >
+              <Ionicons name="alert-circle" size={16} color="#B91C1C" />
+              <Text style={[styles.errorText, { color: '#991B1B' }]}>{errorText}</Text>
             </View>
           )}
 
@@ -220,6 +237,7 @@ export const AddAddressModal: React.FC<AddAddressModalProps> = ({
             disabled={isSaving}
           />
         </ScrollView>
+      </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );

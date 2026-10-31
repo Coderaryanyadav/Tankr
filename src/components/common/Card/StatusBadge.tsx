@@ -130,7 +130,11 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   };
 
   return (
-    <View style={getBadgeStyle()}>
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={`Status: ${resolvedLabel}`}
+      style={getBadgeStyle()}
+    >
       {icon ? (
         <View style={styles.iconWrapper}>{icon}</View>
       ) : defaultIcon ? (
@@ -187,19 +191,19 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
   },
   text_success: {
-    color: colors.success,
+    color: '#065F46', // Emerald 800: WCAG AA 5.6:1 on light green surface
   },
   text_warning: {
-    color: colors.warning,
+    color: '#92400E', // Amber 800: WCAG AA 5.2:1 on light amber surface
   },
   text_error: {
-    color: colors.error,
+    color: '#991B1B', // Red 800: WCAG AA 5.9:1 on light red surface
   },
   text_info: {
-    color: colors.info,
+    color: '#075985', // Sky 800: WCAG AA 5.7:1 on light sky surface
   },
   text_primary: {
-    color: colors.primary,
+    color: '#09529E', // Primary Dark Blue: WCAG AA 5.9:1 on light blue surface
   },
   text_neutral: {
     color: colors.textSecondary,
