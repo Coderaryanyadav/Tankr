@@ -14,11 +14,13 @@ import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../th
 interface BookingSearchingOverlayProps {
   visible: boolean;
   onCancel: () => void;
+  onDispatchConfirmed?: () => void;
 }
 
 export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = ({
   visible,
   onCancel,
+  onDispatchConfirmed,
 }) => {
   const { activeBooking } = useBookingStore();
   const ripple1 = useRef(new Animated.Value(1)).current;
@@ -26,6 +28,13 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
 
   useEffect(() => {
     if (visible) {
+      const dispatchTimer = setTimeout(() => {
+        useBookingStore.setState({ isSearchingDriver: false });
+        if (onDispatchConfirmed) {
+          onDispatchConfirmed();
+        }
+      }, 2500);
+
       const anim1 = Animated.loop(
         Animated.sequence([
           Animated.timing(ripple1, {
@@ -61,11 +70,12 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
       anim2.start();
 
       return () => {
+        clearTimeout(dispatchTimer);
         anim1.stop();
         anim2.stop();
       };
     }
-  }, [visible, ripple1, ripple2]);
+  }, [visible, ripple1, ripple2, onDispatchConfirmed]);
 
   if (!visible || !activeBooking) return null;
 

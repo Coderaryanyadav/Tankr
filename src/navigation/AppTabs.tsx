@@ -14,7 +14,10 @@ export const AppTabs: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.screenWrapper}>
         {activeTab === 'discovery' ? (
-          <HomeScreen onNavigateToBookings={() => setActiveTab('bookings')} />
+          <HomeScreen
+            onNavigateToBookings={() => setActiveTab('bookings')}
+            onNavigateToTracking={() => setActiveTab('activity')}
+          />
         ) : activeTab === 'bookings' ? (
           <BookingsListScreen
             onBack={() => setActiveTab('discovery')}

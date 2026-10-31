@@ -279,10 +279,15 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                       ₹{tanker.estimated_total_price.toLocaleString('en-IN')}
                     </Text>
                     <Text style={styles.priceSubtext}>all incl.</Text>
-                    <View style={styles.availableTag}>
-                      <View style={styles.greenPulseDot} />
-                      <Text style={styles.availableText}>Available</Text>
-                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Book ${tanker.capacity_liters}L for ₹${tanker.estimated_total_price}`}
+                      onPress={() => onBookSelectedTanker(tanker)}
+                      style={({ pressed }) => [styles.cardBookBtn, pressed && { opacity: 0.85 }]}
+                    >
+                      <Text style={styles.cardBookBtnText}>Book</Text>
+                      <Ionicons name="arrow-forward" size={11} color={colors.white} />
+                    </Pressable>
                   </View>
                 </View>
 
@@ -301,30 +306,37 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
         )}
       </ScrollView>
 
-      {/* Sticky Bottom Booking Action */}
+      {/* Sleek Floating Booking Action Dock */}
       {selectedTanker && (
-        <View style={styles.stickyFooter}>
-          <View style={styles.footerSummary}>
-            <View>
-              <Text style={styles.footerTankerName}>
-                {selectedTanker.capacity_liters.toLocaleString('en-IN')}L • {selectedTanker.supplier_name}
-              </Text>
-              <Text style={styles.footerEta}>
-                Arriving in ~{selectedTanker.eta_minutes} mins ({selectedTanker.distance_km} km)
+        <View style={styles.floatingDock}>
+          <View style={styles.dockDetailsCol}>
+            <View style={styles.dockTitleRow}>
+              <Ionicons name="water" size={14} color={colors.primary} />
+              <Text style={styles.dockCapacityText}>
+                {getCapacityDisplay(selectedTanker.capacity_liters)}
               </Text>
             </View>
-            <Text style={styles.footerPrice}>
-              ₹{selectedTanker.estimated_total_price.toLocaleString('en-IN')}
+            <Text numberOfLines={1} style={styles.dockSubtext}>
+              {selectedTanker.supplier_name} • ~{selectedTanker.eta_minutes}m
             </Text>
           </View>
 
-          <Button
-            title={`Book ${getCapacityDisplay(selectedTanker.capacity_liters)} Tanker`}
-            variant="primary"
-            size="lg"
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Confirm Book ${selectedTanker.capacity_liters} Liters for ₹${selectedTanker.estimated_total_price}`}
             onPress={() => onBookSelectedTanker(selectedTanker)}
-            rightIcon={<Ionicons name="arrow-forward" size={20} color={colors.white} />}
-          />
+            style={({ pressed }) => [
+              styles.dockCtaButton,
+              pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+            ]}
+          >
+            <Text style={styles.dockCtaPrice}>
+              ₹{selectedTanker.estimated_total_price.toLocaleString('en-IN')}
+            </Text>
+            <View style={styles.dockCtaDivider} />
+            <Text style={styles.dockCtaText}>Book Tanker</Text>
+            <Ionicons name="arrow-forward" size={15} color={colors.white} />
+          </Pressable>
         </View>
       )}
     </View>
@@ -581,55 +593,82 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: -2,
   },
-  availableTag: {
+  cardBookBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    gap: 3,
     marginTop: 4,
   },
-  greenPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.success,
-  },
-  availableText: {
+  cardBookBtnText: {
+    color: colors.white,
     fontSize: 10,
-    color: colors.success,
     fontWeight: fontWeights.bold,
   },
-  stickyFooter: {
+  floatingDock: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 12,
+    left: spacing.md,
+    right: spacing.md,
     backgroundColor: colors.cardSurface,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    padding: spacing.md,
-    paddingBottom: 24,
-    ...shadows.modal,
-  },
-  footerSummary: {
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    zIndex: 40,
+    ...shadows.floating,
   },
-  footerTankerName: {
-    fontSize: 14,
+  dockDetailsCol: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  dockTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dockCapacityText: {
+    fontSize: 13,
     fontWeight: fontWeights.bold,
     color: colors.darkNavy,
   },
-  footerEta: {
+  dockSubtext: {
     fontSize: 11,
     color: colors.textSecondary,
     marginTop: 1,
   },
-  footerPrice: {
-    fontSize: 20,
-    fontWeight: fontWeights.heavy,
-    color: colors.primary,
+  dockCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: borderRadius.xl,
+    gap: 6,
+    ...shadows.subtle,
+  },
+  dockCtaPrice: {
+    fontSize: 13,
+    fontWeight: fontWeights.bold,
+    color: colors.white,
+  },
+  dockCtaDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    marginHorizontal: 2,
+  },
+  dockCtaText: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: colors.white,
   },
 });
 

@@ -26,11 +26,13 @@ import { NearbyTanker } from '../../../types/discovery';
 interface HomeScreenProps {
   onNavigateToBookings?: () => void;
   onNavigateToProfile?: () => void;
+  onNavigateToTracking?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToBookings,
   onNavigateToProfile,
+  onNavigateToTracking,
 }) => {
   const { user, profile, signOut } = useAuthStore();
   const {
@@ -143,7 +145,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <View style={styles.activeBookingWrapper}>
           <ActiveBookingCard
             booking={activeBooking}
-            onViewDetails={onNavigateToBookings}
+            onViewDetails={onNavigateToTracking || onNavigateToBookings}
           />
         </View>
       )}
@@ -221,6 +223,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onCancel={() => {
           if (activeBooking?.id) {
             cancelBooking(activeBooking.id, 'User cancelled during driver dispatch');
+          }
+        }}
+        onDispatchConfirmed={() => {
+          if (onNavigateToTracking) {
+            onNavigateToTracking();
           }
         }}
       />
