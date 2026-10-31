@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
   Modal as RNModal,
   Pressable,
   StyleSheet,
@@ -12,6 +13,8 @@ import { colors } from '../../../theme/colors';
 import { shadows } from '../../../theme/shadows';
 import { spacing } from '../../../theme/spacing';
 import { fontSizes, fontWeights } from '../../../theme/typography';
+import { useReducedMotion } from '../../../theme/motion';
+import { haptics } from '../../../theme/haptics';
 import { Button } from '../Button/Button';
 
 export interface ConfirmDialogProps {
@@ -39,6 +42,33 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const isReducedMotion = useReducedMotion();
+  const animProgress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      if (isDestructive) {
+        haptics.warning();
+      }
+      if (isReducedMotion) {
+        animProgress.setValue(1);
+      } else {
+        animProgress.setValue(0);
+        Animated.spring(animProgress, {
+          toValue: 1,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  }, [visible, isDestructive, isReducedMotion, animProgress]);
+
+  const translateY = animProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [24, 0],
+  });
+
   return (
     <RNModal
       visible={visible}
@@ -49,7 +79,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onCancel} />
 
-        <View style={styles.dialogCard}>
+        <Animated.View
+          style={[
+            styles.dialogCard,
+            {
+              opacity: animProgress,
+              transform: [{ translateY }],
+            },
+          ]}
+        >
           {/* Close X Button */}
           <Pressable
             accessibilityRole="button"
@@ -98,7 +136,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               style={styles.cancelBtn}
             />
           </View>
-        </View>
+        </Animated.View>
       </View>
     </RNModal>
   );

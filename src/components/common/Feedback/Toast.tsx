@@ -12,6 +12,7 @@ import { colors } from '../../../theme/colors';
 import { shadows } from '../../../theme/shadows';
 import { spacing } from '../../../theme/spacing';
 import { fontSizes, fontWeights } from '../../../theme/typography';
+import { haptics } from '../../../theme/haptics';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
@@ -35,6 +36,16 @@ export const Toast: React.FC<ToastProps> = ({
 
   useEffect(() => {
     if (visible) {
+      if (variant === 'success') {
+        haptics.success();
+      } else if (variant === 'error') {
+        haptics.error();
+      } else if (variant === 'warning') {
+        haptics.warning();
+      } else {
+        haptics.lightImpact();
+      }
+
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,

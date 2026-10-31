@@ -25,6 +25,8 @@ import {
   TankerSortOption,
 } from '../../../types/discovery';
 import { borderRadius, colors, fontSizes, fontWeights, shadows, spacing } from '../../../theme';
+import { haptics } from '../../../theme/haptics';
+import { useReducedMotion } from '../../../theme/motion';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -74,10 +76,12 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
 }) => {
   const [currentSnap, setCurrentSnap] = useState<BottomSheetSnapState>(snapState);
   const heightAnim = useRef(new Animated.Value(SNAP_HEIGHTS[snapState])).current;
+  const isReducedMotion = useReducedMotion();
 
   const animateToSnap = (nextSnap: BottomSheetSnapState) => {
     setCurrentSnap(nextSnap);
     onSnapStateChange?.(nextSnap);
+    haptics.lightImpact();
     Animated.spring(heightAnim, {
       toValue: SNAP_HEIGHTS[nextSnap],
       useNativeDriver: false,
@@ -231,7 +235,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="All Capacities"
-                onPress={() => onSelectCapacityFilter(null)}
+                onPress={() => {
+                  haptics.selection();
+                  onSelectCapacityFilter(null);
+                }}
                 style={[
                   styles.filterChip,
                   selectedCapacityFilter === null && styles.filterChipActive,
@@ -254,7 +261,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                     key={cat.capacity}
                     accessibilityRole="button"
                     accessibilityLabel={`${cat.label} filter`}
-                    onPress={() => onSelectCapacityFilter(cat.capacity)}
+                    onPress={() => {
+                      haptics.selection();
+                      onSelectCapacityFilter(cat.capacity);
+                    }}
                     style={[styles.filterChip, isSelected && styles.filterChipActive]}
                   >
                     <Text
@@ -282,7 +292,10 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                   key={opt}
                   accessibilityRole="button"
                   accessibilityLabel={`Sort by ${opt}`}
-                  onPress={() => onSelectSortOption(opt)}
+                  onPress={() => {
+                    haptics.selection();
+                    onSelectSortOption(opt);
+                  }}
                   style={[
                     styles.sortTab,
                     sortOption === opt && styles.sortTabActive,
@@ -331,14 +344,13 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
                     accessibilityRole="button"
                     accessibilityLabel={`${tanker.supplier_name}, ${tanker.capacity_liters} Litres, ₹${tanker.estimated_total_price}`}
                     onPress={() => {
+                      haptics.selection();
                       onSelectTanker(tanker.tanker_id);
-                      if (currentSnap === 'intermediate') {
-                        // Keep selected and open detail preview
-                      }
                     }}
-                    style={[
+                    style={({ pressed }) => [
                       styles.tankerCard,
                       isSelected && styles.tankerCardSelected,
+                      pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] },
                     ]}
                   >
                     <View style={styles.cardHeader}>

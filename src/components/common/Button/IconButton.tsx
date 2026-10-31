@@ -11,6 +11,8 @@ import {
 import { borderRadius } from '../../../theme/borderRadius';
 import { colors } from '../../../theme/colors';
 import { shadows } from '../../../theme/shadows';
+import { animatePress, useReducedMotion } from '../../../theme/motion';
+import { haptics } from '../../../theme/haptics';
 
 export type IconButtonVariant = 'surface' | 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 export type IconButtonSize = 'xs' | 'sm' | 'md' | 'lg';
@@ -37,23 +39,19 @@ export const IconButton: React.FC<IconButtonProps> = ({
   accessibilityLabel,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const isReducedMotion = useReducedMotion();
 
   const handlePressIn = () => {
     if (!disabled && !loading) {
-      Animated.spring(scaleAnim, {
-        toValue: 0.92,
-        useNativeDriver: true,
-        speed: 60,
-      }).start();
+      animatePress(scaleAnim, true, isReducedMotion);
+      if (variant === 'primary' || variant === 'danger') {
+        haptics.lightImpact();
+      }
     }
   };
 
   const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 40,
-    }).start();
+    animatePress(scaleAnim, false, isReducedMotion);
   };
 
   const getContainerStyle = (): ViewStyle[] => {

@@ -10,6 +10,7 @@ import {
 import { borderRadius } from '../../../theme/borderRadius';
 import { colors } from '../../../theme/colors';
 import { spacing } from '../../../theme/spacing';
+import { startSkeletonShimmer, useReducedMotion } from '../../../theme/motion';
 
 export interface SkeletonProps {
   width?: DimensionValue;
@@ -24,27 +25,15 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   radius = borderRadius.md,
   style,
 }) => {
-  const opacityAnim = useRef(new Animated.Value(0.35)).current;
+  const isReducedMotion = useReducedMotion();
+  const opacityAnim = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacityAnim, {
-          toValue: 0.85,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0.35,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-
-    return () => pulse.stop();
-  }, [opacityAnim]);
+    const animation = startSkeletonShimmer(opacityAnim, isReducedMotion);
+    return () => {
+      animation?.stop();
+    };
+  }, [opacityAnim, isReducedMotion]);
 
   return (
     <Animated.View

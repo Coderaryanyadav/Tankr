@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -12,6 +13,8 @@ import { Button } from '../../../components/common/Button/Button';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { borderRadius, colors, fontSizes, fontWeights, shadows, spacing } from '../../../theme';
 import { BookingRecord } from '../../../types/booking';
+import { haptics } from '../../../theme/haptics';
+import { animateSuccessPop, useReducedMotion } from '../../../theme/motion';
 
 export interface BookingSuccessModalProps {
   visible: boolean;
@@ -28,6 +31,17 @@ export const BookingSuccessModal: React.FC<BookingSuccessModalProps> = ({
   onViewOrders,
   onClose,
 }) => {
+  const isReducedMotion = useReducedMotion();
+  const iconScale = useRef(new Animated.Value(0.4)).current;
+  const iconOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible && booking) {
+      haptics.success();
+      animateSuccessPop(iconScale, iconOpacity, isReducedMotion);
+    }
+  }, [visible, booking, isReducedMotion]);
+
   if (!visible || !booking) return null;
 
   return (
@@ -59,9 +73,17 @@ export const BookingSuccessModal: React.FC<BookingSuccessModalProps> = ({
           <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
             {/* Hero Confirmation */}
             <View style={styles.heroSection}>
-              <View style={styles.iconCircle}>
+              <Animated.View
+                style={[
+                  styles.iconCircle,
+                  {
+                    transform: [{ scale: iconScale }],
+                    opacity: iconOpacity,
+                  },
+                ]}
+              >
                 <Ionicons name="water" size={38} color={colors.primary} />
-              </View>
+              </Animated.View>
               <Text style={styles.referenceNumber}>#{booking.booking_reference}</Text>
               <Text style={styles.heroTitle}>Water Tanker Dispatched</Text>
               <Text style={styles.heroSub}>

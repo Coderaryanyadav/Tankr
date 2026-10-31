@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { NearbyTanker } from '../../../types/discovery';
 import { borderRadius, colors, fontSizes, fontWeights, shadows, spacing } from '../../../theme';
+import { haptics } from '../../../theme/haptics';
 
 const TILE_SIZE = 256;
 
@@ -292,7 +293,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             key={tanker.tanker_id}
             accessibilityRole="button"
             accessibilityLabel={`${tanker.supplier_name}, ${capText}, ₹${tanker.estimated_total_price}, ETA ${tanker.eta_minutes} mins`}
-            onPress={() => onSelectTanker(tanker.tanker_id)}
+            onPress={() => {
+              haptics.selection();
+              onSelectTanker(tanker.tanker_id);
+            }}
             style={[
               styles.markerPill,
               isSelected ? styles.markerPillSelected : styles.markerPillDefault,
@@ -358,7 +362,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Zoom in map"
-          onPress={() => setZoom((z) => Math.min(15, z + 1))}
+          onPress={() => {
+            haptics.lightImpact();
+            setZoom((z) => Math.min(15, z + 1));
+          }}
           style={styles.zoomButton}
         >
           <Ionicons name="add" size={18} color={colors.darkNavy} />
@@ -367,7 +374,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Zoom out map"
-          onPress={() => setZoom((z) => Math.max(12, z - 1))}
+          onPress={() => {
+            haptics.lightImpact();
+            setZoom((z) => Math.max(12, z - 1));
+          }}
           style={styles.zoomButton}
         >
           <Ionicons name="remove" size={18} color={colors.darkNavy} />
@@ -379,7 +389,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Center map to my sump GPS location"
-          onPress={onRecenterGps}
+          onPress={() => {
+            haptics.lightImpact();
+            onRecenterGps();
+          }}
           disabled={isLocating}
           style={({ pressed }) => [styles.gpsButton, pressed && { opacity: 0.8 }]}
         >

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   StyleProp,
   StyleSheet,
   Text,
@@ -14,10 +15,12 @@ import { borderRadius } from '../../../theme/borderRadius';
 import { colors } from '../../../theme/colors';
 import { spacing } from '../../../theme/spacing';
 import { fontSizes, fontWeights } from '../../../theme/typography';
+import { animateErrorShake, useReducedMotion } from '../../../theme/motion';
+import { haptics } from '../../../theme/haptics';
 
 export interface TextInputProps extends RNTextInputProps {
   label?: string;
-  error?: string;
+  error?: string | null;
   success?: boolean;
   loading?: boolean;
   helperText?: string;
@@ -43,9 +46,24 @@ export const TextInput: React.FC<TextInputProps> = ({
   ...rest
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const isReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (error) {
+      animateErrorShake(shakeAnim, isReducedMotion);
+      haptics.error();
+    }
+  }, [error, isReducedMotion]);
 
   return (
-    <View style={[styles.wrapper, containerStyle]}>
+    <Animated.View
+      style={[
+        styles.wrapper,
+        containerStyle,
+        { transform: [{ translateX: shakeAnim }] },
+      ]}
+    >
       {label && <Text style={styles.label}>{label}</Text>}
 
       <View
@@ -88,7 +106,7 @@ export const TextInput: React.FC<TextInputProps> = ({
       ) : helperText ? (
         <Text style={styles.helperText}>{helperText}</Text>
       ) : null}
-    </View>
+    </Animated.View>
   );
 };
 

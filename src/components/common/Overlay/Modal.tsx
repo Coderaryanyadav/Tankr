@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
   Modal as RNModal,
   Pressable,
   StyleSheet,
@@ -12,6 +13,7 @@ import { colors } from '../../../theme/colors';
 import { shadows } from '../../../theme/shadows';
 import { spacing } from '../../../theme/spacing';
 import { fontSizes, fontWeights } from '../../../theme/typography';
+import { useReducedMotion } from '../../../theme/motion';
 import { Button } from '../Button/Button';
 
 export interface ModalProps {
@@ -41,6 +43,30 @@ export const Modal: React.FC<ModalProps> = ({
   cancelTitle = 'Cancel',
   onCancel,
 }) => {
+  const isReducedMotion = useReducedMotion();
+  const animProgress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      if (isReducedMotion) {
+        animProgress.setValue(1);
+      } else {
+        animProgress.setValue(0);
+        Animated.spring(animProgress, {
+          toValue: 1,
+          tension: 65,
+          friction: 9,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  }, [visible, isReducedMotion, animProgress]);
+
+  const translateY = animProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [24, 0],
+  });
+
   return (
     <RNModal
       transparent
@@ -52,7 +78,15 @@ export const Modal: React.FC<ModalProps> = ({
       <View style={styles.backdrop}>
         <Pressable style={styles.pressableBackdrop} onPress={onClose} />
 
-        <View style={styles.dialogCard}>
+        <Animated.View
+          style={[
+            styles.dialogCard,
+            {
+              opacity: animProgress,
+              transform: [{ translateY }],
+            },
+          ]}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close dialog"
@@ -95,7 +129,7 @@ export const Modal: React.FC<ModalProps> = ({
               />
             </View>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </RNModal>
   );

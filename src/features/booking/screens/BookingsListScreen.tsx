@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +20,7 @@ import { BOOKING_STATUS_CONFIG, BookingRecord, BookingStatus } from '../../../ty
 import { InvoiceViewModal } from '../../orders/components/InvoiceViewModal';
 import { invoiceService, InvoiceRecord } from '../../../services/invoice/invoiceService';
 import { PREVIEW_BOOKING, PREVIEW_INVOICE } from '../../../utils/previewDemoData';
+import { haptics } from '../../../theme/haptics';
 
 interface BookingsListScreenProps {
   onBack?: () => void;
@@ -68,6 +70,17 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
     initialModal === 'invoice' ? (PREVIEW_INVOICE as any) : null
   );
   const [filterTab, setFilterTab] = useState<'all' | 'active' | 'recurring'>('all');
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    haptics.lightImpact();
+    if (user?.id) {
+      await fetchUserBookings(user.id);
+    }
+    setIsRefreshing(false);
+  };
 
   const sourceBookings = userBookings.length > 0 ? userBookings : [PREVIEW_BOOKING];
 
@@ -174,6 +187,14 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {isLoadingBookings ? (
           <View style={styles.loadingContainer}>
@@ -347,19 +368,87 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
                   </View>
                 )}
 
+                {/* Expandable Order Details Drawer */}
+                {expandedBookingId === b.id && (
+                  <View style={styles.expandedDrawer}>
+                    <View style={styles.drawerDivider} />
+                    <Text style={styles.drawerSectionTitle}>Order Breakdown & Logistics</Text>
+
+                    <View style={styles.drawerRow}>
+                      <Text style={styles.drawerLabel}>Base Water Cost</Text>
+                      <Text style={styles.drawerValue}>
+                        ₹{(((b as any).pricing_breakdown)?.base_price || Math.max(0, b.final_payable_amount - 150)).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={styles.drawerRow}>
+                      <Text style={styles.drawerLabel}>Delivery & Dispatch</Text>
+                      <Text style={styles.drawerValue}>
+                        ₹{(((b as any).pricing_breakdown)?.delivery_fee || 150).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={styles.drawerRow}>
+                      <Text style={styles.drawerLabel}>GST (5% Potable)</Text>
+                      <Text style={styles.drawerValue}>
+                        ₹{(((b as any).pricing_breakdown)?.taxes || Math.round(b.final_payable_amount * 0.05)).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={[styles.drawerRow, styles.drawerTotalRow]}>
+                      <Text style={styles.drawerTotalLabel}>Total Paid / Payable</Text>
+                      <Text style={styles.drawerTotalValue}>₹{b.final_payable_amount.toLocaleString('en-IN')}</Text>
+                    </View>
+
+                    <View style={styles.drawerLogisticsSection}>
+                      <View style={styles.drawerLogisticsRow}>
+                        <Ionicons name="business" size={12} color={colors.textSecondary} />
+                        <Text style={styles.drawerLogisticsText}>Supplier: {b.supplier_name || 'Verified Water Fleet'}</Text>
+                      </View>
+                      {b.driver_name && (
+                        <View style={styles.drawerLogisticsRow}>
+                          <Ionicons name="person" size={12} color={colors.textSecondary} />
+                          <Text style={styles.drawerLogisticsText}>Driver: {b.driver_name}</Text>
+                        </View>
+                      )}
+                      {b.vehicle_number && (
+                        <View style={styles.drawerLogisticsRow}>
+                          <Ionicons name="car" size={12} color={colors.textSecondary} />
+                          <Text style={styles.drawerLogisticsText}>Vehicle: {b.vehicle_number}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
                 {/* 4. Bottom Section: Actionable Buttons (Strict PIN Privacy) */}
                 <View style={styles.cardActionsRow}>
                   {isActiveTrip ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Track live delivery on map"
-                      onPress={() => onSelectBooking?.(b)}
-                      style={styles.trackDeliveryBtn}
-                    >
-                      <Ionicons name="navigate-circle-outline" size={16} color="#FFFFFF" />
-                      <Text style={styles.trackDeliveryBtnText}>Track Live Delivery</Text>
-                      <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
-                    </Pressable>
+                    <View style={styles.activeActionsRow}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Track live delivery on map"
+                        onPress={() => onSelectBooking?.(b)}
+                        style={styles.trackDeliveryBtn}
+                      >
+                        <Ionicons name="navigate-circle-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.trackDeliveryBtnText}>Track Live Delivery</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
+                      </Pressable>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle order breakdown details"
+                        onPress={() => {
+                          haptics.selection();
+                          setExpandedBookingId(expandedBookingId === b.id ? null : b.id);
+                        }}
+                        style={styles.expandToggleBtn}
+                      >
+                        <Ionicons
+                          name={expandedBookingId === b.id ? 'chevron-up-circle' : 'information-circle-outline'}
+                          size={18}
+                          color={colors.primary}
+                        />
+                      </Pressable>
+                    </View>
                   ) : (
                     <View style={styles.completedActions}>
                       <Pressable
@@ -372,17 +461,24 @@ export const BookingsListScreen: React.FC<BookingsListScreenProps> = ({
                         <Text style={styles.invoiceBtnText}>View Tax Invoice</Text>
                       </Pressable>
 
-                      {onSelectBooking && (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="View delivery receipt"
-                          onPress={() => onSelectBooking(b)}
-                          style={styles.detailsBtn}
-                        >
-                          <Text style={styles.detailsBtnText}>Order Details</Text>
-                          <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
-                        </Pressable>
-                      )}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Toggle order breakdown details"
+                        onPress={() => {
+                          haptics.selection();
+                          setExpandedBookingId(expandedBookingId === b.id ? null : b.id);
+                        }}
+                        style={styles.detailsBtn}
+                      >
+                        <Text style={styles.detailsBtnText}>
+                          {expandedBookingId === b.id ? 'Hide Details' : 'Order Details'}
+                        </Text>
+                        <Ionicons
+                          name={expandedBookingId === b.id ? 'chevron-up' : 'chevron-down'}
+                          size={12}
+                          color={colors.textSecondary}
+                        />
+                      </Pressable>
                     </View>
                   )}
                 </View>
@@ -720,7 +816,87 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     paddingTop: spacing.xs,
   },
+  activeActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  expandToggleBtn: {
+    padding: spacing.sm,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expandedDrawer: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  drawerDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginBottom: spacing.sm,
+  },
+  drawerSectionTitle: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: colors.darkNavy,
+    marginBottom: spacing.xs,
+  },
+  drawerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  drawerLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  drawerValue: {
+    fontSize: 11,
+    fontWeight: fontWeights.medium,
+    color: colors.darkNavy,
+  },
+  drawerTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    marginTop: 4,
+    paddingTop: 4,
+    marginBottom: spacing.xs,
+  },
+  drawerTotalLabel: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: colors.darkNavy,
+  },
+  drawerTotalValue: {
+    fontSize: 12,
+    fontWeight: fontWeights.bold,
+    color: colors.primary,
+  },
+  drawerLogisticsSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    padding: spacing.xs,
+    marginTop: spacing.xs,
+    gap: 4,
+  },
+  drawerLogisticsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  drawerLogisticsText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    flex: 1,
+  },
   trackDeliveryBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

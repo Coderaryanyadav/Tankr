@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius } from '../../../theme/borderRadius';
@@ -7,6 +7,8 @@ import { colors } from '../../../theme/colors';
 import { shadows } from '../../../theme/shadows';
 import { spacing } from '../../../theme/spacing';
 import { fontSizes, fontWeights } from '../../../theme/typography';
+import { animateTabPress, useReducedMotion } from '../../../theme/motion';
+import { haptics } from '../../../theme/haptics';
 
 export type TabId = 'discovery' | 'bookings' | 'activity' | 'profile';
 
@@ -30,6 +32,60 @@ const DEFAULT_TABS: TabItem[] = [
   { id: 'profile', label: 'Account', iconName: 'person-outline' },
 ];
 
+const TabButton: React.FC<{
+  tab: TabItem;
+  isActive: boolean;
+  onPress: () => void;
+  isReducedMotion: boolean;
+}> = ({ tab, isActive, onPress, isReducedMotion }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    animateTabPress(scaleAnim, isReducedMotion);
+    haptics.selection();
+    onPress();
+  };
+
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityLabel={tab.label}
+      accessibilityState={{ selected: isActive }}
+      onPress={handlePress}
+      style={styles.tabButton}
+    >
+      <Animated.View
+        style={[
+          styles.iconContainer,
+          isActive && styles.iconContainerActive,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <Ionicons
+          name={tab.iconName}
+          size={20}
+          color={isActive ? colors.primary : colors.textSecondary}
+        />
+        {Boolean(tab.badgeCount) && (
+          <View style={styles.badgePill}>
+            <Text style={styles.badgeText}>{tab.badgeCount}</Text>
+          </View>
+        )}
+      </Animated.View>
+
+      <Text
+        style={[
+          styles.tabLabel,
+          isActive ? styles.tabLabelActive : styles.tabLabelInactive,
+        ]}
+        numberOfLines={1}
+      >
+        {tab.label}
+      </Text>
+    </Pressable>
+  );
+};
+
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   onTabPress,
@@ -37,50 +93,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 10);
+  const isReducedMotion = useReducedMotion();
 
   return (
     <View style={[styles.container, { paddingBottom: bottomPad }]}>
       <View style={styles.content}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-
-          return (
-            <Pressable
-              key={tab.id}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: isActive }}
-              onPress={() => onTabPress(tab.id)}
-              style={({ pressed }) => [
-                styles.tabButton,
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
-                <Ionicons
-                  name={tab.iconName}
-                  size={20}
-                  color={isActive ? colors.primary : colors.textSecondary}
-                />
-                {Boolean(tab.badgeCount) && (
-                  <View style={styles.badgePill}>
-                    <Text style={styles.badgeText}>{tab.badgeCount}</Text>
-                  </View>
-                )}
-              </View>
-
-              <Text
-                style={[
-                  styles.tabLabel,
-                  isActive ? styles.tabLabelActive : styles.tabLabelInactive,
-                ]}
-                numberOfLines={1}
-              >
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {tabs.map((tab) => (
+          <TabButton
+            key={tab.id}
+            tab={tab}
+            isActive={activeTab === tab.id}
+            onPress={() => onTabPress(tab.id)}
+            isReducedMotion={isReducedMotion}
+          />
+        ))}
       </View>
     </View>
   );

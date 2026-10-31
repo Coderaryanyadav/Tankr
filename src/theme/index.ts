@@ -6,4 +6,6 @@ export * from './shadows';
 export * from './borders';
 export * from './layout';
 export * from './animations';
+export * from './motion';
+export * from './haptics';
 export * from './theme';

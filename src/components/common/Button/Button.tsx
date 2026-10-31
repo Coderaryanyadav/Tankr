@@ -15,6 +15,8 @@ import { colors } from '../../../theme/colors';
 import { shadows } from '../../../theme/shadows';
 import { spacing } from '../../../theme/spacing';
 import { fontSizes, fontWeights } from '../../../theme/typography';
+import { animatePress, useReducedMotion } from '../../../theme/motion';
+import { haptics } from '../../../theme/haptics';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -49,25 +51,19 @@ export const Button: React.FC<ButtonProps> = ({
   accessibilityLabel,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const isReducedMotion = useReducedMotion();
 
   const handlePressIn = () => {
     if (!disabled && !loading) {
-      Animated.spring(scaleAnim, {
-        toValue: 0.98,
-        useNativeDriver: true,
-        speed: 50,
-        bounciness: 4,
-      }).start();
+      animatePress(scaleAnim, true, isReducedMotion);
+      if (variant === 'primary' || variant === 'danger') {
+        haptics.lightImpact();
+      }
     }
   };
 
   const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 6,
-    }).start();
+    animatePress(scaleAnim, false, isReducedMotion);
   };
 
   const getContainerStyle = (): ViewStyle[] => {
