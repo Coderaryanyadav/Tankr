@@ -97,13 +97,13 @@ class MapplsServiceClass {
               formattedAddress:
                 item.formatted_address ||
                 [item.street, item.subLocality, item.locality, item.city].filter(Boolean).join(', ') ||
-                'Bengaluru, Karnataka',
+                'Mumbai, Maharashtra',
               houseNumber: item.houseNumber,
               houseName: item.houseName,
               locality: item.locality,
               subLocality: item.subLocality || item.subSubLocality,
-              city: item.city || 'Bengaluru',
-              state: item.state || 'Karnataka',
+              city: item.city || 'Mumbai',
+              state: item.state || 'Maharashtra',
               pincode: item.pincode || '',
               latitude,
               longitude,
@@ -124,10 +124,10 @@ class MapplsServiceClass {
           const item = json?.copResults || json?.results?.[0];
           if (item) {
             return {
-              formattedAddress: item.formattedAddress || 'Bengaluru, Karnataka',
+              formattedAddress: item.formattedAddress || 'Mumbai, Maharashtra',
               locality: item.locality,
-              city: item.city || 'Bengaluru',
-              state: item.state || 'Karnataka',
+              city: item.city || 'Mumbai',
+              state: item.state || 'Maharashtra',
               pincode: item.pincode || '',
               latitude,
               longitude,

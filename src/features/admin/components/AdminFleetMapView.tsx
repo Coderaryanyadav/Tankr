@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -25,23 +25,27 @@ function projectToTileCoords(lat: number, lng: number, zoom: number) {
   return { x, y };
 }
 
-// Bengaluru High-Deficit Zones for Demand Heatmap Overlay
-const DEFICIT_ZONES = [
-  { name: 'Whitefield (Tech Hub)', lat: 12.9850, lng: 77.7200, deficitLevel: 'SEVERE (84%)', color: '#DC2626', radius: 48 },
-  { name: 'Bellandur / ORR', lat: 12.9260, lng: 77.6762, deficitLevel: 'CRITICAL (78%)', color: '#EA580C', radius: 44 },
-  { name: 'Marathahalli Junction', lat: 12.9550, lng: 77.7000, deficitLevel: 'ELEVATED (68%)', color: '#D97706', radius: 38 },
-  { name: 'HSR Layout Sector 1-4', lat: 12.9121, lng: 77.6446, deficitLevel: 'MODERATE (52%)', color: '#EAB308', radius: 36 },
-  { name: 'Indiranagar / Domlur', lat: 12.9716, lng: 77.6412, deficitLevel: 'OPTIMAL (25%)', color: '#16A34A', radius: 32 },
-];
-
 export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
-  const { fleetTankers } = useAdminStore();
-  const [zoom, setZoom] = useState<number>(12);
-  const [centerLat, setCenterLat] = useState<number>(12.9500);
-  const [centerLng, setCenterLng] = useState<number>(77.6600);
+  const { fleetTankers, deficitZones, fetchDeficitZones, fetchFleetTankers } = useAdminStore();
+  const [zoom, setZoom] = useState<number>(13);
+  const [centerLat, setCenterLat] = useState<number>(19.1171);
+  const [centerLng, setCenterLng] = useState<number>(72.8809);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
   const [selectedCapacity, setSelectedCapacity] = useState<number | null>(null);
   const [selectedTanker, setSelectedTanker] = useState<FleetTankerItem | null>(null);
+
+  useEffect(() => {
+    fetchDeficitZones();
+    fetchFleetTankers();
+  }, [fetchDeficitZones, fetchFleetTankers]);
+
+  // Center map dynamically on first zone when data loads
+  useEffect(() => {
+    if (deficitZones.length > 0 && centerLat === 19.1171 && centerLng === 72.8809) {
+      setCenterLat(deficitZones[0].center_lat);
+      setCenterLng(deficitZones[0].center_lng);
+    }
+  }, [deficitZones]);
 
   const mapWidth = isDesktop ? 780 : Dimensions.get('window').width - 32;
   const mapHeight = 520;
@@ -101,29 +105,35 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
     });
   }, [filteredTankers, centerLat, centerLng, zoom, mapWidth, mapHeight]);
 
-  // Project Heatmap Zones
+  // Project Live Database Heatmap Zones
   const projectedDeficits = useMemo(() => {
     const center = projectToTileCoords(centerLat, centerLng, zoom);
-    return DEFICIT_ZONES.map((zone) => {
-      const proj = projectToTileCoords(zone.lat, zone.lng, zoom);
+    return deficitZones.map((zone) => {
+      const proj = projectToTileCoords(zone.center_lat, zone.center_lng, zoom);
       const pixelX = (proj.x - center.x) * TILE_SIZE + mapWidth / 2;
       const pixelY = (proj.y - center.y) * TILE_SIZE + mapHeight / 2;
       return {
-        ...zone,
+        id: zone.id,
+        name: zone.zone_name,
+        deficitLevel: zone.deficit_level,
+        color: zone.color,
+        radius: zone.radius_pixels,
+        onlineFleet: zone.online_fleet_count,
+        activeDeliveries: zone.active_deliveries,
         pixelX,
         pixelY,
       };
     });
-  }, [centerLat, centerLng, zoom, mapWidth, mapHeight]);
+  }, [deficitZones, centerLat, centerLng, zoom, mapWidth, mapHeight]);
 
   return (
     <View style={styles.container}>
       {/* Top Controls Toolbar */}
       <View style={styles.toolbar}>
         <View style={styles.toolbarLeft}>
-          <Text style={styles.toolbarTitle}>Bengaluru Fleet Command & Deficit Heatmap</Text>
+          <Text style={styles.toolbarTitle}>Mumbai Fleet Command & Deficit Heatmap (Marol HQ)</Text>
           <Text style={styles.toolbarSub}>
-            Streaming telemetry for {filteredTankers.length} online tankers
+            Streaming telemetry for {filteredTankers.length} online tankers across Marol & Andheri
           </Text>
         </View>
 
@@ -273,11 +283,13 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Recenter Bengaluru"
+              accessibilityLabel="Recenter Fleet Map"
               onPress={() => {
-                setCenterLat(12.9500);
-                setCenterLng(77.6600);
-                setZoom(12);
+                const targetLat = deficitZones[0]?.center_lat ?? filteredTankers[0]?.latitude ?? 19.1171;
+                const targetLng = deficitZones[0]?.center_lng ?? filteredTankers[0]?.longitude ?? 72.8809;
+                setCenterLat(targetLat);
+                setCenterLng(targetLng);
+                setZoom(13);
               }}
               style={styles.mapCtrlBtn}
             >
@@ -389,7 +401,7 @@ export const AdminFleetMapView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop
               <Ionicons name="navigate-circle-outline" size={48} color="#94A3B8" />
               <Text style={styles.drawerEmptyTitle}>Select a Tanker on the Map</Text>
               <Text style={styles.drawerEmptySub}>
-                Click any tanker pin across Bengaluru to inspect driver telemetry, capacity, and live GPS coordinates.
+                Click any tanker pin across Mumbai (Marol, Andheri, Powai) to inspect driver telemetry, capacity, and live GPS coordinates.
               </Text>
             </View>
           )}

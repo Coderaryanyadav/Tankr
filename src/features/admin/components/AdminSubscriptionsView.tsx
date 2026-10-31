@@ -67,8 +67,8 @@ export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDe
       contact_person: contactPerson.trim(),
       contact_phone: contactPhone.trim(),
       delivery_address: deliveryAddress.trim(),
-      latitude: 12.9260,
-      longitude: 77.6762,
+      latitude: 19.1128,
+      longitude: 72.8988,
       daily_liters: Number(dailyLiters) || 15000,
       preferred_time_slot: timeSlot,
       monthly_rate: Number(monthlyRate) || 60000,
@@ -292,7 +292,7 @@ export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDe
                 <Text style={styles.inputLabel}>CORPORATE / SOCIETY NAME</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="e.g. Embassy Tech Village, Prestige Shantiniketan"
+                  placeholder="e.g. Boomerang Business Park, SEEPZ Tech Center"
                   placeholderTextColor="#94A3B8"
                   value={clientName}
                   onChangeText={setClientName}
@@ -367,7 +367,7 @@ export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDe
                 <Text style={styles.inputLabel}>DELIVERY ADDRESS / SUMP LOCATION</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Outer Ring Road, Bengaluru"
+                  placeholder="Chandivali Farm Road, Andheri East, Mumbai"
                   placeholderTextColor="#94A3B8"
                   value={deliveryAddress}
                   onChangeText={setDeliveryAddress}

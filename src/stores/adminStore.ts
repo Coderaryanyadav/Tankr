@@ -57,6 +57,21 @@ export interface ServiceZoneItem {
   traffic_factor: number;
 }
 
+export interface LiveDeficitZone {
+  id: string;
+  zone_name: string;
+  center_lat: number;
+  center_lng: number;
+  radius_km: number;
+  online_fleet_count: number;
+  available_fleet_count: number;
+  active_deliveries: number;
+  deficit_percentage: number;
+  deficit_level: string;
+  color: string;
+  radius_pixels: number;
+}
+
 export interface FleetTankerItem {
   id: string;
   vehicle_number: string;
@@ -151,6 +166,7 @@ interface AdminState {
   disputes: DisputeItem[];
   auditLogs: AdminAuditLogItem[];
   serviceZones: ServiceZoneItem[];
+  deficitZones: LiveDeficitZone[];
   fleetTankers: FleetTankerItem[];
   emergencyDispatches: EmergencyDispatchItem[];
   payoutLedger: PayoutLedgerItem[];
@@ -163,6 +179,7 @@ interface AdminState {
   fetchDashboardMetrics: () => Promise<void>;
   fetchAuditLogs: () => Promise<void>;
   fetchServiceZones: () => Promise<void>;
+  fetchDeficitZones: () => Promise<void>;
   fetchFleetTankers: () => Promise<void>;
   fetchEmergencyDispatches: () => Promise<void>;
   triggerEmergencyDispatch: (params: {
@@ -208,6 +225,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   disputes: [],
   auditLogs: [],
   serviceZones: [],
+  deficitZones: [],
   fleetTankers: [],
   emergencyDispatches: [],
   payoutLedger: [],
@@ -293,6 +311,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       // 4. Parallel fetch enterprise suite modules
       await Promise.allSettled([
         get().fetchFleetTankers(),
+        get().fetchDeficitZones(),
         get().fetchEmergencyDispatches(),
         get().fetchPayoutLedger(),
         get().fetchWaterCertificates(),
@@ -324,8 +343,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             water_type: t.water_type || 'Potable (Drinking)',
             is_available: t.is_available,
             is_online: t.is_online,
-            latitude: Number(t.latitude || 12.9716),
-            longitude: Number(t.longitude || 77.6412),
+            latitude: Number(t.latitude || 19.1171),
+            longitude: Number(t.longitude || 72.8809),
             heading_degrees: t.heading_degrees,
             base_price: t.base_price,
             supplier_id: t.supplier_id,
@@ -334,6 +353,32 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       }
     } catch {
       // Ignored
+    }
+  },
+
+  fetchDeficitZones: async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_live_demand_deficit_zones');
+      if (!error && data && Array.isArray(data)) {
+        set({
+          deficitZones: data.map((z: any) => ({
+            id: z.id,
+            zone_name: z.zone_name,
+            center_lat: Number(z.center_lat),
+            center_lng: Number(z.center_lng),
+            radius_km: Number(z.radius_km),
+            online_fleet_count: Number(z.online_fleet_count || 0),
+            available_fleet_count: Number(z.available_fleet_count || 0),
+            active_deliveries: Number(z.active_deliveries || 0),
+            deficit_percentage: Number(z.deficit_percentage || 0),
+            deficit_level: z.deficit_level || 'OPTIMAL',
+            color: z.color || '#16A34A',
+            radius_pixels: Number(z.radius_pixels || 40),
+          })),
+        });
+      }
+    } catch (err) {
+      console.warn('[AdminStore] Error fetching live deficit zones:', err);
     }
   },
 
@@ -661,7 +706,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           action: 'approve_supplier',
           target_type: 'supplier',
           target_id: supplierId,
-          notes: 'KYC verified and approved for Bangalore metropolitan distribution.',
+          notes: 'KYC verified and approved for Mumbai metropolitan distribution.',
         });
       }
 

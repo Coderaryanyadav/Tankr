@@ -119,7 +119,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onProfilePress={() => {
           Alert.alert(
             'My Account',
-            `Phone: ${user?.phone || 'Verified'}\nAccount Role: ${(profile?.role || 'Customer').toUpperCase()}\nCity: ${profile?.city || 'Bengaluru'}`,
+            `Phone: ${user?.phone || 'Verified'}\nAccount Role: ${(profile?.role || 'Customer').toUpperCase()}\nCity: ${profile?.city || 'Mumbai'}`,
             [
               {
                 text: 'Sign Out',
@@ -205,7 +205,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     label: 'home',
                     flat_or_building: text,
                     street_address: activeAddressText || 'Delivery Point',
-                    city: profile?.city || 'Bengaluru',
+                    city: profile?.city || 'Mumbai',
                     pincode: '560001',
                     latitude: activeCoordinates.latitude,
                     longitude: activeCoordinates.longitude,

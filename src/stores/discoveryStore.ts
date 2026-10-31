@@ -45,7 +45,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   isRefreshing: false,
   error: null,
   lastFetchedAt: null,
-  userCoordinates: { latitude: 12.9716, longitude: 77.5946 },
+  userCoordinates: { latitude: 19.1171, longitude: 72.8809 },
 
   fetchNearbyTankers: async (lat: number, lng: number, forceRefresh = false) => {
     if (forceRefresh) {

@@ -180,7 +180,7 @@ export const AdminDashboardScreen: React.FC = () => {
                   <Text style={styles.opsBadgeText}>OPS COMMAND</Text>
                 </View>
               </View>
-              <Text style={styles.brandSub}>Bengaluru Operations Hub</Text>
+              <Text style={styles.brandSub}>Mumbai Operations Hub (Marol HQ)</Text>
             </View>
           </View>
 
@@ -268,7 +268,7 @@ export const AdminDashboardScreen: React.FC = () => {
                 {activeTab === 'overview'
                   ? 'Real-Time Dispatch Command Desk'
                   : activeTab === 'fleet_map'
-                  ? 'Bengaluru Live Geospatial Fleet & Deficit Heatmap'
+                  ? 'Mumbai Live Geospatial Fleet & Deficit Heatmap'
                   : activeTab === 'priority_dispatch'
                   ? 'Hospital & Critical Sump Priority Dispatch (20m SLA)'
                   : activeTab === 'payouts'
@@ -282,7 +282,7 @@ export const AdminDashboardScreen: React.FC = () => {
                   : activeTab === 'disputes'
                   ? 'Customer Disputes & SLA Mediation'
                   : activeTab === 'zones'
-                  ? 'Bengaluru PostGIS Liquidity Zones'
+                  ? 'Mumbai PostGIS Liquidity Zones'
                   : 'Immutable System Audit Trail'}
               </Text>
             </View>
@@ -566,7 +566,7 @@ export const AdminDashboardScreen: React.FC = () => {
                           <Ionicons name="shield-checkmark" size={36} color="#16A34A" />
                           <Text style={styles.emptyCardTitle}>KYC Queue Clear</Text>
                           <Text style={styles.emptyCardSub}>
-                            All active water suppliers in Bangalore are verified.
+                            All active water suppliers in Mumbai are verified.
                           </Text>
                         </View>
                       ) : (
@@ -738,7 +738,7 @@ export const AdminDashboardScreen: React.FC = () => {
               <View style={styles.portalCard}>
                 <View style={styles.portalCardHeader}>
                   <View>
-                    <Text style={styles.portalCardTitle}>Bengaluru Service Zones & PostGIS Telemetry</Text>
+                    <Text style={styles.portalCardTitle}>Mumbai Service Zones & PostGIS Telemetry</Text>
                     <Text style={styles.portalCardSubtitle}>
                       Zone polygon liquidity and traffic ETA multipliers
                     </Text>

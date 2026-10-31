@@ -25,9 +25,9 @@ interface CommunityPoolModalProps {
 export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
   visible,
   onClose,
-  defaultAddress = 'Whitefield, Bengaluru',
-  defaultLat = 12.9716,
-  defaultLng = 77.7499,
+  defaultAddress = 'Marol, Andheri East, Mumbai',
+  defaultLat = 19.1171,
+  defaultLng = 72.8809,
 }) => {
   const {
     pools,

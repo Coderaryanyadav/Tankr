@@ -25,20 +25,21 @@ interface SupplierRegistrationScreenProps {
 }
 
 const AVAILABLE_ZONES = [
-  'Whitefield',
-  'Bellandur',
-  'Indiranagar',
-  'Koramangala',
-  'Electronic City',
-  'HSR Layout',
-  'Marathahalli',
-  'Sarjapur Road',
+  'Marol / MIDC',
+  'Andheri East',
+  'Sakinaka',
+  'SEEPZ',
+  'Powai',
+  'Chandivali',
+  'Chakala / JB Nagar',
+  'Vile Parle East',
 ];
 
 const WATER_SOURCES = [
+  'BMC Bhandup Filtration Node (Potable TDS < 200)',
   'Certified Private Borewell (Tested TDS < 250)',
   'Commercial RO Filtration Plant',
-  'BWSSB Permitted Bulk Supply Point',
+  'MIDC Marol Potable Bulk Extraction Terminal',
 ];
 
 export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProps> = ({
@@ -53,7 +54,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
   const [address, setAddress] = useState('');
   const [gstin, setGstin] = useState('');
   const [selectedWaterSource, setSelectedWaterSource] = useState(WATER_SOURCES[0]);
-  const [selectedZones, setSelectedZones] = useState<string[]>(['Whitefield', 'Bellandur']);
+  const [selectedZones, setSelectedZones] = useState<string[]>(['Marol / MIDC', 'Andheri East']);
   const [tankerCount, setTankerCount] = useState('2');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessSubmitted, setIsSuccessSubmitted] = useState(false);
@@ -158,7 +159,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
           </Pressable>
           <View style={{ flex: 1, marginLeft: spacing.sm }}>
             <Text style={styles.headerTitle}>Supplier Partner Onboarding</Text>
-            <Text style={styles.headerSubtitle}>Join the Bengaluru Water Distribution Network</Text>
+            <Text style={styles.headerSubtitle}>Join the Mumbai Water Distribution Network</Text>
           </View>
         </View>
 
@@ -204,7 +205,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
             <Text style={styles.label}>Depot / Filling Station Address *</Text>
             <TextInput
               style={[styles.input, { minHeight: 64, textAlignVertical: 'top' }]}
-              placeholder="Plot No. 12, Whitefield Main Road, Bengaluru"
+              placeholder="Plot No. 18, Marol MIDC Road, Andheri East, Mumbai"
               placeholderTextColor={colors.textMuted}
               multiline
               value={address}
@@ -219,7 +220,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
             <Text style={styles.label}>15-Digit GSTIN Number *</Text>
             <TextInput
               style={styles.input}
-              placeholder="29AABCS1429B1Z8"
+              placeholder="27AABCT8821M1Z5"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
               value={gstin}
@@ -251,7 +252,7 @@ export const SupplierRegistrationScreen: React.FC<SupplierRegistrationScreenProp
           {/* Operating Zones Section */}
           <Text style={styles.sectionHeader}>3. Operational Coverage & Fleet</Text>
 
-          <Text style={styles.label}>Select Service Zones (Bengaluru Urban)</Text>
+          <Text style={styles.label}>Select Service Zones (Mumbai Suburban)</Text>
           <View style={styles.chipRow}>
             {AVAILABLE_ZONES.map((zone) => {
               const active = selectedZones.includes(zone);

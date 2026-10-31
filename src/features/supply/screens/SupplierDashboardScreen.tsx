@@ -65,7 +65,7 @@ export const SupplierDashboardScreen: React.FC = () => {
             />
           </View>
           <Text style={styles.supplierTitle}>{supplierBusinessName}</Text>
-          <Text style={styles.supplierSubtitle}>Registered Hub • Bengaluru Metro</Text>
+          <Text style={styles.supplierSubtitle}>Registered Hub • Mumbai Metro (Marol HQ)</Text>
         </View>
 
         <Pressable

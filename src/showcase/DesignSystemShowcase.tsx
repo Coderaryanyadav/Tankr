@@ -521,11 +521,11 @@ export const DesignSystemShowcase: React.FC = () => {
                   await addSavedAddress(user.id, {
                     label: 'other',
                     flat_or_building: text,
-                    street_address: 'Outer Ring Road, Bellandur',
-                    city: 'Bengaluru',
-                    pincode: '560103',
-                    latitude: 12.926,
-                    longitude: 77.6762,
+                    street_address: 'Marol Military Road, Andheri East',
+                    city: 'Mumbai',
+                    pincode: '400059',
+                    latitude: 19.1171,
+                    longitude: 72.8809,
                     is_default: false,
                   });
                 }

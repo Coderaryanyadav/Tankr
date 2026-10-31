@@ -38,10 +38,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
   const [flatOrBuilding, setFlatOrBuilding] = useState<string>('');
   const [streetAddress, setStreetAddress] = useState<string>('');
   const [landmark, setLandmark] = useState<string>('');
-  const [city, setCity] = useState<string>('Bengaluru');
+  const [city, setCity] = useState<string>('Mumbai');
   const [pincode, setPincode] = useState<string>('');
-  const [latitude, setLatitude] = useState<number>(12.9716);
-  const [longitude, setLongitude] = useState<number>(77.5946);
+  const [latitude, setLatitude] = useState<number>(19.1171);
+  const [longitude, setLongitude] = useState<number>(72.8809);
   const [addressLabel, setAddressLabel] = useState<'home' | 'work' | 'other'>('home');
 
   // Status & Validation
@@ -305,7 +305,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
 
             <TextInput
               label="Street / Area / Road *"
-              placeholder="e.g. ECC Road, Whitefield"
+              placeholder="e.g. Marol Military Road, Andheri East"
               value={streetAddress}
               onChangeText={setStreetAddress}
               error={validationErrors.streetAddress}
@@ -334,7 +334,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
               <View style={{ flex: 1, marginLeft: spacing.sm }}>
                 <TextInput
                   label="Postal PIN Code *"
-                  placeholder="560066"
+                  placeholder="400059"
                   keyboardType="number-pad"
                   maxLength={6}
                   value={pincode}

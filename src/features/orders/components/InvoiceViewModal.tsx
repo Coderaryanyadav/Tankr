@@ -133,7 +133,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
                 <Text style={styles.partyName}>{supplierName}</Text>
                 <Text style={styles.partyDetail}>GSTIN: {supplierGstin}</Text>
                 <Text style={styles.partyDetail}>Vehicle: {vehicleNo}</Text>
-                <Text style={styles.partyDetail}>Bengaluru, Karnataka</Text>
+                <Text style={styles.partyDetail}>Mumbai, Maharashtra</Text>
               </View>
 
               <View style={styles.partyCol}>

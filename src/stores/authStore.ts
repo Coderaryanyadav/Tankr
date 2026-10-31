@@ -147,7 +147,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         is_onboarding_completed: false,
         profile_photo_url: null,
         preferred_address: null,
-        city: 'Bengaluru',
+        city: 'Mumbai',
         pincode: null,
       };
     } catch (err) {

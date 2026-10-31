@@ -36,8 +36,8 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
       contact_person: contactPerson.trim(),
       contact_phone: contactPhone.trim(),
       delivery_address: deliveryAddress.trim(),
-      latitude: 12.9850,
-      longitude: 77.7200,
+      latitude: 19.1235,
+      longitude: 72.8815,
       required_liters: requiredLiters,
       sla_minutes: 20,
     });
@@ -107,7 +107,7 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
             <Text style={styles.inputLabel}>CRITICAL FACILITY / HOSPITAL NAME</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g. Manipal Dialysis Unit, Columbia Asia ICU"
+              placeholder="e.g. SevenHills Hospital (Marol), Holy Spirit ICU"
               placeholderTextColor="#94A3B8"
               value={institutionName}
               onChangeText={setInstitutionName}
@@ -177,7 +177,7 @@ export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ 
             <Text style={styles.inputLabel}>DELIVERY ADDRESS / INLET POINT</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g. Inpatient Block B, Whitefield Main Road"
+              placeholder="e.g. Inpatient Block B, Marol Maroshi Road, Andheri East"
               placeholderTextColor="#94A3B8"
               value={deliveryAddress}
               onChangeText={setDeliveryAddress}

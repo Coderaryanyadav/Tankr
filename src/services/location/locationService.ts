@@ -18,11 +18,11 @@ export interface GeocodedAddress {
 }
 
 /**
- * Default fallback coordinates: Central Bengaluru
+ * Default fallback coordinates: Marol, Andheri East, Mumbai
  */
 export const DEFAULT_FALLBACK_LOCATION: GeoLocation = {
-  latitude: 12.9716,
-  longitude: 77.5946,
+  latitude: 19.1171,
+  longitude: 72.8809,
 };
 
 export const LocationService = {
@@ -106,7 +106,7 @@ export const LocationService = {
         formattedAddress: formatted || 'Selected Pin Location',
         flatOrBuilding: item.name || '',
         streetAddress: [item.street, item.subregion].filter(Boolean).join(', ') || 'Main Road',
-        city: item.city || 'Bengaluru',
+        city: item.city || 'Mumbai',
         pincode: item.postalCode || '',
         latitude: coords.latitude,
         longitude: coords.longitude,

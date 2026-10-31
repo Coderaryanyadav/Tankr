@@ -29,7 +29,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
 
   const displayName = profile?.full_name || (user?.phone ? `Customer (${user.phone.slice(-4)})` : 'Valued Customer');
   const displayPhone = user?.phone || profile?.phone_number || 'Phone verified';
-  const displayCity = profile?.city || 'Bengaluru';
+  const displayCity = profile?.city || 'Mumbai';
   const roleName = (profile?.role || 'Customer').toUpperCase();
 
   const handleSignOut = () => {
@@ -170,8 +170,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigateToBookin
 
         {/* Version Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>TANKR v1.0.0 • Bengaluru Metropolitan Ops</Text>
-          <Text style={styles.footerSubtext}>Encrypted • BWSSB Compliant • PostGIS Radar</Text>
+          <Text style={styles.footerText}>TANKR v1.0.0 • Mumbai Metropolitan Ops (Marol HQ)</Text>
+          <Text style={styles.footerSubtext}>Encrypted • BMC Compliant • PostGIS Live Radar</Text>
         </View>
       </ScrollView>
 

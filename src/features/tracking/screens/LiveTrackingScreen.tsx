@@ -43,8 +43,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
   const [trackingState, setTrackingState] = useState<LiveTrackingState | null>(null);
 
-  const centerLat = activeBooking?.delivery_latitude || 12.9716;
-  const centerLng = activeBooking?.delivery_longitude || 77.5946;
+  const centerLat = activeBooking?.delivery_latitude || 19.1171;
+  const centerLng = activeBooking?.delivery_longitude || 72.8809;
   const zoom = 14;
 
   const trackingTiles = useMemo(() => {
