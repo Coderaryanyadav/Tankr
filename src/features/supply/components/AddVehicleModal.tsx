@@ -214,6 +214,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     maxHeight: '88%',
+    width: '100%',
+    maxWidth: 540,
+    alignSelf: 'center',
     paddingBottom: spacing.lg,
   },
   header: {

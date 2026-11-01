@@ -225,7 +225,7 @@ class PaymentService {
    */
   async processBookingPayment(
     bookingId: string,
-    amount: number,
+    _amount: number,
     method: 'upi' | 'card' | 'cod'
   ): Promise<PaymentProcessResult> {
     const idempotencyKey = this.generateIdempotencyKey(bookingId);
@@ -267,7 +267,7 @@ class PaymentService {
   /**
    * Processes a refund when a tanker booking is cancelled prior to tanker dispatch.
    */
-  async processRefund(bookingId: string, reason: string): Promise<boolean> {
+  async processRefund(bookingId: string, _reason?: string): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('payments')

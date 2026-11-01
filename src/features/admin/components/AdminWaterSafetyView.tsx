@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -12,10 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore, WaterCertificateItem } from '../../../stores/adminStore';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, fontWeights, shadows, spacing } from '../../../theme';
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
-export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
+export const AdminWaterSafetyView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop: _isDesktop = true }) => {
   const {
     waterCertificates,
     suspendWaterCertificate,

@@ -934,7 +934,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       // Find a supplier id or use default supplier
       const sup = get().pendingSuppliers[0];
       const { data: sups } = await supabase.from('suppliers').select('id').limit(1);
-      const supplierId = sups?.[0]?.id || '8cf81dd2-a4ca-4d4d-8268-9f3212f71e87';
+      const supplierId = sups?.[0]?.id || sup?.id || '8cf81dd2-a4ca-4d4d-8268-9f3212f71e87';
 
       const { error } = await supabase.from('tankers').insert({
         supplier_id: supplierId,

@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontWeights, shadows } from '../../../theme';
+import { fontWeights, shadows } from '../../../theme';
 
 interface ScreenLink {
   app: string;

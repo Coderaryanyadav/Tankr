@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal } from '../../../components/common/Overlay/Modal';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
 import { DiscoveryHeader } from '../components/DiscoveryHeader';
 import { DiscoveryBottomSheet } from '../components/DiscoveryBottomSheet';
@@ -45,7 +44,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToTracking,
   initialModal,
 }) => {
-  const { user, profile, signOut } = useAuthStore();
+  const { user } = useAuthStore();
   const {
     activeCoordinates,
     activeAddressText,
@@ -53,7 +52,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     locateUserViaGps,
     initializeLocation,
     fetchSavedAddresses,
-    addSavedAddress,
     isLocating,
   } = useLocationStore();
 
@@ -66,7 +64,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const {
     filteredTankers,
     selectedTankerId,
-    selectedTanker,
     selectedCapacityFilter,
     sortOption,
     isLoading,
@@ -96,7 +93,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, [initialModal]);
 
-  const { notifications, unreadCount, fetchNotifications, subscribeToNotifications } = useNotificationStore();
+  const { unreadCount, fetchNotifications, subscribeToNotifications } = useNotificationStore();
   const { pools, fetchCommunityPools, subscribeToLivePools } = useCommunityPoolStore();
 
   // Initialize live customer location from database or GPS
@@ -137,15 +134,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   }, [subscribeToLiveTankers]);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchSavedAddresses(user.id);
-      fetchNotifications(user.id);
-      const unsub = subscribeToNotifications(user.id);
-      return () => {
-        unsub();
-      };
-    }
-  }, [user, fetchSavedAddresses, fetchNotifications, subscribeToNotifications]);
+    if (!user?.id) return undefined;
+
+    fetchSavedAddresses(user.id);
+    fetchNotifications(user.id);
+    const unsub = subscribeToNotifications(user.id);
+    return () => {
+      unsub();
+    };
+  }, [user?.id, fetchSavedAddresses, fetchNotifications, subscribeToNotifications]);
 
   // Recenter GPS
   const handleRecenterGps = async () => {
@@ -228,6 +225,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             onViewDetails={onNavigateToTracking || onNavigateToBookings}
           />
         </View>
+      )}
+
+      {/* Tap-outside backdrop when sheet is expanded */}
+      {bottomSheetSnap === 'expanded' && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Minimize fleet sheet and view map"
+          style={styles.sheetBackdrop}
+          onPress={() => setBottomSheetSnap('intermediate')}
+        />
       )}
 
       {/* 3. Bottom Section: Polished Draggable Bottom Sheet */}
@@ -408,9 +415,18 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 30,
   },
+  sheetBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    zIndex: 95,
+  },
   bottomSheetSection: {
     flex: 1,
     marginTop: -20, // Overlap slightly with map for modern rounded sheet look
-    zIndex: 10,
+    zIndex: 100,
   },
 });

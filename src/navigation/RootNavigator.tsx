@@ -8,6 +8,7 @@ import { SupplierRegistrationScreen } from '../features/supply/screens/SupplierR
 import { DriverDashboardScreen } from '../features/supply/screens/DriverDashboardScreen';
 import { AdminDashboardScreen } from '../features/admin/screens/AdminDashboardScreen';
 import { DesignSystemShowcase } from '../showcase/DesignSystemShowcase';
+import { TabId } from '../components/common/Navigation/BottomNav';
 import { AppTabs } from './AppTabs';
 import { useAuthStore } from '../stores/authStore';
 import { colors } from '../theme';
@@ -98,8 +99,16 @@ export const RootNavigator: React.FC = () => {
     }
 
     // Default to Customer App with requested tab or modal
-    const targetTab = urlParams.tab || (urlParams.screen === 'bookings' ? 'bookings' : urlParams.screen === 'tracking' ? 'activity' : urlParams.screen === 'account' ? 'account' : 'discovery');
-    return <AppTabs initialTab={targetTab as any} initialModal={urlParams.modal || undefined} />;
+    const rawTab = urlParams.tab || urlParams.screen;
+    const targetTab: TabId =
+      rawTab === 'account' || rawTab === 'profile'
+        ? 'profile'
+        : rawTab === 'tracking' || rawTab === 'activity'
+        ? 'activity'
+        : rawTab === 'bookings'
+        ? 'bookings'
+        : 'discovery';
+    return <AppTabs initialTab={targetTab} initialModal={urlParams.modal || undefined} />;
   };
 
   // Authoritative Server-Driven Role Navigation

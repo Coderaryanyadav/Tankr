@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProfileSection } from '../../../components/common/Card/ProfileSection';
 import { SettingsRow } from '../../../components/common/Card/SettingsRow';
-import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { SavedAddressesSheet } from '../../location/components/SavedAddressesSheet';
 import { SignOutConfirmModal } from '../components/SignOutConfirmModal';

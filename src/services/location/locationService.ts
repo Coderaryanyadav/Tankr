@@ -1,5 +1,4 @@
 import * as Location from 'expo-location';
-import { Alert } from 'react-native';
 import { MapplsService } from '../mappls/mapplsService';
 
 export interface GeoLocation {
@@ -125,7 +124,7 @@ export const LocationService = {
 
     try {
       const results = await Location.geocodeAsync(query);
-      return results.slice(0, 4).map((res, index) => ({
+      return results.slice(0, 4).map((res) => ({
         title: query,
         subtitle: `Latitude: ${res.latitude.toFixed(4)}, Longitude: ${res.longitude.toFixed(4)}`,
         coords: {

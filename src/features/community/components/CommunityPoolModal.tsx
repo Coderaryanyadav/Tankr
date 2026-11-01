@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -56,18 +55,19 @@ export const CommunityPoolModal: React.FC<CommunityPoolModalProps> = ({
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    if (visible) {
-      fetchCommunityPools();
-      try {
-        const unsub = subscribeToLivePools();
-        return () => {
-          try {
-            unsub();
-          } catch {}
-        };
-      } catch (err) {
-        console.warn('[CommunityPoolModal] Subscription notice:', err);
-      }
+    if (!visible) return undefined;
+
+    fetchCommunityPools();
+    try {
+      const unsub = subscribeToLivePools();
+      return () => {
+        try {
+          unsub();
+        } catch {}
+      };
+    } catch (err) {
+      console.warn('[CommunityPoolModal] Subscription notice:', err);
+      return undefined;
     }
   }, [visible, fetchCommunityPools, subscribeToLivePools]);
 

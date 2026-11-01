@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -12,10 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore } from '../../../stores/adminStore';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, fontWeights, shadows, spacing } from '../../../theme';
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
-export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
+export const AdminPayoutsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop: _isDesktop = true }) => {
   const { payoutLedger, financialSummary, executeBatchPayout, createDriverPayout, settleIndividualPayout } = useAdminStore();
   const [isExecuting, setIsExecuting] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

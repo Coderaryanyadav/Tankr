@@ -28,13 +28,14 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
   const ripple2 = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (visible) {
-      const dispatchTimer = setTimeout(() => {
-        useBookingStore.setState({ isSearchingDriver: false });
-        if (onDispatchConfirmed) {
-          onDispatchConfirmed();
-        }
-      }, 2500);
+    if (!visible) return undefined;
+
+    const dispatchTimer = setTimeout(() => {
+      useBookingStore.setState({ isSearchingDriver: false });
+      if (onDispatchConfirmed) {
+        onDispatchConfirmed();
+      }
+    }, 2500);
 
       const anim1 = Animated.loop(
         Animated.sequence([
@@ -67,15 +68,14 @@ export const BookingSearchingOverlay: React.FC<BookingSearchingOverlayProps> = (
         ])
       );
 
-      anim1.start();
-      anim2.start();
+    anim1.start();
+    anim2.start();
 
-      return () => {
-        clearTimeout(dispatchTimer);
-        anim1.stop();
-        anim2.stop();
-      };
-    }
+    return () => {
+      clearTimeout(dispatchTimer);
+      anim1.stop();
+      anim2.stop();
+    };
   }, [visible, ripple1, ripple2, onDispatchConfirmed]);
 
   if (!visible || !activeBooking) return null;

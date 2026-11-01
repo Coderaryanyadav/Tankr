@@ -2,7 +2,7 @@
  * TANKR — Mappls (MapmyIndia) Geospatial & Navigation Engine
  * Powers reverse geocoding, address search, route ETA, and driver navigation across India.
  */
-import { Platform, Linking } from 'react-native';
+import { Linking } from 'react-native';
 
 const MAPPLS_REST_KEY = process.env.EXPO_PUBLIC_MAPPLS_REST_KEY || '';
 const MAPPLS_CLIENT_ID = process.env.EXPO_PUBLIC_MAPPLS_CLIENT_ID || '';

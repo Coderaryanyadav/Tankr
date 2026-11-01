@@ -24,7 +24,7 @@ export const DiscoveryHeader: React.FC<DiscoveryHeaderProps> = ({
   onProfilePress,
   unreadNotificationsCount = 1,
 }) => {
-  const { user, profile } = useAuthStore();
+  const { profile } = useAuthStore();
   const { activeAddressText, activeAddressLabel } = useLocationStore();
 
   const getInitials = (name?: string | null): string => {

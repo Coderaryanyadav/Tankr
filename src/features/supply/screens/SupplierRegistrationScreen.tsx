@@ -14,7 +14,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
-import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { supabase } from '../../../services/supabase/client';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, spacing } from '../../../theme';

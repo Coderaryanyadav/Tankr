@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Dimensions,
   Image,
   LayoutChangeEvent,
   Linking,

@@ -28,7 +28,7 @@ import { notify } from '../../../utils/alertUtils';
 import { InvoiceViewModal } from '../../orders/components/InvoiceViewModal';
 import { invoiceService, InvoiceRecord } from '../../../services/invoice/invoiceService';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function projectToTileCoords(lat: number, lng: number, zoom: number) {
   const n = Math.pow(2, zoom);
@@ -219,7 +219,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
     const fetchLatestPosition = async () => {
       try {
         // 1. Try authoritative RPC (bypasses RLS safely and calculates accurate ETA)
-        const { data: rpcData, error: rpcErr } = await supabase.rpc(
+        const { data: rpcData } = await supabase.rpc(
           'get_latest_tracking_breadcrumb',
           { p_booking_id: activeBooking.id }
         );

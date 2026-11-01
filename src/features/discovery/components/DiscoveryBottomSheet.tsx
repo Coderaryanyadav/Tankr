@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
-import { Card } from '../../../components/common/Card/Card';
 import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { PriceDisplay } from '../../../components/common/Card/PriceDisplay';
@@ -75,35 +74,64 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
   onBookSelectedTanker,
 }) => {
   const [currentSnap, setCurrentSnap] = useState<BottomSheetSnapState>(snapState);
+  const currentSnapRef = useRef<BottomSheetSnapState>(snapState);
   const heightAnim = useRef(new Animated.Value(SNAP_HEIGHTS[snapState])).current;
   const isReducedMotion = useReducedMotion();
 
   const animateToSnap = (nextSnap: BottomSheetSnapState) => {
+    currentSnapRef.current = nextSnap;
     setCurrentSnap(nextSnap);
     onSnapStateChange?.(nextSnap);
     haptics.lightImpact();
-    Animated.spring(heightAnim, {
-      toValue: SNAP_HEIGHTS[nextSnap],
-      useNativeDriver: false,
-      tension: 200,
-      friction: 22,
-    }).start();
+    if (isReducedMotion) {
+      heightAnim.setValue(SNAP_HEIGHTS[nextSnap]);
+    } else {
+      Animated.spring(heightAnim, {
+        toValue: SNAP_HEIGHTS[nextSnap],
+        useNativeDriver: false,
+        tension: 200,
+        friction: 22,
+      }).start();
+    }
   };
 
-  // PanResponder to handle drag gestures
+  // Sync state if snapState prop changes externally
+  useEffect(() => {
+    if (snapState && snapState !== currentSnapRef.current) {
+      animateToSnap(snapState);
+    }
+  }, [snapState]);
+
+  // PanResponder to handle drag gestures smoothly without blocking child taps
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 10,
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 8;
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 8;
+      },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy < -50) {
-          // Dragged up
-          if (currentSnap === 'collapsed') animateToSnap('intermediate');
-          else if (currentSnap === 'intermediate') animateToSnap('expanded');
-        } else if (gestureState.dy > 50) {
-          // Dragged down
-          if (currentSnap === 'expanded') animateToSnap('intermediate');
-          else if (currentSnap === 'intermediate') animateToSnap('collapsed');
+        const snap = currentSnapRef.current;
+        const { dy, vy } = gestureState;
+
+        // Downward drag or swipe
+        if (dy > 30 || vy > 0.4) {
+          if (snap === 'expanded') {
+            animateToSnap('intermediate');
+          } else if (snap === 'intermediate') {
+            animateToSnap('collapsed');
+          }
+        }
+        // Upward drag or swipe
+        else if (dy < -30 || vy < -0.4) {
+          if (snap === 'collapsed') {
+            animateToSnap('intermediate');
+          } else if (snap === 'intermediate') {
+            animateToSnap('expanded');
+          }
         }
       },
     })
@@ -119,31 +147,24 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
     <Animated.View style={[styles.sheetContainer, { height: heightAnim }]}>
       {/* Draggable Header Bar */}
       <View {...panResponder.panHandlers} style={styles.dragHandleWrapper}>
-        <View style={styles.dragBar} />
-        <View style={styles.dragHandleIndicators}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Snap state: ${currentSnap}`}
-            onPress={() => {
-              if (currentSnap === 'collapsed') animateToSnap('intermediate');
-              else if (currentSnap === 'intermediate') animateToSnap('expanded');
-              else animateToSnap('intermediate');
-            }}
-            style={styles.snapStateToggle}
-          >
-            <Ionicons
-              name={
-                currentSnap === 'expanded'
-                  ? 'chevron-down'
-                  : currentSnap === 'collapsed'
-                  ? 'chevron-up'
-                  : 'swap-vertical'
-              }
-              size={18}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            currentSnap === 'expanded'
+              ? 'Collapse to half screen'
+              : currentSnap === 'collapsed'
+              ? 'Expand to half screen'
+              : 'Expand to full screen'
+          }
+          onPress={() => {
+            if (currentSnap === 'expanded') animateToSnap('intermediate');
+            else if (currentSnap === 'collapsed') animateToSnap('intermediate');
+            else animateToSnap('expanded');
+          }}
+          style={styles.dragBarHitArea}
+        >
+          <View style={styles.dragBar} />
+        </Pressable>
       </View>
 
       {/* 1. Delivering To Address Row (Visible in all states) */}
@@ -182,6 +203,17 @@ export const DiscoveryBottomSheet: React.FC<DiscoveryBottomSheetProps> = ({
             <Ionicons name="sync" size={16} color={colors.darkNavy} />
           )}
         </Pressable>
+
+        {currentSnap === 'expanded' && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Collapse fleet sheet"
+            onPress={() => animateToSnap('intermediate')}
+            style={styles.collapseCircleBtn}
+          >
+            <Ionicons name="chevron-down" size={18} color={colors.darkNavy} />
+          </Pressable>
+        )}
       </View>
 
       {/* STATE A: COLLAPSED VIEW */}
@@ -465,22 +497,22 @@ const styles = StyleSheet.create({
   },
   dragHandleWrapper: {
     alignItems: 'center',
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: 2,
     position: 'relative',
+    minHeight: 28,
+    justifyContent: 'center',
+  },
+  dragBarHitArea: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dragBar: {
-    width: 44,
+    width: 48,
     height: 5,
     borderRadius: borderRadius.full,
     backgroundColor: colors.cardBorder,
-  },
-  dragHandleIndicators: {
-    position: 'absolute',
-    right: spacing.md,
-    top: 6,
-  },
-  snapStateToggle: {
-    padding: 4,
   },
   destinationBar: {
     flexDirection: 'row',
@@ -538,6 +570,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundMuted,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  collapseCircleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.backgroundMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.xs,
   },
   collapsedSummaryCard: {
     flexDirection: 'row',

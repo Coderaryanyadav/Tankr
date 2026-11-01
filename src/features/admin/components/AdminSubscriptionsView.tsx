@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -14,7 +13,7 @@ import { useAdminStore } from '../../../stores/adminStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
-export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {
+export const AdminSubscriptionsView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop: _isDesktop = true }) => {
   const { corporateSubscriptions, toggleSubscriptionStatus, createCorporateSubscription } = useAdminStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

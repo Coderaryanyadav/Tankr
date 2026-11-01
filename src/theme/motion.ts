@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Platform } from 'react-native';
+import { AccessibilityInfo, Animated, Easing } from 'react-native';
 import { animationDurations, springConfigs } from './animations';
 
 export { animationDurations, springConfigs };

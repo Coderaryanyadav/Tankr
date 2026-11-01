@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Dimensions,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -17,7 +16,6 @@ import {
   Card,
   EmptyState,
   ErrorBanner,
-  HeaderBar,
   IconButton,
   LocationPill,
   Modal,
@@ -31,24 +29,21 @@ import {
   TankerCardSkeleton,
   TextInput,
 } from '../components';
-import { borderRadius, colors, fontWeights, shadows, spacing, typography } from '../theme';
+import { borderRadius, colors, fontWeights, shadows, spacing } from '../theme';
 import { useAuthStore } from '../stores/authStore';
 import { useLocationStore } from '../stores/locationStore';
 import { SavedAddressesSheet } from '../features/location/components/SavedAddressesSheet';
 
-const { width } = Dimensions.get('window');
-
 type ShowcaseCategory = 'booking' | 'buttons' | 'inputs' | 'feedback';
 
 export const DesignSystemShowcase: React.FC = () => {
-  const { user, profile, signOut } = useAuthStore();
+  const { user, signOut } = useAuthStore();
   const {
     activeAddressText,
     setActiveLocation,
     locateUserViaGps,
     fetchSavedAddresses,
     addSavedAddress,
-    savedAddresses,
   } = useLocationStore();
 
   // Navigation & Category states

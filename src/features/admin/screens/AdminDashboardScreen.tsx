@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -60,7 +59,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ init
     emergencyDispatches,
     waterCertificates,
     corporateSubscriptions,
-    isLoading,
     emergencyMode,
     fetchDashboardMetrics,
     fetchServiceZones,

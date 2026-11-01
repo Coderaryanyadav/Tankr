@@ -12,7 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
-import { PriceDisplay } from '../../../components/common/Card/PriceDisplay';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useLocationStore } from '../../../stores/locationStore';
@@ -238,7 +237,14 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
                       key={t.id}
                       accessibilityRole="button"
                       accessibilityLabel={`Select delivery timing ${t.title}`}
-                      onPress={() => setDeliveryType(t.id)}
+                      onPress={() => {
+                        setDeliveryType(t.id);
+                        if (t.id === 'recurring') {
+                          setScheduledSlot('06:00 AM - 08:00 AM');
+                        } else if (t.id === 'scheduled_once') {
+                          setScheduledSlot('07:00 AM - 09:00 AM');
+                        }
+                      }}
                       style={[
                         styles.timingOptionCard,
                         isSelected && styles.timingOptionCardActive,

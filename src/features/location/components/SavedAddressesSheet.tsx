@@ -12,7 +12,7 @@ import { BottomSheet } from '../../../components/common/Overlay/BottomSheet';
 import { SavedAddress, useLocationStore } from '../../../stores/locationStore';
 import { AddAddressModal } from './AddAddressModal';
 import { confirmAction, notify } from '../../../utils/alertUtils';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, colors, fontWeights, spacing } from '../../../theme';
 
 interface SavedAddressesSheetProps {
   visible: boolean;

@@ -13,7 +13,7 @@ import { EmptyState } from '../../../components/common/Feedback/EmptyState';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
-import { TankrNotification, TankrNotificationType } from '../../../services/notification/notificationService';
+import { TankrNotificationType } from '../../../services/notification/notificationService';
 
 interface NotificationsModalProps {
   visible: boolean;

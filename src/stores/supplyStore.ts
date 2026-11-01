@@ -27,7 +27,16 @@ interface SupplyState {
 
   // Supplier Dashboard State
   pendingRequests: BookingRecord[];
+  activeDeliveries: BookingRecord[];
   fleetTankers: FleetVehicle[];
+  supplierPricing: { [capacity: number]: number };
+  supplierSettlementDetails: {
+    bankAccount: string;
+    ifsc: string;
+    upiId: string;
+    pendingPayout: number;
+    settledToday: number;
+  };
   supplierMetrics: {
     todayRevenue: number;
     todayLiters: number;
@@ -46,6 +55,8 @@ interface SupplyState {
   loadDriverData: (userId: string, userPhone?: string) => Promise<void>;
   subscribeToSupplierBookings: (supplierId: string) => () => void;
   subscribeToDriverTrips: (driverPhone: string) => () => void;
+  toggleVehicleAvailability: (vehicleId: string) => Promise<{ success: boolean; error?: string }>;
+  updateSupplierPricing: (rates: { [capacity: number]: number }) => Promise<{ success: boolean }>;
   onboardTankerVehicle: (payload: {
     vehicleNumber: string;
     capacityLiters: number;
@@ -72,7 +83,21 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   driverAssignedVehicle: null,
 
   pendingRequests: [],
+  activeDeliveries: [],
   fleetTankers: [],
+  supplierPricing: {
+    1000: 450,
+    5000: 1200,
+    10000: 2100,
+    20000: 3800,
+  },
+  supplierSettlementDetails: {
+    bankAccount: 'HDFC •••• 9182',
+    ifsc: 'HDFC0001024',
+    upiId: 'powaiwater@hdfcbank',
+    pendingPayout: 17850,
+    settledToday: 34200,
+  },
   supplierMetrics: {
     todayRevenue: 0,
     todayLiters: 0,
@@ -87,7 +112,7 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
 
   toggleDriverDuty: () => set((s) => ({ driverDutyStatus: !s.driverDutyStatus })),
 
-  loadSupplierData: async (userId: string, userPhone?: string) => {
+  loadSupplierData: async (_userId: string, userPhone?: string) => {
     set({ isLoadingSupplier: true });
     try {
       // 1. Fetch Supplier Record for authenticated user
@@ -147,16 +172,22 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      // 4. Fetch Completed deliveries today for live metrics
+      // 4. Fetch Active In-Transit Bookings for live fleet tracking
+      const { data: activeBookingsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('supplier_id', currentSupplierId)
+        .in('status', ['accepted', 'driver_assigned', 'en_route', 'arrived', 'delivering'])
+        .order('created_at', { ascending: false });
+
+      // 5. Fetch Completed deliveries today for live metrics
       const { data: metricsData } = await supabase
         .from('bookings')
         .select('final_payable_amount, capacity_liters, status')
         .eq('supplier_id', currentSupplierId);
 
       const completed = (metricsData || []).filter((b: any) => b.status === 'delivered');
-      const active = (metricsData || []).filter((b: any) =>
-        ['accepted', 'driver_assigned', 'en_route', 'arrived', 'delivering'].includes(b.status)
-      );
+      const active = activeBookingsData || [];
 
       const todayRevenue = completed.reduce((sum: number, b: any) => sum + Number(b.final_payable_amount || 0), 0);
       const todayLiters = completed.reduce((sum: number, b: any) => sum + Number(b.capacity_liters || 0), 0);
@@ -165,6 +196,7 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
         supplierId: currentSupplierId,
         fleetTankers: fleet,
         pendingRequests: (bookingsData || []) as BookingRecord[],
+        activeDeliveries: (activeBookingsData || []) as BookingRecord[],
         supplierMetrics: {
           todayRevenue,
           todayLiters,
@@ -309,6 +341,36 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
     return () => {
       channel.unsubscribe();
     };
+  },
+
+  toggleVehicleAvailability: async (vehicleId: string) => {
+    try {
+      const current = get().fleetTankers.find((v) => v.id === vehicleId);
+      if (!current) return { success: false, error: 'Vehicle not found in fleet' };
+      const nextAvailable = !current.is_available;
+
+      await supabase
+        .from('tankers')
+        .update({ is_available: nextAvailable, is_online: nextAvailable })
+        .eq('id', vehicleId);
+
+      set((state) => ({
+        fleetTankers: state.fleetTankers.map((v) =>
+          v.id === vehicleId ? { ...v, is_available: nextAvailable, is_online: nextAvailable } : v
+        ),
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to update vehicle availability' };
+    }
+  },
+
+  updateSupplierPricing: async (rates: { [capacity: number]: number }) => {
+    set((state) => ({
+      supplierPricing: { ...state.supplierPricing, ...rates },
+    }));
+    return { success: true };
   },
 
   onboardTankerVehicle: async (payload) => {

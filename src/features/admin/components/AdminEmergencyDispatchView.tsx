@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -10,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAdminStore } from '../../../stores/adminStore';
-import { borderRadius, colors, fontWeights, shadows, spacing } from '../../../theme';
+import { borderRadius, fontWeights, shadows, spacing } from '../../../theme';
 import { confirmAction, notify } from '../../../utils/alertUtils';
 
 export const AdminEmergencyDispatchView: React.FC<{ isDesktop?: boolean }> = ({ isDesktop = true }) => {

@@ -174,7 +174,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const formattedPhone = `+91${cleaned}`;
 
     // Rate-limiting check
-    const { lastOtpSentAt, cooldownSeconds } = get();
+    const { cooldownSeconds } = get();
     if (cooldownSeconds > 0) {
       const err = `Please wait ${cooldownSeconds} seconds before requesting a new OTP`;
       set({ authError: err });

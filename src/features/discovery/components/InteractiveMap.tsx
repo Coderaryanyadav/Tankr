@@ -61,7 +61,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   // Responsive dimensions for map canvas
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
     const w = Dimensions.get('window').width;
-    const h = Dimensions.get('window').height;
     return {
       width: w > 520 ? 430 : w,
       height: 380,
@@ -90,17 +89,17 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   // Radar sweep for map loading state
   useEffect(() => {
-    if (isLoading) {
-      const sweep = Animated.loop(
-        Animated.timing(radarSweepAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      );
-      sweep.start();
-      return () => sweep.stop();
-    }
+    if (!isLoading) return undefined;
+
+    const sweep = Animated.loop(
+      Animated.timing(radarSweepAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    );
+    sweep.start();
+    return () => sweep.stop();
   }, [isLoading, radarSweepAnim]);
 
   // Calculate Real-World Map Tiles to cover the viewport dynamically

@@ -100,7 +100,7 @@ class InvoiceService {
 
       const invNo = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${bookingId.slice(0, 6).toUpperCase()}`;
 
-      const { data: inserted, error: iErr } = await supabase
+      const { error: iErr } = await supabase
         .from('invoices')
         .insert({
           booking_id: bookingId,
