@@ -1,17 +1,53 @@
 # TANKR 💧
 
-> **Water delivery, just a tap away.**
+<p align="center">
+  <img src="screenshots/customer/04_customer_home_discovery.png" alt="TANKR Mobile App Discovery" width="280" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);" />
+</p>
 
-[![Expo SDK 58](https://img.shields.io/badge/Expo-v58.0.21-000020.svg?style=flat&logo=expo&logoColor=white)](https://expo.dev/)
-[![React Native 0.88](https://img.shields.io/badge/React_Native-v0.88.1-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://reactnative.dev/)
-[![React 19](https://img.shields.io/badge/React-v19.3.0-61DAFB.svg?style=flat&logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Supabase Backend](https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E.svg?style=flat&logo=supabase&logoColor=white)](https://supabase.com/)
-[![PostGIS Spatial](https://img.shields.io/badge/PostGIS-3.3_Spatial_Engine-blue.svg?style=flat&logo=postgresql&logoColor=white)](https://postgis.net/)
-[![Zustand State](https://img.shields.io/badge/State-Zustand_5.0-brown.svg?style=flat)](https://github.com/pmndrs/zustand)
-[![Jest Test Coverage](https://img.shields.io/badge/Tests-Jest_30_Passing-brightgreen.svg?style=flat&logo=jest&logoColor=white)](https://jestjs.io/)
-[![CI Pipeline](https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml/badge.svg)](https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
+<p align="center">
+  <b>Urban Water Deficit Logistics, Emergency Dispatch & Fair Metering Platform</b><br />
+  <i>Mission-critical water logistics for high-density metropolitan ecosystems. Calibrated for Mumbai Metro.</i>
+</p>
+
+<p align="center">
+  <a href="https://expo.dev/"><img src="https://img.shields.io/badge/Expo-SDK_58.0.21-000020.svg?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK" /></a>
+  <a href="https://reactnative.dev/"><img src="https://img.shields.io/badge/React_Native-0.88.1-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black" alt="React Native" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript Strict" /></a>
+  <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E.svg?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase Backend" /></a>
+  <a href="https://postgis.net/"><img src="https://img.shields.io/badge/PostGIS-3.3_Spatial-blue.svg?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostGIS Spatial Engine" /></a>
+  <a href="https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Coderaryanyadav/Tankr/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI%20Pipeline" alt="CI Pipeline" /></a>
+</p>
+
+---
+
+## 📱 Application Preview Showcase
+
+<table align="center">
+  <tr>
+    <td align="center" width="25%">
+      <b>1. Consumer Discovery</b><br/>
+      <img src="screenshots/customer/04_customer_home_discovery.png" width="200" style="border-radius: 12px;" /><br/>
+      <i>Radar & Sump Pinpointing</i>
+    </td>
+    <td align="center" width="25%">
+      <b>2. Live Telemetry</b><br/>
+      <img src="screenshots/customer/09_customer_live_tracking.png" width="200" style="border-radius: 12px;" /><br/>
+      <i>Real-Time GPS Tracking</i>
+    </td>
+    <td align="center" width="25%">
+      <b>3. Driver Console</b><br/>
+      <img src="screenshots/driver/18_driver_dashboard_active.png" width="200" style="border-radius: 12px;" /><br/>
+      <i>Turn-by-Turn & 4-Digit PIN</i>
+    </td>
+    <td align="center" width="25%">
+      <b>4. Admin Operations</b><br/>
+      <img src="screenshots/admin/23_admin_overview_radar.png" width="200" style="border-radius: 12px;" /><br/>
+      <i>10 Live Desks & Fleet Heatmap</i>
+    </td>
+  </tr>
+</table>
+
+> 💡 **Explore the complete interactive gallery:** Open [`screenshots/index.html`](screenshots/index.html) in any browser to inspect all 33 production screen captures cross-referenced by role.
 
 ---
 
