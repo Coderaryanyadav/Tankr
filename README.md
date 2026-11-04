@@ -1,7 +1,7 @@
 # TANKR 💧
 
 <p align="center">
-  <img src="screenshots/customer/04_customer_home_discovery.png" alt="TANKR Mobile App Discovery" width="280" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);" />
+  <img src="docs/screenshots/customer/04_customer_home_discovery.png" alt="TANKR Mobile App Discovery" width="280" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);" />
 </p>
 
 <p align="center">
@@ -26,28 +26,28 @@
   <tr>
     <td align="center" width="25%">
       <b>1. Consumer Discovery</b><br/>
-      <img src="screenshots/customer/04_customer_home_discovery.png" width="200" style="border-radius: 12px;" /><br/>
+      <img src="docs/screenshots/customer/04_customer_home_discovery.png" width="200" style="border-radius: 12px;" /><br/>
       <i>Radar & Sump Pinpointing</i>
     </td>
     <td align="center" width="25%">
       <b>2. Live Telemetry</b><br/>
-      <img src="screenshots/customer/09_customer_live_tracking.png" width="200" style="border-radius: 12px;" /><br/>
+      <img src="docs/screenshots/customer/09_customer_live_tracking.png" width="200" style="border-radius: 12px;" /><br/>
       <i>Real-Time GPS Tracking</i>
     </td>
     <td align="center" width="25%">
       <b>3. Driver Console</b><br/>
-      <img src="screenshots/driver/18_driver_dashboard_active.png" width="200" style="border-radius: 12px;" /><br/>
+      <img src="docs/screenshots/driver/18_driver_dashboard_active.png" width="200" style="border-radius: 12px;" /><br/>
       <i>Turn-by-Turn & 4-Digit PIN</i>
     </td>
     <td align="center" width="25%">
       <b>4. Admin Operations</b><br/>
-      <img src="screenshots/admin/23_admin_overview_radar.png" width="200" style="border-radius: 12px;" /><br/>
+      <img src="docs/screenshots/admin/23_admin_overview_radar.png" width="200" style="border-radius: 12px;" /><br/>
       <i>10 Live Desks & Fleet Heatmap</i>
     </td>
   </tr>
 </table>
 
-> 💡 **Explore the complete interactive gallery:** Open [`screenshots/index.html`](screenshots/index.html) in any browser to inspect all 33 production screen captures cross-referenced by role.
+> 💡 **Explore the complete interactive gallery:** Open [`docs/screenshots/index.html`](docs/screenshots/index.html) in any browser to inspect all 33 production screen captures cross-referenced by role.
 
 ---
 
@@ -366,7 +366,7 @@ See [Production Deployment Guide](docs/deployment/DEPLOYMENT.md) and [Production
 
 ## 13. Contributing & Code of Conduct
 
-We welcome contributions! Please review our [Contributing Guide](docs/community/CONTRIBUTING.md) and [Code of Conduct](docs/community/CODE_OF_CONDUCT.md). Also check the [Changelog](docs/community/CHANGELOG.md) and [Support Guide](docs/community/SUPPORT.md).
+We welcome contributions! Please review our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md). Also check the [Changelog](CHANGELOG.md) and [Support Guide](SUPPORT.md).
 
 Before opening a pull request, ensure:
 1. `npm run typecheck` passes with **0 errors**.
@@ -377,7 +377,7 @@ Before opening a pull request, ensure:
 
 ## 14. Security Policy
 
-Security reports are taken with utmost seriousness. Please report vulnerabilities to **`security@tankr.in`**. Do not open public GitHub issues for security matters. Review our [Security Policy](docs/community/SECURITY.md) for details on responsible disclosure.
+Security reports are taken with utmost seriousness. Please report vulnerabilities to **`security@tankr.in`**. Do not open public GitHub issues for security matters. Review our [Security Policy](SECURITY.md) for details on responsible disclosure.
 
 ---
 
