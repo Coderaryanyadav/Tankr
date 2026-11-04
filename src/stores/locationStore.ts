@@ -129,7 +129,9 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       coords.longitude < -180 ||
       coords.longitude > 180
     ) {
-      console.warn('[LocationStore] Rejected invalid geo-coordinates (Null Island / Out-of-bounds):', coords);
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn('[LocationStore] Rejected invalid geo-coordinates (Null Island / Out-of-bounds):', coords);
+      }
       return;
     }
 
@@ -183,7 +185,9 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('[LocationStore] Fetch addresses notice:', error.message);
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn('[LocationStore] Fetch addresses notice:', error.message);
+        }
       }
 
       if (data && data.length > 0) {

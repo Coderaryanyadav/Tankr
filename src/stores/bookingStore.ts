@@ -88,7 +88,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         return q;
       }
 
-      console.warn('[BookingStore] RPC calculation returned no quote or error:', error);
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn('[BookingStore] RPC calculation returned no quote or error:', error);
+      }
       set({
         activeQuote: null,
         isLoadingQuote: false,
@@ -270,7 +272,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           p_reason: reason,
         });
         if (atomicErr) {
-          console.warn('[bookingStore] Remote cancellation warning:', atomicErr.message);
+          if (process.env.NODE_ENV !== 'test') {
+            console.warn('[bookingStore] Remote cancellation warning:', atomicErr.message);
+          }
         }
       }
 
