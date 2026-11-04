@@ -51,8 +51,9 @@ const ExpoSecureStoreAdapter = {
 };
 
 // Environment Configuration
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const isTestEnv = process.env.NODE_ENV === 'test';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || (isTestEnv ? 'https://qicoczialqxulcbipuix.supabase.co' : '');
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || (isTestEnv ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpY29jemlhbHF4dWxjYmlwdWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzI3OTMsImV4cCI6MjEwODk0ODc5M30.aTT8i9UAydWN33n0SrlZKBmPCgYBmdizgSENAPLfR6Q' : '');
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error(

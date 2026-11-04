@@ -19,3 +19,17 @@ try {
 } catch (e) {
   console.warn('Failed to load .env in test setup:', e);
 }
+
+// Fallback test environment configuration for CI / automated test suites
+if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
+  process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://qicoczialqxulcbipuix.supabase.co';
+}
+if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpY29jemlhbHF4dWxjYmlwdWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzI3OTMsImV4cCI6MjEwODk0ODc5M30.aTT8i9UAydWN33n0SrlZKBmPCgYBmdizgSENAPLfR6Q';
+}
+if (!process.env.EXPO_PUBLIC_MAPPLS_REST_KEY) {
+  process.env.EXPO_PUBLIC_MAPPLS_REST_KEY = 'mock_mappls_rest_key';
+}
+if (!process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID) {
+  process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID = 'rzp_test_mock_key';
+}

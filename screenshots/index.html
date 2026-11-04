@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,7 +16,13 @@
       --accent-glow: rgba(2, 132, 199, 0.25);
       --success: #10B981;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--bg);
@@ -23,6 +30,7 @@
       padding: 32px 24px;
       line-height: 1.5;
     }
+
     .header {
       max-width: 1400px;
       margin: 0 auto 32px auto;
@@ -32,6 +40,7 @@
       border-bottom: 1px solid var(--card-border);
       padding-bottom: 24px;
     }
+
     .header-top {
       display: flex;
       justify-content: space-between;
@@ -39,6 +48,7 @@
       flex-wrap: wrap;
       gap: 16px;
     }
+
     .brand-title {
       font-size: 28px;
       font-weight: 800;
@@ -47,6 +57,7 @@
       align-items: center;
       gap: 12px;
     }
+
     .brand-badge {
       background: var(--accent);
       color: #fff;
@@ -57,16 +68,19 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+
     .meta-text {
       font-size: 13px;
       color: var(--text-sub);
     }
+
     .tabs-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 12px;
     }
+
     .tab-btn {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -78,16 +92,19 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
+
     .tab-btn:hover {
       border-color: var(--accent);
       color: var(--text-main);
     }
+
     .tab-btn.active {
       background: var(--accent);
       border-color: var(--accent);
       color: #fff;
       box-shadow: 0 0 12px var(--accent-glow);
     }
+
     .grid {
       max-width: 1400px;
       margin: 0 auto;
@@ -95,6 +112,7 @@
       grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
       gap: 24px;
     }
+
     .card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -104,11 +122,13 @@
       flex-direction: column;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
+
     .card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 12px 24px -8px rgba(0,0,0,0.5);
+      box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.5);
       border-color: #475569;
     }
+
     .img-container {
       width: 100%;
       height: 380px;
@@ -120,15 +140,18 @@
       overflow: hidden;
       position: relative;
     }
+
     .img-container img {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
       transition: transform 0.25s ease;
     }
+
     .img-container:hover img {
       transform: scale(1.03);
     }
+
     .img-overlay {
       position: absolute;
       bottom: 8px;
@@ -141,6 +164,7 @@
       color: #fff;
       backdrop-filter: blur(4px);
     }
+
     .card-body {
       padding: 18px;
       display: flex;
@@ -148,11 +172,13 @@
       gap: 8px;
       flex: 1;
     }
+
     .card-meta {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
+
     .group-tag {
       font-size: 11px;
       font-weight: 700;
@@ -160,21 +186,25 @@
       letter-spacing: 0.5px;
       color: var(--accent);
     }
+
     .file-size {
       font-size: 11px;
       color: var(--text-sub);
     }
+
     .card-title {
       font-size: 16px;
       font-weight: 700;
       color: var(--text-main);
     }
+
     .card-desc {
       font-size: 12px;
       color: var(--text-sub);
       line-height: 1.4;
       flex: 1;
     }
+
     .card-footer {
       display: flex;
       justify-content: space-between;
@@ -183,22 +213,26 @@
       padding-top: 10px;
       border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
+
     .view-btn {
       font-size: 12px;
       color: var(--accent);
       font-weight: 600;
       text-decoration: none;
     }
+
     .view-btn:hover {
       text-decoration: underline;
     }
+
     .res-badge {
       font-size: 10px;
-      background: rgba(255,255,255,0.06);
+      background: rgba(255, 255, 255, 0.06);
       padding: 2px 6px;
       border-radius: 4px;
       color: #94A3B8;
     }
+
     /* Modal Lightbox */
     .lightbox {
       display: none;
@@ -212,9 +246,11 @@
       justify-content: center;
       flex-direction: column;
     }
+
     .lightbox.active {
       display: flex;
     }
+
     .lightbox-close {
       position: absolute;
       top: 20px;
@@ -226,13 +262,15 @@
       border: none;
       padding: 8px;
     }
+
     .lightbox img {
       max-width: 90vw;
       max-height: 85vh;
       border-radius: 8px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
       object-fit: contain;
     }
+
     .lightbox-title {
       margin-top: 12px;
       font-size: 15px;
@@ -241,6 +279,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="header">
     <div class="header-top">
@@ -252,639 +291,722 @@
       </div>
     </div>
     <div class="tabs-row">
-      <button class="tab-btn active" onclick="filterCategory('all', this)">All Screens (33)</button><button class="tab-btn " onclick="filterCategory('customer', this)">Customer App (17)</button><button class="tab-btn " onclick="filterCategory('driver', this)">Driver App (2)</button><button class="tab-btn " onclick="filterCategory('supplier', this)">Supplier App (3)</button><button class="tab-btn " onclick="filterCategory('admin', this)">Admin Operations (10)</button><button class="tab-btn " onclick="filterCategory('showcase', this)">Design System (1)</button>
+      <button class="tab-btn active" onclick="filterCategory('all', this)">All Screens (33)</button><button
+        class="tab-btn " onclick="filterCategory('customer', this)">Customer App (17)</button><button class="tab-btn "
+        onclick="filterCategory('driver', this)">Driver App (2)</button><button class="tab-btn "
+        onclick="filterCategory('supplier', this)">Supplier App (3)</button><button class="tab-btn "
+        onclick="filterCategory('admin', this)">Admin Operations (10)</button><button class="tab-btn "
+        onclick="filterCategory('showcase', this)">Design System (1)</button>
     </div>
   </div>
 
   <div class="grid" id="screensGrid">
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/01_auth_login.png', 'Mobile Phone Login & Demo Switcher')">
-          <img src="customer/01_auth_login.png" alt="Mobile Phone Login & Demo Switcher" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/01_auth_login.png', 'Mobile Phone Login & Demo Switcher')">
+        <img src="customer/01_auth_login.png" alt="Mobile Phone Login & Demo Switcher" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Auth & Onboarding</span>
+          <span class="file-size">146 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Auth & Onboarding</span>
-            <span class="file-size">146 KB</span>
-          </div>
-          <div class="card-title">Mobile Phone Login & Demo Switcher</div>
-          <div class="card-desc">Login screen with +91 phone input, instant OTP disclaimer, and quick persona demo chips.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/01_auth_login.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Mobile Phone Login & Demo Switcher</div>
+        <div class="card-desc">Login screen with +91 phone input, instant OTP disclaimer, and quick persona demo chips.
+        </div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/01_auth_login.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/02_auth_otp_verify.png', 'SMS OTP 6-Digit Verification')">
-          <img src="customer/02_auth_otp_verify.png" alt="SMS OTP 6-Digit Verification" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/02_auth_otp_verify.png', 'SMS OTP 6-Digit Verification')">
+        <img src="customer/02_auth_otp_verify.png" alt="SMS OTP 6-Digit Verification" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Auth & Onboarding</span>
+          <span class="file-size">75 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Auth & Onboarding</span>
-            <span class="file-size">75 KB</span>
-          </div>
-          <div class="card-title">SMS OTP 6-Digit Verification</div>
-          <div class="card-desc">6-digit SMS verification code input with 30s resend countdown and security badge.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/02_auth_otp_verify.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">SMS OTP 6-Digit Verification</div>
+        <div class="card-desc">6-digit SMS verification code input with 30s resend countdown and security badge.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/02_auth_otp_verify.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/03_auth_onboarding.png', 'Customer Onboarding & Sump Setup')">
-          <img src="customer/03_auth_onboarding.png" alt="Customer Onboarding & Sump Setup" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/03_auth_onboarding.png', 'Customer Onboarding & Sump Setup')">
+        <img src="customer/03_auth_onboarding.png" alt="Customer Onboarding & Sump Setup" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Auth & Onboarding</span>
+          <span class="file-size">147 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Auth & Onboarding</span>
-            <span class="file-size">147 KB</span>
-          </div>
-          <div class="card-title">Customer Onboarding & Sump Setup</div>
-          <div class="card-desc">City selection, full name, residential address, and underground/overhead sump specification.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/03_auth_onboarding.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Customer Onboarding & Sump Setup</div>
+        <div class="card-desc">City selection, full name, residential address, and underground/overhead sump
+          specification.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/03_auth_onboarding.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/04_customer_home_discovery.png', 'Live Discovery Map & Tanker Sheet')">
-          <img src="customer/04_customer_home_discovery.png" alt="Live Discovery Map & Tanker Sheet" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/04_customer_home_discovery.png', 'Live Discovery Map & Tanker Sheet')">
+        <img src="customer/04_customer_home_discovery.png" alt="Live Discovery Map & Tanker Sheet" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">621 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">621 KB</span>
-          </div>
-          <div class="card-title">Live Discovery Map & Tanker Sheet</div>
-          <div class="card-desc">Interactive OpenStreetMap with radius tankers, capacity filter chips (1kL to 20kL), and bottom sheet.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/04_customer_home_discovery.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Live Discovery Map & Tanker Sheet</div>
+        <div class="card-desc">Interactive OpenStreetMap with radius tankers, capacity filter chips (1kL to 20kL), and
+          bottom sheet.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/04_customer_home_discovery.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/05_customer_booking_review.png', 'Booking Review & Authoritative Quote')">
-          <img src="customer/05_customer_booking_review.png" alt="Booking Review & Authoritative Quote" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/05_customer_booking_review.png', 'Booking Review & Authoritative Quote')">
+        <img src="customer/05_customer_booking_review.png" alt="Booking Review & Authoritative Quote" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">200 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">200 KB</span>
-          </div>
-          <div class="card-title">Booking Review & Authoritative Quote</div>
-          <div class="card-desc">Detailed price breakdown (base rate, km delivery, 5% GST), schedule selection, and UPI / Cash options.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/05_customer_booking_review.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Booking Review & Authoritative Quote</div>
+        <div class="card-desc">Detailed price breakdown (base rate, km delivery, 5% GST), schedule selection, and UPI /
+          Cash options.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/05_customer_booking_review.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/06_customer_booking_searching.png', 'Searching & Dispatching Supplier Overlay')">
-          <img src="customer/06_customer_booking_searching.png" alt="Searching & Dispatching Supplier Overlay" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/06_customer_booking_searching.png', 'Searching & Dispatching Supplier Overlay')">
+        <img src="customer/06_customer_booking_searching.png" alt="Searching & Dispatching Supplier Overlay"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">620 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">620 KB</span>
-          </div>
-          <div class="card-title">Searching & Dispatching Supplier Overlay</div>
-          <div class="card-desc">Animated radar pulse locating nearest available tanker with auto-cancellation guard.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/06_customer_booking_searching.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Searching & Dispatching Supplier Overlay</div>
+        <div class="card-desc">Animated radar pulse locating nearest available tanker with auto-cancellation guard.
+        </div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/06_customer_booking_searching.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/07_customer_bookings_list.png', 'Order History & Delivery Stepper')">
-          <img src="customer/07_customer_bookings_list.png" alt="Order History & Delivery Stepper" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/07_customer_bookings_list.png', 'Order History & Delivery Stepper')">
+        <img src="customer/07_customer_bookings_list.png" alt="Order History & Delivery Stepper" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">107 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">107 KB</span>
-          </div>
-          <div class="card-title">Order History & Delivery Stepper</div>
-          <div class="card-desc">Bookings list with placed -> confirmed -> dispatched -> delivered stepper and GST invoice links.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/07_customer_bookings_list.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Order History & Delivery Stepper</div>
+        <div class="card-desc">Bookings list with placed -> confirmed -> dispatched -> delivered stepper and GST invoice
+          links.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/07_customer_bookings_list.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/08_customer_tax_invoice.png', 'Official GST Tax Invoice Modal')">
-          <img src="customer/08_customer_tax_invoice.png" alt="Official GST Tax Invoice Modal" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/08_customer_tax_invoice.png', 'Official GST Tax Invoice Modal')">
+        <img src="customer/08_customer_tax_invoice.png" alt="Official GST Tax Invoice Modal" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">166 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">166 KB</span>
-          </div>
-          <div class="card-title">Official GST Tax Invoice Modal</div>
-          <div class="card-desc">Itemized GST invoice with CGST/SGST breakdown, supplier GSTIN, water TDS rating, and delivery stamp.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/08_customer_tax_invoice.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Official GST Tax Invoice Modal</div>
+        <div class="card-desc">Itemized GST invoice with CGST/SGST breakdown, supplier GSTIN, water TDS rating, and
+          delivery stamp.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/08_customer_tax_invoice.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/09_customer_live_tracking.png', 'Live GPS Telemetry & Handshake PIN')">
-          <img src="customer/09_customer_live_tracking.png" alt="Live GPS Telemetry & Handshake PIN" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/09_customer_live_tracking.png', 'Live GPS Telemetry & Handshake PIN')">
+        <img src="customer/09_customer_live_tracking.png" alt="Live GPS Telemetry & Handshake PIN" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">778 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">778 KB</span>
-          </div>
-          <div class="card-title">Live GPS Telemetry & Handshake PIN</div>
-          <div class="card-desc">Live tanker map tracking with current speed, heading, driver contact, and 4-digit Handshake Delivery PIN.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/09_customer_live_tracking.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Live GPS Telemetry & Handshake PIN</div>
+        <div class="card-desc">Live tanker map tracking with current speed, heading, driver contact, and 4-digit
+          Handshake Delivery PIN.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/09_customer_live_tracking.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/10_customer_account_profile.png', 'Customer Account & Sump Profile')">
-          <img src="customer/10_customer_account_profile.png" alt="Customer Account & Sump Profile" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/10_customer_account_profile.png', 'Customer Account & Sump Profile')">
+        <img src="customer/10_customer_account_profile.png" alt="Customer Account & Sump Profile" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">196 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">196 KB</span>
-          </div>
-          <div class="card-title">Customer Account & Sump Profile</div>
-          <div class="card-desc">User profile management, saved sump locations, water quality guarantees, and sign-out controls.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/10_customer_account_profile.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Customer Account & Sump Profile</div>
+        <div class="card-desc">User profile management, saved sump locations, water quality guarantees, and sign-out
+          controls.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/10_customer_account_profile.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/11_customer_saved_addresses.png', 'Saved Delivery Addresses & Sump Sheet')">
-          <img src="customer/11_customer_saved_addresses.png" alt="Saved Delivery Addresses & Sump Sheet" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/11_customer_saved_addresses.png', 'Saved Delivery Addresses & Sump Sheet')">
+        <img src="customer/11_customer_saved_addresses.png" alt="Saved Delivery Addresses & Sump Sheet"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">500 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">500 KB</span>
-          </div>
-          <div class="card-title">Saved Delivery Addresses & Sump Sheet</div>
-          <div class="card-desc">Multi-location management with Home, Office, and Sump designations (underground/overhead).</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/11_customer_saved_addresses.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Saved Delivery Addresses & Sump Sheet</div>
+        <div class="card-desc">Multi-location management with Home, Office, and Sump designations
+          (underground/overhead).</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/11_customer_saved_addresses.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/12_customer_water_quality.png', 'BIS-10500 Water Quality Lab Certificate')">
-          <img src="customer/12_customer_water_quality.png" alt="BIS-10500 Water Quality Lab Certificate" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/12_customer_water_quality.png', 'BIS-10500 Water Quality Lab Certificate')">
+        <img src="customer/12_customer_water_quality.png" alt="BIS-10500 Water Quality Lab Certificate"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">202 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">202 KB</span>
-          </div>
-          <div class="card-title">BIS-10500 Water Quality Lab Certificate</div>
-          <div class="card-desc">NABL accredited test report details: TDS ppm, pH level, turbidity, and 0-coliform certification.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/12_customer_water_quality.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">BIS-10500 Water Quality Lab Certificate</div>
+        <div class="card-desc">NABL accredited test report details: TDS ppm, pH level, turbidity, and 0-coliform
+          certification.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/12_customer_water_quality.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/13_customer_fair_metering.png', 'Two-Way Fair Metering Guarantee')">
-          <img src="customer/13_customer_fair_metering.png" alt="Two-Way Fair Metering Guarantee" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/13_customer_fair_metering.png', 'Two-Way Fair Metering Guarantee')">
+        <img src="customer/13_customer_fair_metering.png" alt="Two-Way Fair Metering Guarantee" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">160 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">160 KB</span>
-          </div>
-          <div class="card-title">Two-Way Fair Metering Guarantee</div>
-          <div class="card-desc">Digital flow meter guarantee with automatic prorated escrow refund policy for short deliveries.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/13_customer_fair_metering.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Two-Way Fair Metering Guarantee</div>
+        <div class="card-desc">Digital flow meter guarantee with automatic prorated escrow refund policy for short
+          deliveries.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/13_customer_fair_metering.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/14_customer_dispute_modal.png', 'Customer Delivery Incident & Dispute Filing')">
-          <img src="customer/14_customer_dispute_modal.png" alt="Customer Delivery Incident & Dispute Filing" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/14_customer_dispute_modal.png', 'Customer Delivery Incident & Dispute Filing')">
+        <img src="customer/14_customer_dispute_modal.png" alt="Customer Delivery Incident & Dispute Filing"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">294 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">294 KB</span>
-          </div>
-          <div class="card-title">Customer Delivery Incident & Dispute Filing</div>
-          <div class="card-desc">Formal complaint form for volume shortages, delayed tankers, or water quality discrepancies.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/14_customer_dispute_modal.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Customer Delivery Incident & Dispute Filing</div>
+        <div class="card-desc">Formal complaint form for volume shortages, delayed tankers, or water quality
+          discrepancies.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/14_customer_dispute_modal.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/15_customer_community_pool.png', 'Community Sump Pooling & Cost Splitting')">
-          <img src="customer/15_customer_community_pool.png" alt="Community Sump Pooling & Cost Splitting" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/15_customer_community_pool.png', 'Community Sump Pooling & Cost Splitting')">
+        <img src="customer/15_customer_community_pool.png" alt="Community Sump Pooling & Cost Splitting"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">272 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">272 KB</span>
-          </div>
-          <div class="card-title">Community Sump Pooling & Cost Splitting</div>
-          <div class="card-desc">Multi-household pooled delivery campaign allowing neighbors to co-fund large 20kL bulk tankers.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/15_customer_community_pool.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Community Sump Pooling & Cost Splitting</div>
+        <div class="card-desc">Multi-household pooled delivery campaign allowing neighbors to co-fund large 20kL bulk
+          tankers.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/15_customer_community_pool.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/16_customer_notifications.png', 'Real-time Notifications Drawer')">
-          <img src="customer/16_customer_notifications.png" alt="Real-time Notifications Drawer" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/16_customer_notifications.png', 'Real-time Notifications Drawer')">
+        <img src="customer/16_customer_notifications.png" alt="Real-time Notifications Drawer" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">46 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">46 KB</span>
-          </div>
-          <div class="card-title">Real-time Notifications Drawer</div>
-          <div class="card-desc">In-app notification drawer showing delivery status changes, OTP verifications, and surge alerts.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/16_customer_notifications.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Real-time Notifications Drawer</div>
+        <div class="card-desc">In-app notification drawer showing delivery status changes, OTP verifications, and surge
+          alerts.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/16_customer_notifications.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="customer">
-        <div class="img-container" onclick="openLightbox('customer/17_customer_support_desk.png', '24/7 Water Emergency Support Desk')">
-          <img src="customer/17_customer_support_desk.png" alt="24/7 Water Emergency Support Desk" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="customer">
+      <div class="img-container"
+        onclick="openLightbox('customer/17_customer_support_desk.png', '24/7 Water Emergency Support Desk')">
+        <img src="customer/17_customer_support_desk.png" alt="24/7 Water Emergency Support Desk" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Customer App</span>
+          <span class="file-size">151 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Customer App</span>
-            <span class="file-size">151 KB</span>
-          </div>
-          <div class="card-title">24/7 Water Emergency Support Desk</div>
-          <div class="card-desc">Direct priority contact channels with Mumbai municipal liaison and 24/7 emergency dispatch helpline.</div>
-          <div class="card-footer">
-            <span class="res-badge">CUSTOMER</span>
-            <a class="view-btn" href="customer/17_customer_support_desk.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">24/7 Water Emergency Support Desk</div>
+        <div class="card-desc">Direct priority contact channels with Mumbai municipal liaison and 24/7 emergency
+          dispatch helpline.</div>
+        <div class="card-footer">
+          <span class="res-badge">CUSTOMER</span>
+          <a class="view-btn" href="customer/17_customer_support_desk.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="driver">
-        <div class="img-container" onclick="openLightbox('driver/18_driver_dashboard_active.png', 'Driver Duty Toggle & Active Delivery Card')">
-          <img src="driver/18_driver_dashboard_active.png" alt="Driver Duty Toggle & Active Delivery Card" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="driver">
+      <div class="img-container"
+        onclick="openLightbox('driver/18_driver_dashboard_active.png', 'Driver Duty Toggle & Active Delivery Card')">
+        <img src="driver/18_driver_dashboard_active.png" alt="Driver Duty Toggle & Active Delivery Card"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Fleet Driver Console</span>
+          <span class="file-size">373 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Fleet Driver Console</span>
-            <span class="file-size">373 KB</span>
-          </div>
-          <div class="card-title">Driver Duty Toggle & Active Delivery Card</div>
-          <div class="card-desc">Driver duty status switch (ON/OFF), assigned delivery address, navigation trigger, and trip earnings.</div>
-          <div class="card-footer">
-            <span class="res-badge">DRIVER</span>
-            <a class="view-btn" href="driver/18_driver_dashboard_active.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Driver Duty Toggle & Active Delivery Card</div>
+        <div class="card-desc">Driver duty status switch (ON/OFF), assigned delivery address, navigation trigger, and
+          trip earnings.</div>
+        <div class="card-footer">
+          <span class="res-badge">DRIVER</span>
+          <a class="view-btn" href="driver/18_driver_dashboard_active.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="driver">
-        <div class="img-container" onclick="openLightbox('driver/19_driver_meter_verification.png', 'Digital Meter Verification & Customer PIN Handshake')">
-          <img src="driver/19_driver_meter_verification.png" alt="Digital Meter Verification & Customer PIN Handshake" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="driver">
+      <div class="img-container"
+        onclick="openLightbox('driver/19_driver_meter_verification.png', 'Digital Meter Verification & Customer PIN Handshake')">
+        <img src="driver/19_driver_meter_verification.png" alt="Digital Meter Verification & Customer PIN Handshake"
+          loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Fleet Driver Console</span>
+          <span class="file-size">170 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Fleet Driver Console</span>
-            <span class="file-size">170 KB</span>
-          </div>
-          <div class="card-title">Digital Meter Verification & Customer PIN Handshake</div>
-          <div class="card-desc">Two-way handshake verification: customer 4-digit PIN entry plus digital flow meter start/end reading.</div>
-          <div class="card-footer">
-            <span class="res-badge">DRIVER</span>
-            <a class="view-btn" href="driver/19_driver_meter_verification.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Digital Meter Verification & Customer PIN Handshake</div>
+        <div class="card-desc">Two-way handshake verification: customer 4-digit PIN entry plus digital flow meter
+          start/end reading.</div>
+        <div class="card-footer">
+          <span class="res-badge">DRIVER</span>
+          <a class="view-btn" href="driver/19_driver_meter_verification.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="supplier">
-        <div class="img-container" onclick="openLightbox('supplier/20_supplier_dashboard_fleet.png', 'Supplier Fleet & Dispatch Dashboard')">
-          <img src="supplier/20_supplier_dashboard_fleet.png" alt="Supplier Fleet & Dispatch Dashboard" loading="lazy" />
-          <div class="img-overlay">1200 × 800 @2x</div>
+    </div>
+
+    <div class="card" data-category="supplier">
+      <div class="img-container"
+        onclick="openLightbox('supplier/20_supplier_dashboard_fleet.png', 'Supplier Fleet & Dispatch Dashboard')">
+        <img src="supplier/20_supplier_dashboard_fleet.png" alt="Supplier Fleet & Dispatch Dashboard" loading="lazy" />
+        <div class="img-overlay">1200 × 800 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Supplier Partner Portal</span>
+          <span class="file-size">216 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Supplier Partner Portal</span>
-            <span class="file-size">216 KB</span>
-          </div>
-          <div class="card-title">Supplier Fleet & Dispatch Dashboard</div>
-          <div class="card-desc">Supplier operations command: daily revenue metrics, pending incoming orders, and live fleet tankers.</div>
-          <div class="card-footer">
-            <span class="res-badge">SUPPLIER</span>
-            <a class="view-btn" href="supplier/20_supplier_dashboard_fleet.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Supplier Fleet & Dispatch Dashboard</div>
+        <div class="card-desc">Supplier operations command: daily revenue metrics, pending incoming orders, and live
+          fleet tankers.</div>
+        <div class="card-footer">
+          <span class="res-badge">SUPPLIER</span>
+          <a class="view-btn" href="supplier/20_supplier_dashboard_fleet.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="supplier">
-        <div class="img-container" onclick="openLightbox('supplier/21_supplier_add_vehicle.png', 'Tanker Vehicle Onboarding Modal')">
-          <img src="supplier/21_supplier_add_vehicle.png" alt="Tanker Vehicle Onboarding Modal" loading="lazy" />
-          <div class="img-overlay">1200 × 800 @2x</div>
+    </div>
+
+    <div class="card" data-category="supplier">
+      <div class="img-container"
+        onclick="openLightbox('supplier/21_supplier_add_vehicle.png', 'Tanker Vehicle Onboarding Modal')">
+        <img src="supplier/21_supplier_add_vehicle.png" alt="Tanker Vehicle Onboarding Modal" loading="lazy" />
+        <div class="img-overlay">1200 × 800 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Supplier Partner Portal</span>
+          <span class="file-size">246 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Supplier Partner Portal</span>
-            <span class="file-size">246 KB</span>
-          </div>
-          <div class="card-title">Tanker Vehicle Onboarding Modal</div>
-          <div class="card-desc">RTO vehicle registration input, water grade (Potable BIS-10500/Commercial), capacity, and driver assignment.</div>
-          <div class="card-footer">
-            <span class="res-badge">SUPPLIER</span>
-            <a class="view-btn" href="supplier/21_supplier_add_vehicle.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Tanker Vehicle Onboarding Modal</div>
+        <div class="card-desc">RTO vehicle registration input, water grade (Potable BIS-10500/Commercial), capacity, and
+          driver assignment.</div>
+        <div class="card-footer">
+          <span class="res-badge">SUPPLIER</span>
+          <a class="view-btn" href="supplier/21_supplier_add_vehicle.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="supplier">
-        <div class="img-container" onclick="openLightbox('supplier/22_supplier_registration.png', 'Supplier KYC & Compliance Registration')">
-          <img src="supplier/22_supplier_registration.png" alt="Supplier KYC & Compliance Registration" loading="lazy" />
-          <div class="img-overlay">390 × 844 @2x</div>
+    </div>
+
+    <div class="card" data-category="supplier">
+      <div class="img-container"
+        onclick="openLightbox('supplier/22_supplier_registration.png', 'Supplier KYC & Compliance Registration')">
+        <img src="supplier/22_supplier_registration.png" alt="Supplier KYC & Compliance Registration" loading="lazy" />
+        <div class="img-overlay">390 × 844 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Supplier Partner Portal</span>
+          <span class="file-size">191 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Supplier Partner Portal</span>
-            <span class="file-size">191 KB</span>
-          </div>
-          <div class="card-title">Supplier KYC & Compliance Registration</div>
-          <div class="card-desc">Supplier partner onboarding: GSTIN, municipal water extraction permits, and lab certificate upload.</div>
-          <div class="card-footer">
-            <span class="res-badge">SUPPLIER</span>
-            <a class="view-btn" href="supplier/22_supplier_registration.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Supplier KYC & Compliance Registration</div>
+        <div class="card-desc">Supplier partner onboarding: GSTIN, municipal water extraction permits, and lab
+          certificate upload.</div>
+        <div class="card-footer">
+          <span class="res-badge">SUPPLIER</span>
+          <a class="view-btn" href="supplier/22_supplier_registration.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/23_admin_overview_radar.png', 'Operations Desk & Demand Deficit Radar')">
-          <img src="admin/23_admin_overview_radar.png" alt="Operations Desk & Demand Deficit Radar" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/23_admin_overview_radar.png', 'Operations Desk & Demand Deficit Radar')">
+        <img src="admin/23_admin_overview_radar.png" alt="Operations Desk & Demand Deficit Radar" loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">361 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">361 KB</span>
-          </div>
-          <div class="card-title">Operations Desk & Demand Deficit Radar</div>
-          <div class="card-desc">Executive command center with GMV metrics, live demand deficit zones (BKC, Andheri, Powai), and surge controls.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/23_admin_overview_radar.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Operations Desk & Demand Deficit Radar</div>
+        <div class="card-desc">Executive command center with GMV metrics, live demand deficit zones (BKC, Andheri,
+          Powai), and surge controls.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/23_admin_overview_radar.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/24_admin_fleet_map.png', 'Live Fleet GPS Tracking & Heatmap Desk')">
-          <img src="admin/24_admin_fleet_map.png" alt="Live Fleet GPS Tracking & Heatmap Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/24_admin_fleet_map.png', 'Live Fleet GPS Tracking & Heatmap Desk')">
+        <img src="admin/24_admin_fleet_map.png" alt="Live Fleet GPS Tracking & Heatmap Desk" loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">1089 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">1089 KB</span>
-          </div>
-          <div class="card-title">Live Fleet GPS Tracking & Heatmap Desk</div>
-          <div class="card-desc">High-density interactive map showing all online tankers, real-time velocities, and heading vectors.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/24_admin_fleet_map.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Live Fleet GPS Tracking & Heatmap Desk</div>
+        <div class="card-desc">High-density interactive map showing all online tankers, real-time velocities, and
+          heading vectors.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/24_admin_fleet_map.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/25_admin_priority_dispatch.png', 'Hospital Priority Dispatch (20m SLA) Desk')">
-          <img src="admin/25_admin_priority_dispatch.png" alt="Hospital Priority Dispatch (20m SLA) Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/25_admin_priority_dispatch.png', 'Hospital Priority Dispatch (20m SLA) Desk')">
+        <img src="admin/25_admin_priority_dispatch.png" alt="Hospital Priority Dispatch (20m SLA) Desk"
+          loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">460 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">460 KB</span>
-          </div>
-          <div class="card-title">Hospital Priority Dispatch (20m SLA) Desk</div>
-          <div class="card-desc">Emergency priority console for hospitals & dialysis units with guaranteed 20-minute SLA fulfillment.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/25_admin_priority_dispatch.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Hospital Priority Dispatch (20m SLA) Desk</div>
+        <div class="card-desc">Emergency priority console for hospitals & dialysis units with guaranteed 20-minute SLA
+          fulfillment.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/25_admin_priority_dispatch.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/26_admin_payouts_ledger.png', 'Financial Settlements & Driver Payouts Desk')">
-          <img src="admin/26_admin_payouts_ledger.png" alt="Financial Settlements & Driver Payouts Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/26_admin_payouts_ledger.png', 'Financial Settlements & Driver Payouts Desk')">
+        <img src="admin/26_admin_payouts_ledger.png" alt="Financial Settlements & Driver Payouts Desk" loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">524 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">524 KB</span>
-          </div>
-          <div class="card-title">Financial Settlements & Driver Payouts Desk</div>
-          <div class="card-desc">Payout ledger, escrow holdbacks, supplier splits, and instant NEFT bank settlement verification.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/26_admin_payouts_ledger.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Financial Settlements & Driver Payouts Desk</div>
+        <div class="card-desc">Payout ledger, escrow holdbacks, supplier splits, and instant NEFT bank settlement
+          verification.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/26_admin_payouts_ledger.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/27_admin_water_safety.png', 'Water Safety & Quality Lab Audit Desk')">
-          <img src="admin/27_admin_water_safety.png" alt="Water Safety & Quality Lab Audit Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/27_admin_water_safety.png', 'Water Safety & Quality Lab Audit Desk')">
+        <img src="admin/27_admin_water_safety.png" alt="Water Safety & Quality Lab Audit Desk" loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">385 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">385 KB</span>
-          </div>
-          <div class="card-title">Water Safety & Quality Lab Audit Desk</div>
-          <div class="card-desc">Water quality compliance dashboard tracking BIS-10500 lab tests, TDS ppm ratings, and supplier source audits.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/27_admin_water_safety.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Water Safety & Quality Lab Audit Desk</div>
+        <div class="card-desc">Water quality compliance dashboard tracking BIS-10500 lab tests, TDS ppm ratings, and
+          supplier source audits.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/27_admin_water_safety.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/28_admin_corporate_subscriptions.png', 'Corporate Recurring Contracts & Subscriptions Desk')">
-          <img src="admin/28_admin_corporate_subscriptions.png" alt="Corporate Recurring Contracts & Subscriptions Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/28_admin_corporate_subscriptions.png', 'Corporate Recurring Contracts & Subscriptions Desk')">
+        <img src="admin/28_admin_corporate_subscriptions.png" alt="Corporate Recurring Contracts & Subscriptions Desk"
+          loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">482 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">482 KB</span>
-          </div>
-          <div class="card-title">Corporate Recurring Contracts & Subscriptions Desk</div>
-          <div class="card-desc">Enterprise contract management for IT tech parks, hospital clusters, and large residential societies.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/28_admin_corporate_subscriptions.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Corporate Recurring Contracts & Subscriptions Desk</div>
+        <div class="card-desc">Enterprise contract management for IT tech parks, hospital clusters, and large
+          residential societies.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/28_admin_corporate_subscriptions.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/29_admin_kyc_approvals.png', 'Supplier KYC Compliance & Document Approvals Desk')">
-          <img src="admin/29_admin_kyc_approvals.png" alt="Supplier KYC Compliance & Document Approvals Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/29_admin_kyc_approvals.png', 'Supplier KYC Compliance & Document Approvals Desk')">
+        <img src="admin/29_admin_kyc_approvals.png" alt="Supplier KYC Compliance & Document Approvals Desk"
+          loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">212 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">212 KB</span>
-          </div>
-          <div class="card-title">Supplier KYC Compliance & Document Approvals Desk</div>
-          <div class="card-desc">KYC approval workflow verifying GSTIN, RTO commercial vehicle permits, and municipal water licenses.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/29_admin_kyc_approvals.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Supplier KYC Compliance & Document Approvals Desk</div>
+        <div class="card-desc">KYC approval workflow verifying GSTIN, RTO commercial vehicle permits, and municipal
+          water licenses.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/29_admin_kyc_approvals.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/30_admin_disputes_escrow.png', 'Customer Disputes & Escrow Arbitration Desk')">
-          <img src="admin/30_admin_disputes_escrow.png" alt="Customer Disputes & Escrow Arbitration Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/30_admin_disputes_escrow.png', 'Customer Disputes & Escrow Arbitration Desk')">
+        <img src="admin/30_admin_disputes_escrow.png" alt="Customer Disputes & Escrow Arbitration Desk"
+          loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">232 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">232 KB</span>
-          </div>
-          <div class="card-title">Customer Disputes & Escrow Arbitration Desk</div>
-          <div class="card-desc">Dispute arbitration queue handling digital flow meter discrepancies and automated prorated refunds.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/30_admin_disputes_escrow.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Customer Disputes & Escrow Arbitration Desk</div>
+        <div class="card-desc">Dispute arbitration queue handling digital flow meter discrepancies and automated
+          prorated refunds.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/30_admin_disputes_escrow.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/31_admin_service_zones.png', 'Service Delivery Zones & Traffic Multipliers Desk')">
-          <img src="admin/31_admin_service_zones.png" alt="Service Delivery Zones & Traffic Multipliers Desk" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/31_admin_service_zones.png', 'Service Delivery Zones & Traffic Multipliers Desk')">
+        <img src="admin/31_admin_service_zones.png" alt="Service Delivery Zones & Traffic Multipliers Desk"
+          loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">299 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">299 KB</span>
-          </div>
-          <div class="card-title">Service Delivery Zones & Traffic Multipliers Desk</div>
-          <div class="card-desc">Operational polygon management, zone minimum density rules, and real-time peak traffic factors.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/31_admin_service_zones.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Service Delivery Zones & Traffic Multipliers Desk</div>
+        <div class="card-desc">Operational polygon management, zone minimum density rules, and real-time peak traffic
+          factors.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/31_admin_service_zones.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="admin">
-        <div class="img-container" onclick="openLightbox('admin/32_admin_system_audit_log.png', 'Authoritative Cryptographic System Audit Log')">
-          <img src="admin/32_admin_system_audit_log.png" alt="Authoritative Cryptographic System Audit Log" loading="lazy" />
-          <div class="img-overlay">1280 × 820 @2x</div>
+    </div>
+
+    <div class="card" data-category="admin">
+      <div class="img-container"
+        onclick="openLightbox('admin/32_admin_system_audit_log.png', 'Authoritative Cryptographic System Audit Log')">
+        <img src="admin/32_admin_system_audit_log.png" alt="Authoritative Cryptographic System Audit Log"
+          loading="lazy" />
+        <div class="img-overlay">1280 × 820 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Operations Admin Desks</span>
+          <span class="file-size">464 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Operations Admin Desks</span>
-            <span class="file-size">464 KB</span>
-          </div>
-          <div class="card-title">Authoritative Cryptographic System Audit Log</div>
-          <div class="card-desc">Immutable system audit trail recording emergency dispatches, surge changes, and supplier authorizations.</div>
-          <div class="card-footer">
-            <span class="res-badge">ADMIN</span>
-            <a class="view-btn" href="admin/32_admin_system_audit_log.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Authoritative Cryptographic System Audit Log</div>
+        <div class="card-desc">Immutable system audit trail recording emergency dispatches, surge changes, and supplier
+          authorizations.</div>
+        <div class="card-footer">
+          <span class="res-badge">ADMIN</span>
+          <a class="view-btn" href="admin/32_admin_system_audit_log.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
-      <div class="card" data-category="showcase">
-        <div class="img-container" onclick="openLightbox('showcase/33_showcase_design_system.png', 'Design System Visual Component Catalog')">
-          <img src="showcase/33_showcase_design_system.png" alt="Design System Visual Component Catalog" loading="lazy" />
-          <div class="img-overlay">1200 × 900 @2x</div>
+    </div>
+
+    <div class="card" data-category="showcase">
+      <div class="img-container"
+        onclick="openLightbox('showcase/33_showcase_design_system.png', 'Design System Visual Component Catalog')">
+        <img src="showcase/33_showcase_design_system.png" alt="Design System Visual Component Catalog" loading="lazy" />
+        <div class="img-overlay">1200 × 900 @2x</div>
+      </div>
+      <div class="card-body">
+        <div class="card-meta">
+          <span class="group-tag">Design System Showcase</span>
+          <span class="file-size">223 KB</span>
         </div>
-        <div class="card-body">
-          <div class="card-meta">
-            <span class="group-tag">Design System Showcase</span>
-            <span class="file-size">223 KB</span>
-          </div>
-          <div class="card-title">Design System Visual Component Catalog</div>
-          <div class="card-desc">Complete UI component library: brand typography, buttons, color swatches, status badges, and inputs.</div>
-          <div class="card-footer">
-            <span class="res-badge">SHOWCASE</span>
-            <a class="view-btn" href="showcase/33_showcase_design_system.png" target="_blank">Open High-Res ↗</a>
-          </div>
+        <div class="card-title">Design System Visual Component Catalog</div>
+        <div class="card-desc">Complete UI component library: brand typography, buttons, color swatches, status badges,
+          and inputs.</div>
+        <div class="card-footer">
+          <span class="res-badge">SHOWCASE</span>
+          <a class="view-btn" href="showcase/33_showcase_design_system.png" target="_blank">Open High-Res ↗</a>
         </div>
       </div>
-    
+    </div>
+
   </div>
 
   <div class="lightbox" id="lightbox" onclick="closeLightbox()">
@@ -922,4 +1044,5 @@
     });
   </script>
 </body>
+
 </html>
