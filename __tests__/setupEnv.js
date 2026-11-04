@@ -20,6 +20,15 @@ try {
   console.warn('Failed to load .env in test setup:', e);
 }
 
+// Polyfill global.WebSocket for Node.js environments (e.g. Node 20 in CI)
+try {
+  if (typeof global.WebSocket === 'undefined') {
+    global.WebSocket = require('ws');
+  }
+} catch {
+  // Ignore if ws is not available
+}
+
 // Fallback test environment configuration for CI / automated test suites
 if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://qicoczialqxulcbipuix.supabase.co';
