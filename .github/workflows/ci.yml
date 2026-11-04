@@ -14,14 +14,19 @@ jobs:
   validate:
     name: Typecheck & Tests
     runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL || 'https://qicoczialqxulcbipuix.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpY29jemlhbHF4dWxjYmlwdWl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzI3OTMsImV4cCI6MjEwODk0ODc5M30.aTT8i9UAydWN33n0SrlZKBmPCgYBmdizgSENAPLfR6Q' }}
+      EXPO_PUBLIC_MAPPLS_REST_KEY: 'bxtphoyagzpyhhukdfjunqunpqibgugplcdc'
+      EXPO_PUBLIC_RAZORPAY_KEY_ID: 'rzp_test_TuCCnOeHyd9KdO'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20.x
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
