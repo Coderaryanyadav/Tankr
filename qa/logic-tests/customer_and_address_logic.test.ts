@@ -104,10 +104,8 @@ describe('LOGIC-01: Customer Identity and Address Business Logic', () => {
 
       expect(quote1).not.toBeNull();
       expect(quote2).not.toBeNull();
-      if (quote1 && quote2) {
-        expect(quote2.distance_km).toBeGreaterThan(quote1.distance_km);
-        expect(quote2.final_payable_amount).toBeGreaterThan(quote1.final_payable_amount);
-      }
+      expect(quote2!.distance_km).toBeGreaterThan(quote1!.distance_km);
+      expect(quote2!.final_payable_amount).toBeGreaterThan(quote1!.final_payable_amount);
     });
   });
 });
