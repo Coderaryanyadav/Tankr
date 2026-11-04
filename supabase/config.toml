@@ -265,8 +265,8 @@ template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 max_frequency = "5s"
 
-# Use pre-defined map of phone number to OTP for testing.
-# Keys are the phone number with country code and without the + prefix.
+# Use pre-defined map of phone number to OTP for local development testing only.
+# WARNING: NEVER sync or replicate these test OTP mappings to cloud staging or production environments.
 [auth.sms.test_otp]
 "917777777777" = "123456"
 "918888888888" = "123456"

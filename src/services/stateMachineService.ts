@@ -45,7 +45,8 @@ export interface CancellationRefundResult {
 /**
  * Computes cancellation refund based on state of the dispatch trip:
  * - pending / accepted / driver_assigned: Full refund, ₹0 fee
- * - en_route / arrived: Deduct ₹150 logistics compensation fee
+ * - en_route: Deduct ₹150 logistics compensation fee
+ * - arrived: Deduct ₹200 driver arrival & idle fuel compensation fee (per FINANCIAL_RULES.md & customer_cancel_booking_with_policy)
  * - delivering / delivered: Throws error (cannot cancel)
  */
 export function calculateCancellationRefund(
@@ -63,8 +64,14 @@ export function calculateCancellationRefund(
   }
 
   let cancellationFee = 0;
-  if (status === 'en_route' || status === 'arrived') {
+  let reason = 'Full 100% refund before vehicle dispatch';
+
+  if (status === 'en_route') {
     cancellationFee = 150.0;
+    reason = 'Deducted ₹150 driver trip dispatch fee';
+  } else if (status === 'arrived') {
+    cancellationFee = 200.0;
+    reason = 'Deducted ₹200 driver arrival and idle fuel compensation fee';
   }
 
   const refundAmount = Math.max(0, Math.round((totalPaid - cancellationFee) * 100) / 100);
@@ -72,10 +79,7 @@ export function calculateCancellationRefund(
   return {
     cancellationFee,
     refundAmount,
-    reason:
-      cancellationFee > 0
-        ? 'Deducted ₹150 driver trip dispatch fee'
-        : 'Full 100% refund before vehicle dispatch',
+    reason,
   };
 }
 

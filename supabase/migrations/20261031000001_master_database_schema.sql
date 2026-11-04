@@ -1453,13 +1453,27 @@ CREATE POLICY "Admins have full access to bookings" ON public.bookings FOR ALL U
 );
 
 -- 21e. Invoices, Payments, Notifications, Tracking
+-- SEC-001 & BUG-002: Invoices and payments are strictly SELECT-only for users/admins via client REST API.
+-- Mutations (INSERT, UPDATE) are strictly reserved to authoritative database RPCs running as SECURITY DEFINER or service_role.
 CREATE POLICY "Users read own invoices" ON public.invoices FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.invoices.booking_id AND b.customer_id = auth.uid())
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
 );
 CREATE POLICY "Users read own payments" ON public.payments FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.payments.booking_id AND b.customer_id = auth.uid())
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
+);
+CREATE POLICY "Admins manage invoices" ON public.invoices FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
+CREATE POLICY "Admins manage payments" ON public.payments FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
 );
 CREATE POLICY "Users read own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Tracking read by booking parties" ON public.tracking_breadcrumbs FOR SELECT USING (

@@ -48,7 +48,7 @@ class PaymentService {
     const key = idempotencyKey || this.generateIdempotencyKey(bookingId);
 
     try {
-      // 1. Attempt authoritative database RPC first
+      // 1. Authoritative Server RPC Execution
       const { data, error } = await supabase.rpc('create_payment_order', {
         p_booking_id: bookingId,
         p_method: method,
@@ -67,67 +67,10 @@ class PaymentService {
         };
       }
 
-      // 2. Resilient Fallback: Direct table persistence into public.payments
-      const { data: bData, error: bErr } = await supabase
-        .from('bookings')
-        .select('final_payable_amount')
-        .eq('id', bookingId)
-        .single();
-
-      if (bErr || !bData) {
-        return {
-          success: false,
-          error: `Booking verification failed: ${bErr?.message || 'Booking not found'}`,
-        };
-      }
-
-      const generatedOrderId = `order_${bookingId.replace(/-/g, '').slice(0, 16)}_${Date.now()}`;
-      const payableAmount = Number(bData.final_payable_amount);
-
-      const { error: pErr } = await supabase.from('payments').insert({
-        booking_id: bookingId,
-        gateway_order_id: generatedOrderId,
-        amount: payableAmount,
-        currency: 'INR',
-        method,
-        status: 'created',
-        idempotency_key: key,
-      });
-
-      if (pErr) {
-        // If already inserted with identical idempotency key, retrieve existing record
-        const { data: existingPay } = await supabase
-          .from('payments')
-          .select('gateway_order_id, amount, currency')
-          .eq('idempotency_key', key)
-          .single();
-
-        if (existingPay) {
-          return {
-            success: true,
-            data: {
-              orderId: existingPay.gateway_order_id,
-              amount: Number(existingPay.amount),
-              currency: existingPay.currency || 'INR',
-              keyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_5yL7gq7b8A88N4',
-            },
-          };
-        }
-
-        return {
-          success: false,
-          error: `Payment initialization error: ${pErr.message}`,
-        };
-      }
-
+      // Security Remediation (BUG-002): Financial mutations MUST NOT fall back to direct client table insertion
       return {
-        success: true,
-        data: {
-          orderId: generatedOrderId,
-          amount: payableAmount,
-          currency: 'INR',
-          keyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_5yL7gq7b8A88N4',
-        },
+        success: false,
+        error: error?.message || 'Payment order creation failed on secure backend RPC.',
       };
     } catch (err: any) {
       return {
@@ -156,7 +99,7 @@ class PaymentService {
     }
 
     try {
-      // 1. Attempt authoritative database RPC
+      // 1. Authoritative Server RPC Reconciliation
       const { data, error } = await supabase.rpc('verify_and_reconcile_payment', {
         p_booking_id: bookingId,
         p_gateway_order_id: orderId,
@@ -173,42 +116,10 @@ class PaymentService {
         };
       }
 
-      // 2. Resilient Fallback: Reconcile payments and bookings tables directly
-      const { data: updatedPay, error: pUpdateErr } = await supabase
-        .from('payments')
-        .update({
-          status: 'captured',
-          gateway_payment_id: paymentId,
-          gateway_signature: signature,
-        })
-        .eq('booking_id', bookingId)
-        .eq('gateway_order_id', orderId)
-        .select();
-
-      if (pUpdateErr) {
-        return {
-          success: false,
-          error: `Payment reconciliation failed: ${pUpdateErr.message}`,
-        };
-      }
-
-      if (!updatedPay || updatedPay.length === 0) {
-        return {
-          success: false,
-          error: 'Payment reconciliation rejected: No matching pending payment order found for this booking reference.',
-        };
-      }
-
-      await supabase
-        .from('bookings')
-        .update({ payment_status: 'paid' })
-        .eq('id', bookingId);
-
+      // Security Remediation (BUG-002): Financial reconciliation MUST NOT fall back to direct client table updates
       return {
-        success: true,
-        paymentId,
-        orderId,
-        transactionRef: `UPI/${paymentId}/tankr`,
+        success: false,
+        error: error?.message || data?.error || 'Payment reconciliation rejected: Gateway signature or transaction verification failed.',
       };
     } catch (err: any) {
       return {

@@ -27,8 +27,21 @@ describe('LOGIC-01: Customer Identity and Address Business Logic', () => {
       const location = useLocationStore.getState();
       const victimCustomerId = 'victim-uuid-4444-5555';
 
+      // Seed a test address belonging to victim user
+      await location.addSavedAddress(victimCustomerId, {
+        label: 'home',
+        flat_or_building: 'A-201, Green Meadows',
+        street_address: 'Marol Pipeline Road',
+        city: 'Mumbai',
+        pincode: '400059',
+        latitude: 19.1171,
+        longitude: 72.8809,
+        is_default: true,
+      });
+
       await location.fetchSavedAddresses(victimCustomerId);
       const loaded = useLocationStore.getState().savedAddresses;
+      expect(loaded.length).toBeGreaterThan(0);
       // All loaded addresses must belong exclusively to the queried user
       loaded.forEach((addr) => {
         expect(addr.user_id).toBe(victimCustomerId);
@@ -89,6 +102,8 @@ describe('LOGIC-01: Customer Identity and Address Business Logic', () => {
       // Address 2 (farther: 6km away)
       const quote2 = await booking.requestPriceQuote(tanker as any, 19.1600, 72.8810);
 
+      expect(quote1).not.toBeNull();
+      expect(quote2).not.toBeNull();
       if (quote1 && quote2) {
         expect(quote2.distance_km).toBeGreaterThan(quote1.distance_km);
         expect(quote2.final_payable_amount).toBeGreaterThan(quote1.final_payable_amount);

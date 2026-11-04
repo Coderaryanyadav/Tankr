@@ -88,14 +88,14 @@ describe('LOGIC-03: Booking State Machine & Transition Logic Audit', () => {
       expect(refundAccepted.refundAmount).toBe(totalPaid);
     });
 
-    it('deducts ₹150 logistics fee when cancelled after tanker is en route or arrived', () => {
+    it('deducts ₹150 for en_route and ₹200 for arrived according to cancellation policy', () => {
       const refundEnRoute = calculateCancellationRefund('en_route', totalPaid);
       expect(refundEnRoute.cancellationFee).toBe(150.00);
       expect(refundEnRoute.refundAmount).toBe(totalPaid - 150.00);
 
       const refundArrived = calculateCancellationRefund('arrived', totalPaid);
-      expect(refundArrived.cancellationFee).toBe(150.00);
-      expect(refundArrived.refundAmount).toBe(totalPaid - 150.00);
+      expect(refundArrived.cancellationFee).toBe(200.00);
+      expect(refundArrived.refundAmount).toBe(totalPaid - 200.00);
     });
 
     it('throws error when attempting cancellation on delivering or delivered', () => {

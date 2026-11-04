@@ -44,6 +44,10 @@ yarn-error.*
 supabase/.temp/
 supabase/.branches/
 
+# Native Mappls Licensing & Configs
+*.olf
+*.conf
+
 # generated native folders
 /ios
 /android

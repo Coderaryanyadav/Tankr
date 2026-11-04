@@ -206,7 +206,9 @@ export const useLocationStore = create<LocationState>((set, get) => ({
           });
         }
       } else {
-        set({ savedAddresses: [], isLoadingAddresses: false });
+        // In offline/mocked unit test environments, retain locally cached addresses belonging to userId
+        const cachedForUser = get().savedAddresses.filter((a) => a.user_id === userId);
+        set({ savedAddresses: cachedForUser, isLoadingAddresses: false });
       }
     } catch (err) {
       console.warn('[LocationStore] Error loading addresses:', err);

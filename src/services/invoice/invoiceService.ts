@@ -80,7 +80,7 @@ class InvoiceService {
    */
   async generateInvoice(bookingId: string): Promise<InvoiceRecord | null> {
     try {
-      // 1. Attempt authoritative PostgreSQL RPC
+      // 1. Authoritative PostgreSQL RPC
       const { data, error } = await supabase.rpc('generate_invoice_for_booking', {
         p_booking_id: bookingId,
       });
@@ -89,44 +89,8 @@ class InvoiceService {
         return this.getInvoiceByBookingId(bookingId);
       }
 
-      // 2. Resilient Fallback: Create invoice directly in public.invoices
-      const { data: b, error: bErr } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('id', bookingId)
-        .single();
-
-      if (bErr || !b) return null;
-
-      const invNo = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${bookingId.slice(0, 6).toUpperCase()}`;
-
-      const { error: iErr } = await supabase
-        .from('invoices')
-        .insert({
-          booking_id: bookingId,
-          invoice_number: invNo,
-          customer_name: 'Verified Customer',
-          customer_phone: b.customer_phone || '+919876543210',
-          delivery_address: b.delivery_address,
-          supplier_business_name: b.supplier_name || 'Marol Potable Water Hub (MIDC Andheri)',
-          supplier_gstin: '27AAAAA0000A1Z5',
-          water_type: b.water_type,
-          volume_liters: b.capacity_liters,
-          base_price: b.base_price,
-          delivery_charge: b.delivery_charge,
-          surcharge: b.surcharge,
-          tax_amount: b.tax_amount,
-          final_amount: b.final_payable_amount,
-          payment_status: 'PAID',
-        })
-        .select()
-        .single();
-
-      if (iErr) {
-        return this.getInvoiceByBookingId(bookingId);
-      }
-
-      return this.getInvoiceByBookingId(bookingId);
+      // Security Remediation (BUG-002): Financial invoices must be generated authoritatively by the database RPC
+      return null;
     } catch {
       return null;
     }

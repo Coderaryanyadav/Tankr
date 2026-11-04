@@ -21,7 +21,7 @@
 - **Onboarding**: KYC registration with GSTIN uniqueness check via `register_supplier`.
 - **Fleet Management**: Adding tankers with RTO registration, ultrasonic meter calibration numbers, and driver linkage via `supplier_onboard_tanker`.
 - **Order Dispatch**: Real-time order notification, acceptance via `supplier_accept_booking`, or reassignment via `supplier_cancel_and_reassign`.
-- **Payouts**: Reconciliation of net supplier payouts (Gross - 10% platform commission) through `admin_execute_batch_payout`.
+- **Payouts**: Reconciliation of net supplier payouts (85% Net Disbursed / 15% Platform Take including 10% Platform Commission and 5% Fleet Maintenance Reserve) through `admin_execute_batch_payout`.
 
 ### 1.3 Driver Workflow
 - **Duty Staging**: Driver logs in, sets duty status `on_duty`.

@@ -9,7 +9,7 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <RootNavigator />
-      <DevAppSwitcher />
+      {__DEV__ && <DevAppSwitcher />}
     </SafeAreaProvider>
   );
 }
