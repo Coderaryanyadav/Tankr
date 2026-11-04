@@ -72,42 +72,52 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         tankersList = data as NearbyTanker[];
       } else {
         // 2. Direct real-time query against live tankers table in database
-        const { data: dbTankers, error: dbErr } = await supabase
+        let query = supabase
           .from('tankers')
           .select('*, suppliers!inner(business_name, rating, total_deliveries)')
           .eq('is_online', true)
           .eq('is_available', true);
 
-        if (!dbErr && dbTankers && dbTankers.length > 0) {
-          tankersList = dbTankers.map((t: any) => {
-            const dLat = (t.latitude - lat) * 111;
-            const dLng = (t.longitude - lng) * 111 * Math.cos((lat * Math.PI) / 180);
-            const distKm = Math.round(Math.sqrt(dLat * dLat + dLng * dLng) * 10) / 10;
-            const etaMin = Math.max(5, Math.round(8 + distKm * 3.2));
-            const estPrice = Math.round(Number(t.base_price) + distKm * Number(t.price_per_km));
+        const capacityFilter = get().selectedCapacityFilter;
+        if (capacityFilter !== null && capacityFilter !== undefined) {
+          query = query.eq('capacity_liters', capacityFilter);
+        }
 
-            return {
-              tanker_id: t.id,
-              supplier_id: t.supplier_id,
-              supplier_name: t.suppliers?.business_name || 'TANKR Partner Hub',
-              vehicle_number: t.vehicle_number,
-              driver_name: t.driver_name,
-              driver_phone: t.driver_phone,
-              capacity_liters: t.capacity_liters,
-              water_type: t.water_type || 'Potable (Drinking)',
-              base_price: Number(t.base_price),
-              price_per_km: Number(t.price_per_km),
-              distance_km: distKm,
-              eta_minutes: etaMin,
-              estimated_total_price: estPrice,
-              latitude: t.latitude,
-              longitude: t.longitude,
-              heading_degrees: t.heading_degrees || 0,
-              is_available: t.is_available,
-              rating: Number(t.suppliers?.rating ?? 0),
-              total_deliveries: Number(t.suppliers?.total_deliveries ?? 0),
-            };
-          });
+        const { data: dbTankers, error: dbErr } = await query;
+
+        if (!dbErr && dbTankers && dbTankers.length > 0) {
+          tankersList = dbTankers
+            .map((t: any) => {
+              const dLat = (t.latitude - lat) * 111;
+              const dLng = (t.longitude - lng) * 111 * Math.cos((lat * Math.PI) / 180);
+              const distKm = Math.round(Math.sqrt(dLat * dLat + dLng * dLng) * 10) / 10;
+              const etaMin = Math.max(5, Math.round(8 + distKm * 3.2));
+              const estPrice = Math.round(Number(t.base_price) + distKm * Number(t.price_per_km));
+
+              return {
+                tanker_id: t.id,
+                supplier_id: t.supplier_id,
+                supplier_name: t.suppliers?.business_name || 'TANKR Partner Hub',
+                vehicle_number: t.vehicle_number,
+                driver_name: t.driver_name,
+                driver_phone: t.driver_phone,
+                capacity_liters: t.capacity_liters,
+                water_type: t.water_type || 'Potable (Drinking)',
+                base_price: Number(t.base_price),
+                price_per_km: Number(t.price_per_km),
+                distance_km: distKm,
+                eta_minutes: etaMin,
+                estimated_total_price: estPrice,
+                latitude: t.latitude,
+                longitude: t.longitude,
+                heading_degrees: t.heading_degrees || 0,
+                is_available: t.is_available,
+                rating: Number(t.suppliers?.rating ?? 0),
+                total_deliveries: Number(t.suppliers?.total_deliveries ?? 0),
+              };
+            })
+            // Enforce the 30 km discovery radius boundary on the fallback query
+            .filter((t) => t.distance_km <= 30);
         }
       }
 

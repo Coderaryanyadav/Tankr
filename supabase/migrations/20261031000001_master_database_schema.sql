@@ -2004,7 +2004,7 @@ BEGIN
         v_type_enum := 'hospital_dialysis'::public.institution_type;
     END;
 
-    -- Select nearest available tanker
+    -- Select nearest available online tanker
     SELECT id, vehicle_number, driver_name, driver_phone
     INTO v_tanker_id, v_vehicle_number, v_driver_name, v_driver_phone
     FROM public.tankers
@@ -2015,17 +2015,12 @@ BEGIN
     ) ASC
     LIMIT 1;
 
-    -- If none strictly available, pick nearest online tanker to pre-empt
+    -- If no available tanker is ready, fail gracefully rather than preempting a vehicle already performing another trip
     IF v_tanker_id IS NULL THEN
-        SELECT id, vehicle_number, driver_name, driver_phone
-        INTO v_tanker_id, v_vehicle_number, v_driver_name, v_driver_phone
-        FROM public.tankers
-        WHERE is_online = true
-        ORDER BY ST_Distance(
-            current_location,
-            ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::geography
-        ) ASC
-        LIMIT 1;
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'No available tankers currently online in the emergency service zone. Please try again shortly.'
+        );
     END IF;
 
     -- Mark tanker as dispatched
@@ -2243,7 +2238,7 @@ BEGIN
             p_refund_amount,
             'refund',
             'refunded',
-            'rfnd_' || substr(md5(random()::text), 1, 16)
+            'rfnd_dispute_' || p_dispute_id::text
         );
     END IF;
 

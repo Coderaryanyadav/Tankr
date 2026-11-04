@@ -69,23 +69,38 @@ export const RootNavigator: React.FC = () => {
   const renderExplicitRoute = () => {
     if (!urlParams) return null;
 
-    if (urlParams.app === 'showcase') {
+    // Design system showcase is public in development
+    if (urlParams.app === 'showcase' && __DEV__) {
       return <DesignSystemShowcase />;
     }
 
-    if (urlParams.app === 'admin') {
-      return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
-    }
-
-    if (urlParams.app === 'supplier') {
-      if (urlParams.screen === 'registration') {
-        return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
+    // Role-gated route overrides: only allowed in development with an authenticated session matching role or in __DEV__ preview mode
+    if (__DEV__) {
+      if (urlParams.app === 'admin') {
+        return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
       }
-      return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
-    }
 
-    if (urlParams.app === 'driver') {
-      return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
+      if (urlParams.app === 'supplier') {
+        if (urlParams.screen === 'registration') {
+          return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
+        }
+        return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
+      }
+
+      if (urlParams.app === 'driver') {
+        return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
+      }
+    } else {
+      // In production, verify that the authenticated profile role matches the requested portal
+      if (urlParams.app === 'admin' && profile?.role === 'admin') {
+        return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
+      }
+      if (urlParams.app === 'supplier' && profile?.role === 'supplier') {
+        return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
+      }
+      if (urlParams.app === 'driver' && profile?.role === 'driver') {
+        return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
+      }
     }
 
     if (urlParams.app === 'auth' || urlParams.screen === 'login' || urlParams.screen === 'verify' || urlParams.screen === 'onboarding') {
