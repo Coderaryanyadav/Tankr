@@ -572,7 +572,7 @@ BEGIN
 END;
 $$;
 
--- 9. get_nearby_tankers (PostGIS Radius Engine)
+-- 9. get_nearby_tankers (PostGIS Radius Engine with SEC-002 PII Redaction)
 CREATE OR REPLACE FUNCTION public.get_nearby_tankers(
     user_lat DOUBLE PRECISION,
     user_lng DOUBLE PRECISION,
@@ -606,8 +606,13 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     user_point GEOGRAPHY;
+    v_caller_is_admin BOOLEAN := FALSE;
 BEGIN
     user_point := ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326)::geography;
+
+    IF auth.uid() IS NOT NULL THEN
+        v_caller_is_admin := public.is_admin(auth.uid()) OR auth.role() = 'service_role';
+    END IF;
 
     RETURN QUERY
     SELECT 
@@ -616,7 +621,14 @@ BEGIN
         s.business_name AS supplier_name,
         t.vehicle_number,
         t.driver_name,
-        t.driver_phone,
+        -- SEC-002: Redact driver phone numbers during discovery scans to protect PII against scraping
+        CASE 
+            WHEN v_caller_is_admin THEN t.driver_phone
+            WHEN t.driver_phone IS NULL THEN NULL
+            WHEN LENGTH(t.driver_phone) >= 10 THEN
+                SUBSTRING(t.driver_phone, 1, 3) || '••••' || SUBSTRING(t.driver_phone, LENGTH(t.driver_phone) - 2)
+            ELSE '••••••••••'
+        END AS driver_phone,
         t.capacity_liters,
         t.water_type,
         t.base_price,

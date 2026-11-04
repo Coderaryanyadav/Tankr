@@ -741,7 +741,7 @@ BEGIN
 END;
 $$;
 
--- 20g. verify_and_reconcile_payment
+-- 20g. verify_and_reconcile_payment (Server-Authenticated, Authorized & Idempotent)
 CREATE OR REPLACE FUNCTION public.verify_and_reconcile_payment(
     p_booking_id uuid,
     p_gateway_order_id text,
@@ -756,7 +756,33 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_payment RECORD;
+    v_booking RECORD;
 BEGIN
+    -- 1. Input Validation: gateway payment ID must be provided
+    IF p_gateway_payment_id IS NULL OR length(trim(p_gateway_payment_id)) < 3 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Invalid gateway payment ID provided.');
+    END IF;
+
+    -- 2. Retrieve booking and enforce caller authorization
+    SELECT * INTO v_booking
+    FROM public.bookings
+    WHERE id = p_booking_id;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for payment reference.');
+    END IF;
+
+    -- Caller must be the customer who owns the booking, an administrator, or service_role
+    IF auth.uid() IS NOT NULL AND auth.uid() <> v_booking.customer_id AND NOT public.is_admin(auth.uid()) AND auth.role() <> 'service_role' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Caller not authorized to reconcile payment for this booking.');
+    END IF;
+
+    -- 3. Verification enforcement: reject explicitly unverified transactions
+    IF p_verified IS FALSE THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Payment verification failed: Gateway reported unverified signature.');
+    END IF;
+
+    -- 4. Locate payment record with row lock
     SELECT * INTO v_payment
     FROM public.payments
     WHERE booking_id = p_booking_id
@@ -767,21 +793,36 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Payment record not found for order reference.');
     END IF;
 
+    -- 5. Idempotent check: if already captured, return success immediately
+    IF v_payment.status = 'captured' THEN
+        RETURN jsonb_build_object(
+            'success', true,
+            'payment_id', v_payment.id,
+            'order_id', p_gateway_order_id,
+            'status', 'captured',
+            'idempotent', true
+        );
+    END IF;
+
+    -- 6. Reconcile and transition statuses atomically
     UPDATE public.payments
     SET status = 'captured',
         gateway_payment_id = p_gateway_payment_id,
-        gateway_signature = p_gateway_signature
+        gateway_signature = COALESCE(p_gateway_signature, v_payment.gateway_signature),
+        updated_at = NOW()
     WHERE id = v_payment.id;
 
     UPDATE public.bookings
-    SET payment_status = 'paid'
+    SET payment_status = 'paid',
+        updated_at = NOW()
     WHERE id = p_booking_id;
 
     RETURN jsonb_build_object(
         'success', true,
         'payment_id', v_payment.id,
         'order_id', p_gateway_order_id,
-        'status', 'captured'
+        'status', 'captured',
+        'idempotent', false
     );
 END;
 $$;
@@ -1157,6 +1198,10 @@ DECLARE
     v_liters BIGINT := 0;
     v_surge NUMERIC(3,2) := 1.25;
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for dashboard metrics (ERRCODE 42501)';
+    END IF;
+
     SELECT COALESCE(SUM(final_payable_amount), 0.00), COUNT(*)
     INTO v_total_gmv, v_total_b
     FROM public.bookings;
@@ -1234,15 +1279,36 @@ AS $$
     SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid AND role = 'admin');
 $$;
 
--- Privilege Grants & Default Privileges for Authenticated & Anon Roles
+-- Privilege Grants: Least-Privilege Role Separation (SEC-001 Remediation)
+-- 1. Schema Usage
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+-- 2. Service Role has authoritative administration
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
+
+-- 3. Authenticated Role: Access strictly moderated by Row-Level Security (RLS)
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO authenticated;
+
+-- 4. Anon Role: Minimal public read permissions, strictly bounded to unauthenticated discovery
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
+REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM anon;
+
+GRANT SELECT ON public.service_zones, public.water_quality_certificates, public.community_pools, public.community_pool_contributions TO anon;
+GRANT INSERT ON public.community_pool_contributions TO anon;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO anon;
+
+-- Default Privileges: ensure newly created objects do not leak blanket privileges to anon
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO authenticated;
 
 -- Clean existing policies for idempotency
 DO $$ BEGIN
@@ -1306,16 +1372,61 @@ CREATE POLICY "Users can update own addresses" ON public.saved_addresses FOR UPD
 CREATE POLICY "Users can delete own addresses" ON public.saved_addresses FOR DELETE USING (auth.uid() = user_id);
 CREATE POLICY "Admins full access on saved_addresses" ON public.saved_addresses FOR ALL USING (public.is_admin(auth.uid()));
 
--- 21c. Service Zones & Suppliers & Tankers (Publicly discoverable by authenticated users)
+-- 21c. Service Zones & Suppliers & Tankers (SEC-002: Hardened Discovery & Access Policies)
 CREATE POLICY "Public read on service_zones" ON public.service_zones FOR SELECT USING (TRUE);
-CREATE POLICY "Public read on suppliers" ON public.suppliers FOR SELECT USING (TRUE);
-CREATE POLICY "Public read on tankers" ON public.tankers FOR SELECT USING (TRUE);
-CREATE POLICY "Suppliers can update own tankers" ON public.tankers FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM public.suppliers s JOIN public.profiles p ON s.contact_phone = p.phone_number WHERE p.id = auth.uid() AND s.id = tankers.supplier_id)
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+
+-- Suppliers: Public can only view active, verified business entities; Suppliers view/edit their own; Admins view all
+CREATE POLICY "Public read verified suppliers" ON public.suppliers FOR SELECT USING (
+    (is_active = TRUE AND verification_status = 'verified')
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
+    OR EXISTS (
+        SELECT 1 FROM public.profiles p 
+        WHERE p.id = auth.uid() 
+          AND (p.phone_number = suppliers.contact_phone OR '+' || p.phone_number = suppliers.contact_phone)
+    )
 );
-CREATE POLICY "Public read on driver_profiles" ON public.driver_profiles FOR SELECT USING (TRUE);
-CREATE POLICY "Drivers manage own driver_profiles" ON public.driver_profiles FOR ALL USING (profile_id = auth.uid() OR public.is_admin(auth.uid()));
+
+-- Tankers: Public can only discover online and available fleet units; Suppliers & Drivers manage their assigned units
+CREATE POLICY "Public read active tankers" ON public.tankers FOR SELECT USING (
+    (is_online = TRUE AND is_available = TRUE)
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
+    OR EXISTS (
+        SELECT 1 FROM public.suppliers s 
+        JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number)
+        WHERE p.id = auth.uid() AND s.id = tankers.supplier_id
+    )
+    OR driver_phone IN (
+        SELECT phone_number FROM public.profiles WHERE id = auth.uid()
+        UNION
+        SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid()
+    )
+);
+
+CREATE POLICY "Suppliers can update own tankers" ON public.tankers FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM public.suppliers s JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number) WHERE p.id = auth.uid() AND s.id = tankers.supplier_id)
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
+);
+
+-- Driver Profiles: Strictly restricted to the driver, their operating supplier, and platform administrators
+CREATE POLICY "Drivers and suppliers read driver_profiles" ON public.driver_profiles FOR SELECT USING (
+    profile_id = auth.uid()
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
+    OR EXISTS (
+        SELECT 1 FROM public.suppliers s
+        JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number)
+        WHERE p.id = auth.uid() AND s.id = driver_profiles.supplier_id
+    )
+);
+
+CREATE POLICY "Drivers manage own driver_profiles" ON public.driver_profiles FOR ALL USING (
+    profile_id = auth.uid() 
+    OR public.is_admin(auth.uid()) 
+    OR auth.role() = 'service_role'
+);
 
 -- 21d. Bookings (Strict Isolation)
 CREATE POLICY "Customers can view own bookings" ON public.bookings FOR SELECT USING (auth.uid() = customer_id);
@@ -1356,15 +1467,28 @@ CREATE POLICY "Tracking read by booking parties" ON public.tracking_breadcrumbs 
     OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- 21f. Community Pools, Subscriptions & Emergency (Admin & Public read)
+-- 21f. Community Pools, Subscriptions & Emergency (SEC-001 & SEC-002: Authenticated / Admin Isolation)
 CREATE POLICY "Public read community_pools" ON public.community_pools FOR SELECT USING (TRUE);
 CREATE POLICY "Public insert pool contributions" ON public.community_pool_contributions FOR INSERT WITH CHECK (TRUE);
 CREATE POLICY "Public read pool contributions" ON public.community_pool_contributions FOR SELECT USING (TRUE);
 CREATE POLICY "Public read water certificates" ON public.water_quality_certificates FOR SELECT USING (TRUE);
-CREATE POLICY "Admins full emergency dispatches" ON public.emergency_dispatches FOR ALL USING (TRUE);
-CREATE POLICY "Admins full corporate subscriptions" ON public.corporate_subscriptions FOR ALL USING (TRUE);
-CREATE POLICY "Admins full platform settings" ON public.platform_settings FOR ALL USING (TRUE);
-CREATE POLICY "Admins full audit logs" ON public.admin_audit_logs FOR ALL USING (TRUE);
+
+-- SEC-001: Enforce strict administrator authorization on sensitive operational controls
+CREATE POLICY "Admins full emergency dispatches" ON public.emergency_dispatches FOR ALL 
+    USING (public.is_admin(auth.uid()) OR auth.role() = 'service_role')
+    WITH CHECK (public.is_admin(auth.uid()) OR auth.role() = 'service_role');
+
+CREATE POLICY "Admins full corporate subscriptions" ON public.corporate_subscriptions FOR ALL 
+    USING (public.is_admin(auth.uid()) OR auth.role() = 'service_role')
+    WITH CHECK (public.is_admin(auth.uid()) OR auth.role() = 'service_role');
+
+CREATE POLICY "Admins full platform settings" ON public.platform_settings FOR ALL 
+    USING (public.is_admin(auth.uid()) OR auth.role() = 'service_role')
+    WITH CHECK (public.is_admin(auth.uid()) OR auth.role() = 'service_role');
+
+CREATE POLICY "Admins full audit logs" ON public.admin_audit_logs FOR ALL 
+    USING (public.is_admin(auth.uid()) OR auth.role() = 'service_role')
+    WITH CHECK (public.is_admin(auth.uid()) OR auth.role() = 'service_role');
 
 -- ==============================================================================
 -- 22. REALTIME PUBLICATION SETUP
@@ -1672,15 +1796,30 @@ ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS supplier_name TEXT;
 ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);
 ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'volume_shortage';
 
--- 5. Table Grants & RLS for Authenticated and Anon
-GRANT ALL ON TABLE public.driver_payout_ledger TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.corporate_subscriptions TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.emergency_dispatches TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.water_quality_certificates TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.disputes TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.admin_audit_logs TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.service_zones TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.platform_settings TO anon, authenticated, service_role;
+-- 5. Table Grants & Least-Privilege RLS (SEC-001 & SEC-002 Remediation)
+-- Service role retains full administrative grants
+GRANT ALL ON TABLE public.driver_payout_ledger TO service_role;
+GRANT ALL ON TABLE public.corporate_subscriptions TO service_role;
+GRANT ALL ON TABLE public.emergency_dispatches TO service_role;
+GRANT ALL ON TABLE public.water_quality_certificates TO service_role;
+GRANT ALL ON TABLE public.disputes TO service_role;
+GRANT ALL ON TABLE public.admin_audit_logs TO service_role;
+GRANT ALL ON TABLE public.service_zones TO service_role;
+GRANT ALL ON TABLE public.platform_settings TO service_role;
+
+-- Authenticated roles granted DML bounded by RLS
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.driver_payout_ledger TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.corporate_subscriptions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.emergency_dispatches TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.water_quality_certificates TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.disputes TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.admin_audit_logs TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.service_zones TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.platform_settings TO authenticated;
+
+-- Anon revoked from privileged tables, allowed public discovery read on certificates and zones
+REVOKE ALL ON TABLE public.driver_payout_ledger, public.corporate_subscriptions, public.emergency_dispatches, public.disputes, public.admin_audit_logs, public.platform_settings FROM anon;
+GRANT SELECT ON TABLE public.water_quality_certificates, public.service_zones TO anon;
 
 ALTER TABLE public.driver_payout_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.corporate_subscriptions ENABLE ROW LEVEL SECURITY;
@@ -1690,22 +1829,66 @@ ALTER TABLE public.disputes ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
     DROP POLICY IF EXISTS "driver_payout_ledger_all" ON public.driver_payout_ledger;
-    CREATE POLICY "driver_payout_ledger_all" ON public.driver_payout_ledger FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "driver_payout_ledger_access" ON public.driver_payout_ledger FOR ALL 
+        USING (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+            OR driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
+        ) 
+        WITH CHECK (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+        );
 
     DROP POLICY IF EXISTS "corporate_subscriptions_all" ON public.corporate_subscriptions;
-    CREATE POLICY "corporate_subscriptions_all" ON public.corporate_subscriptions FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "corporate_subscriptions_access" ON public.corporate_subscriptions FOR ALL 
+        USING (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+        ) 
+        WITH CHECK (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+        );
 
     DROP POLICY IF EXISTS "emergency_dispatches_all" ON public.emergency_dispatches;
-    CREATE POLICY "emergency_dispatches_all" ON public.emergency_dispatches FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "emergency_dispatches_access" ON public.emergency_dispatches FOR ALL 
+        USING (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+            OR driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
+        ) 
+        WITH CHECK (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+        );
 
     DROP POLICY IF EXISTS "water_quality_certificates_all" ON public.water_quality_certificates;
-    CREATE POLICY "water_quality_certificates_all" ON public.water_quality_certificates FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "water_quality_certificates_read" ON public.water_quality_certificates FOR SELECT USING (TRUE);
+    CREATE POLICY "water_quality_certificates_admin_write" ON public.water_quality_certificates FOR ALL 
+        USING (public.is_admin(auth.uid()) OR auth.role() = 'service_role')
+        WITH CHECK (public.is_admin(auth.uid()) OR auth.role() = 'service_role');
 
     DROP POLICY IF EXISTS "disputes_all" ON public.disputes;
-    CREATE POLICY "disputes_all" ON public.disputes FOR ALL USING (true) WITH CHECK (true);
+    CREATE POLICY "disputes_access" ON public.disputes FOR ALL 
+        USING (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+            OR customer_id = auth.uid()
+            OR EXISTS (
+                SELECT 1 FROM public.suppliers s 
+                JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number) 
+                WHERE p.id = auth.uid() AND s.business_name = disputes.supplier_name
+            )
+        ) 
+        WITH CHECK (
+            public.is_admin(auth.uid()) 
+            OR auth.role() = 'service_role'
+            OR customer_id = auth.uid()
+        );
 END $$;
 
--- 6. RPC: get_service_zone_liquidity_health
+-- 6. RPC: get_service_zone_liquidity_health (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.get_service_zone_liquidity_health()
 RETURNS TABLE (
     zone_name TEXT,
@@ -1721,6 +1904,10 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for zone liquidity metrics (ERRCODE 42501)';
+    END IF;
+
     RETURN QUERY
     WITH zone_calc AS (
         SELECT 
@@ -1767,7 +1954,7 @@ BEGIN
 END;
 $$;
 
--- 7. RPC: admin_emergency_dispatch
+-- 7. RPC: admin_emergency_dispatch (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.admin_emergency_dispatch(
     p_institution_name TEXT,
     p_institution_type TEXT,
@@ -1793,6 +1980,10 @@ DECLARE
     v_dispatch_id UUID;
     v_type_enum public.institution_type;
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for emergency dispatch (ERRCODE 42501)';
+    END IF;
+
     BEGIN
         v_type_enum := p_institution_type::public.institution_type;
     EXCEPTION WHEN OTHERS THEN
@@ -1894,7 +2085,7 @@ BEGIN
 END;
 $$;
 
--- 8. RPC: admin_execute_batch_payout
+-- 8. RPC: admin_execute_batch_payout (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.admin_execute_batch_payout()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1906,6 +2097,10 @@ DECLARE
     v_records_count INTEGER := 0;
     r RECORD;
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for batch payouts (ERRCODE 42501)';
+    END IF;
+
     FOR r IN 
         SELECT 
             driver_phone,
@@ -1955,7 +2150,7 @@ BEGIN
 END;
 $$;
 
--- 9. RPC: admin_verify_supplier
+-- 9. RPC: admin_verify_supplier (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.admin_verify_supplier(
     p_supplier_id UUID,
     p_status TEXT,
@@ -1967,6 +2162,10 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for supplier verification (ERRCODE 42501)';
+    END IF;
+
     UPDATE public.suppliers 
     SET verification_status = p_status,
         is_verified = (p_status = 'verified'),
@@ -1989,7 +2188,7 @@ BEGIN
 END;
 $$;
 
--- 10. RPC: admin_resolve_dispute
+-- 10. RPC: admin_resolve_dispute (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.admin_resolve_dispute(
     p_dispute_id UUID,
     p_status TEXT,
@@ -2005,6 +2204,10 @@ DECLARE
     v_booking_id UUID;
     v_customer_id UUID;
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for dispute resolution (ERRCODE 42501)';
+    END IF;
+
     SELECT booking_id, customer_id INTO v_booking_id, v_customer_id
     FROM public.disputes WHERE id = p_dispute_id;
 
@@ -2046,7 +2249,7 @@ BEGIN
 END;
 $$;
 
--- 11. RPC: admin_rebalance_tanker
+-- 11. RPC: admin_rebalance_tanker (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.admin_rebalance_tanker(
     p_tanker_id UUID,
     p_zone_name TEXT DEFAULT 'Marol / MIDC Andheri East'
@@ -2061,6 +2264,10 @@ DECLARE
     v_target_lat DOUBLE PRECISION;
     v_target_lng DOUBLE PRECISION;
 BEGIN
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Access Denied: Administrative authorization required for tanker rebalancing (ERRCODE 42501)';
+    END IF;
+
     SELECT center_lat, center_lng INTO v_target_lat, v_target_lng
     FROM public.service_zones WHERE zone_name ILIKE '%' || p_zone_name || '%' LIMIT 1;
 
@@ -2153,12 +2360,20 @@ BEGIN
 END;
 $$;
 
--- Grant execute and table permissions to all roles
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+-- Explicit Routine Permissions: Restrict privileged administrative routines
+REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_service_zone_liquidity_health() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.admin_emergency_dispatch(TEXT, TEXT, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, TEXT, INTEGER) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.admin_execute_batch_payout() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) FROM PUBLIC, anon;
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_service_zone_liquidity_health() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_emergency_dispatch(TEXT, TEXT, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, TEXT, INTEGER) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_execute_batch_payout() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
