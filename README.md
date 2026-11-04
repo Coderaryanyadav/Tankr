@@ -10,6 +10,7 @@
 [![PostGIS Spatial](https://img.shields.io/badge/PostGIS-3.3_Spatial_Engine-blue.svg?style=flat&logo=postgresql&logoColor=white)](https://postgis.net/)
 [![Zustand State](https://img.shields.io/badge/State-Zustand_5.0-brown.svg?style=flat)](https://github.com/pmndrs/zustand)
 [![Jest Test Coverage](https://img.shields.io/badge/Tests-Jest_30_Passing-brightgreen.svg?style=flat&logo=jest&logoColor=white)](https://jestjs.io/)
+[![CI Pipeline](https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml/badge.svg)](https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
 
 ---
