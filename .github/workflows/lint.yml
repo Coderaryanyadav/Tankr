@@ -1,0 +1,28 @@
+name: Security & Integrity Scan
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  security:
+    name: Secrets & Config Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Check for Uncommitted .env in Git
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env file is tracked by git! It must be removed from the index immediately."
+            exit 1
+          fi
+
+      - name: Check for Hardcoded Sensitive Keys
+        run: |
+          if git grep -E -i "(AIza[0-9A-Za-z-_]{35}|rzp_live_[a-zA-Z0-9]+)" -- 'src/' >/dev/null 2>&1; then
+            echo "::error::Detected live API secret keys in source files!"
+            exit 1
+          fi
+          echo "No sensitive secrets detected in tracked source files."
