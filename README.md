@@ -366,7 +366,7 @@ See [Production Deployment Guide](docs/deployment/DEPLOYMENT.md) and [Production
 
 ## 13. Contributing & Code of Conduct
 
-We welcome contributions! Please review our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+We welcome contributions! Please review our [Contributing Guide](docs/community/CONTRIBUTING.md) and [Code of Conduct](docs/community/CODE_OF_CONDUCT.md). Also check the [Changelog](docs/community/CHANGELOG.md) and [Support Guide](docs/community/SUPPORT.md).
 
 Before opening a pull request, ensure:
 1. `npm run typecheck` passes with **0 errors**.
@@ -377,7 +377,7 @@ Before opening a pull request, ensure:
 
 ## 14. Security Policy
 
-Security reports are taken with utmost seriousness. Please report vulnerabilities to **`security@tankr.in`**. Do not open public GitHub issues for security matters. Review our [Security Policy](SECURITY.md) for details on responsible disclosure.
+Security reports are taken with utmost seriousness. Please report vulnerabilities to **`security@tankr.in`**. Do not open public GitHub issues for security matters. Review our [Security Policy](docs/community/SECURITY.md) for details on responsible disclosure.
 
 ---
 
