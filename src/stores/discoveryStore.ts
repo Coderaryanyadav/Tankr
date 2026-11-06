@@ -90,9 +90,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
             .map((t: any) => {
               const dLat = (t.latitude - lat) * 111;
               const dLng = (t.longitude - lng) * 111 * Math.cos((lat * Math.PI) / 180);
-              const distKm = Math.round(Math.sqrt(dLat * dLat + dLng * dLng) * 10) / 10;
+              const distKm = Math.round(Math.sqrt(dLat * dLat + dLng * dLng) * 1.25 * 10) / 10;
               const etaMin = Math.max(5, Math.round(8 + distKm * 3.2));
-              const estPrice = Math.round(Number(t.base_price) + distKm * Number(t.price_per_km));
+              const estPrice = Math.round((Number(t.base_price) + distKm * Number(t.price_per_km)) * 1.05);
 
               return {
                 tanker_id: t.id,
@@ -100,7 +100,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
                 supplier_name: t.suppliers?.business_name || 'TANKR Partner Hub',
                 vehicle_number: t.vehicle_number,
                 driver_name: t.driver_name,
-                driver_phone: t.driver_phone,
+                driver_phone: t.driver_phone && t.driver_phone.length >= 10
+                  ? `${t.driver_phone.substring(0, 3)}••••${t.driver_phone.slice(-2)}`
+                  : '••••••••••',
                 capacity_liters: t.capacity_liters,
                 water_type: t.water_type || 'Potable (Drinking)',
                 base_price: Number(t.base_price),

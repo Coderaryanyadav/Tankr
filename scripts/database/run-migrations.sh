@@ -14,15 +14,21 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 ENV_FILE=".env"
-MIGRATION_FILE="supabase/migrations/20261031000001_master_database_schema.sql"
+MIGRATION_FILE_1="supabase/migrations/20261031000001_master_database_schema.sql"
+MIGRATION_FILE_2="supabase/migrations/20261031000002_core_operational_rpcs.sql"
 
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo -e "${BLUE}${BOLD}            TANKR — Database Migration Forward Runner           ${NC}"
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo ""
 
-if [ ! -f "$MIGRATION_FILE" ]; then
-    echo -e "${RED}[ERROR] Migration file not found: ${MIGRATION_FILE}${NC}"
+if [ ! -f "$MIGRATION_FILE_1" ]; then
+    echo -e "${RED}[ERROR] Migration file 1 not found: ${MIGRATION_FILE_1}${NC}"
+    exit 1
+fi
+
+if [ ! -f "$MIGRATION_FILE_2" ]; then
+    echo -e "${RED}[ERROR] Migration file 2 not found: ${MIGRATION_FILE_2}${NC}"
     exit 1
 fi
 
@@ -33,7 +39,8 @@ else
 fi
 
 echo -e "${BOLD}Target Database Host:${NC} ${SUPABASE_URL}"
-echo -e "${BOLD}Migration File:${NC}       ${MIGRATION_FILE}"
+echo -e "${BOLD}Migration File 1:${NC}     ${MIGRATION_FILE_1}"
+echo -e "${BOLD}Migration File 2:${NC}     ${MIGRATION_FILE_2}"
 echo ""
 
 # Check if using local Supabase CLI
@@ -42,13 +49,13 @@ if command -v supabase >/dev/null 2>&1 || npx --no-install supabase --version >/
     if npx supabase db push 2>/dev/null; then
         echo -e "  [${GREEN}SUCCESS${NC}] Schema pushed successfully via Supabase CLI."
     else
-        echo -e "  [${YELLOW}INFO${NC}] Supabase CLI push skipped or local docker offline. Applying directly if database port is open..."
+        echo -e "  [${YELLOW}INFO${NC}] Supabase CLI push skipped or local docker offline."
     fi
 else
     echo -e "  [${YELLOW}INFO${NC}] Supabase CLI not installed. To apply migrations to your remote project:"
     echo -e "  Open Supabase Studio > SQL Editor and paste the contents of:"
-    echo -e "  1. ${BOLD}${MIGRATION_FILE}${NC}"
-    echo -e "  2. ${BOLD}${FIXES_FILE}${NC}"
+    echo -e "  1. ${BOLD}${MIGRATION_FILE_1}${NC}"
+    echo -e "  2. ${BOLD}${MIGRATION_FILE_2}${NC}"
 fi
 
 echo ""

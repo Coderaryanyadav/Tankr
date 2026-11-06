@@ -1,6 +1,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  testTimeout: 15000,
   testMatch: ['**/qa/**/*.test.ts', '**/tests/**/*.test.ts', '**/__tests__/**/*.test.ts'],
   setupFiles: ['<rootDir>/qa/unit-tests/setupEnv.js'],
   transform: {

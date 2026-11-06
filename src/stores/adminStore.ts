@@ -783,20 +783,14 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   approveSupplier: async (supplierId: string) => {
     try {
-      await supabase.rpc('admin_verify_supplier', {
+      const { data, error } = await supabase.rpc('admin_verify_supplier', {
         p_supplier_id: supplierId,
         p_status: 'verified',
       });
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('admin_audit_logs').insert({
-          admin_id: user.id,
-          action: 'approve_supplier',
-          target_type: 'supplier',
-          target_id: supplierId,
-          notes: 'KYC verified and approved for Mumbai metropolitan distribution.',
-        });
+      if (error || (data && data.success === false)) {
+        console.warn('[AdminStore] Error approving supplier:', error?.message || data?.error);
+        return false;
       }
 
       set((state) => ({
@@ -816,20 +810,14 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   rejectSupplier: async (supplierId: string) => {
     try {
-      await supabase.rpc('admin_verify_supplier', {
+      const { data, error } = await supabase.rpc('admin_verify_supplier', {
         p_supplier_id: supplierId,
         p_status: 'rejected',
       });
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('admin_audit_logs').insert({
-          admin_id: user.id,
-          action: 'reject_supplier',
-          target_type: 'supplier',
-          target_id: supplierId,
-          notes: 'KYC documentation failed verification standard.',
-        });
+      if (error || (data && data.success === false)) {
+        console.warn('[AdminStore] Error rejecting supplier:', error?.message || data?.error);
+        return false;
       }
 
       set((state) => ({
@@ -888,7 +876,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const disp = get().disputes.find((d) => d.id === disputeId);
       const refundAmt = refund ? (disp?.amount || 450.0) : 0.0;
-      await supabase.rpc('admin_resolve_dispute', {
+      const { data, error } = await supabase.rpc('admin_resolve_dispute', {
         p_dispute_id: disputeId,
         p_status: refund ? 'refunded' : 'resolved',
         p_refund_amount: refundAmt,
@@ -896,6 +884,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           ? 'Customer refund approved due to verified short delivery.'
           : 'Resolved after driver clarification.',
       });
+
+      if (error || (data && data.success === false)) {
+        console.warn('[AdminStore] Error resolving dispute:', error?.message || data?.error);
+        return;
+      }
 
       set((state) => ({
         disputes: state.disputes.map((d) =>

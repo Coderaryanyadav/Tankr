@@ -252,7 +252,7 @@ powershell -ExecutionPolicy Bypass -File scripts\win\setup.ps1
 3. Installs exact dependencies using `npm install`.
 4. Runs environment validation to verify configuration validity without leaking secrets.
 5. Runs static type compilation (`npx tsc --noEmit`) to verify 0 errors.
-6. Executes all 28 automated unit and regression tests.
+6. Executes all 31 automated unit, integration, and security test suites (216 tests).
 7. Prints copy-paste launch commands and demo login accounts.
 
 ### Launching the Application:
@@ -325,7 +325,7 @@ TANKR adheres to rigorous quality assurance standards. Run the following verific
 # 1. Static Typecheck (Strict TypeScript 6.0)
 npm run typecheck
 
-# 2. Automated Jest Test Suite (28 unit and regression tests)
+# 2. Automated Jest Test Suite (31 suites, 216 automated tests)
 npm run test:ci
 
 # 3. Complete Pre-Release Verification Gate (Types, Tests, Schema, Secrets)

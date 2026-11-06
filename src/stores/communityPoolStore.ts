@@ -130,6 +130,11 @@ export const useCommunityPoolStore = create<CommunityPoolState>((set, get) => ({
         return { success: true };
       }
 
+      if (data && data.success === false) {
+        set({ isContributing: false });
+        return { success: false, error: data.error || 'Contribution rejected' };
+      }
+
       // 2. Resilient Fallback: Direct table update
       const { data: pool, error: pErr } = await supabase
         .from('community_pools')

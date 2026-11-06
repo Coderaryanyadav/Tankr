@@ -69,3 +69,51 @@ This document details all 19 PostgreSQL stored procedures implemented in `public
 ### `complete_customer_onboarding()`
 - **Purpose**: Atomically upserts user profile and default delivery address, bypassing client RLS snags.
 - **Parameters**: `p_full_name`, `p_preferred_address`, `p_city`, `p_pincode`.
+
+---
+
+## 4. Core Operational & Dispatch Procedures
+
+### `create_payment_order()`
+- **Purpose**: Creates an immutable server-side payment order record with unique gateway order reference and idempotency key.
+- **Parameters**: `p_booking_id` (UUID), `p_method` (TEXT), `p_idempotency_key` (TEXT).
+
+### `generate_invoice_for_booking()`
+- **Purpose**: Authoritatively generates a tax invoice record upon delivery completion with CGST/SGST breakdown.
+- **Parameters**: `p_booking_id` (UUID).
+
+### `supplier_accept_booking()`
+- **Purpose**: Validates supplier ownership, verifies quote expiration window, and transitions booking from `pending` to `accepted`.
+- **Parameters**: `p_booking_id` (UUID), `p_supplier_id` (UUID).
+
+### `supplier_cancel_and_reassign()`
+- **Purpose**: Releases current tanker, searches for nearest replacement tanker, or cancels and triggers refund if no alternative vehicle exists.
+- **Parameters**: `p_booking_id` (UUID), `p_supplier_id` (UUID), `p_reason` (TEXT).
+
+### `driver_update_delivery_status()`
+- **Purpose**: Transitions trip lifecycle (`en_route`, `arrived`, `delivering`, `delivered`) and enforces customer 4-digit PIN check on dropoff.
+- **Parameters**: `p_booking_id` (UUID), `p_new_status` (TEXT), `p_delivery_pin` (TEXT).
+
+### `contribute_to_community_pool()`
+- **Purpose**: Registers a resident contribution to a neighborhood bulk water pool and advances pool status to `funded` upon hitting target.
+- **Parameters**: `p_pool_code` (TEXT), `p_contributor_name` (TEXT), `p_flat_number` (TEXT), `p_amount` (NUMERIC).
+
+### `submit_customer_dispute()`
+- **Purpose**: Records customer dispute with category, volume shortfall details, and sets booking status to `disputed`.
+- **Parameters**: `p_booking_id` (UUID), `p_category` (TEXT), `p_reason` (TEXT), `p_liters_received` (NUMERIC), `p_evidence_url` (TEXT).
+
+### `register_supplier()`
+- **Purpose**: Onboards new supplier vendor entity, validates 15-character GSTIN, and safely escalates profile role to `supplier`.
+- **Parameters**: `p_business_name`, `p_owner_name`, `p_phone_number`, `p_business_address`, `p_gst_number`, `p_water_source`, `p_operating_areas`, `p_tanker_count`.
+
+### `get_nearby_tankers()`
+- **Purpose**: High-performance PostGIS spatial radius radar query returning available fleet within service range, calculating 1.25 road curvature distance, 5% GST, and redacting driver phone PII for unprivileged discovery.
+- **Parameters**: `user_lat` (DOUBLE PRECISION), `user_lng` (DOUBLE PRECISION), `radius_meters` (DOUBLE PRECISION), `capacity_filter` (INT).
+
+### `get_latest_tracking_breadcrumb()`
+- **Purpose**: Returns latest GPS telemetry fix, heading, speed, remaining distance, and ETA with booking party authorization checks.
+- **Parameters**: `p_booking_id` (UUID).
+
+### `process_booking_refund()`
+- **Purpose**: Authoritatively checks captured payment balances, verifies non-negative refundable bounds, inserts refund ledger records, and marks booking refunded.
+- **Parameters**: `p_booking_id` (UUID), `p_reason` (TEXT).

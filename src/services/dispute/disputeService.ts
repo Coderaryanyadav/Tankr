@@ -50,6 +50,10 @@ export const DisputeService = {
         return { success: true, disputeId: data.dispute_id };
       }
 
+      if (data && data.success === false) {
+        return { success: false, error: data.error || 'Dispute submission rejected by server.' };
+      }
+
       // 2. Resilient Fallback: Insert into public.disputes directly
       const { data: existingDisp } = await supabase
         .from('disputes')
