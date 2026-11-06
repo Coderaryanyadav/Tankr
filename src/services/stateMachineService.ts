@@ -124,6 +124,14 @@ export function validateDeliveryCompletion(
 
   const volumeDelivered = Math.round((input.meterEnd - input.meterStart) * 10) / 10;
 
+  if (input.bookedCapacity > 0 && volumeDelivered < input.bookedCapacity * 0.95) {
+    return {
+      valid: false,
+      volumeDelivered,
+      error: `Delivered volume (${volumeDelivered}L) must be at least 95% of booked capacity (${input.bookedCapacity}L).`,
+    };
+  }
+
   return {
     valid: true,
     volumeDelivered,

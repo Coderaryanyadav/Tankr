@@ -5,8 +5,6 @@
 import { Linking } from 'react-native';
 
 const MAPPLS_REST_KEY = process.env.EXPO_PUBLIC_MAPPLS_REST_KEY || '';
-const MAPPLS_CLIENT_ID = process.env.EXPO_PUBLIC_MAPPLS_CLIENT_ID || '';
-const MAPPLS_CLIENT_SECRET = process.env.EXPO_PUBLIC_MAPPLS_CLIENT_SECRET || '';
 
 export interface MapplsAddress {
   formattedAddress: string;
@@ -40,44 +38,14 @@ class MapplsServiceClass {
   private tokenExpiresAt: number = 0;
 
   /**
-   * Fetch or return cached OAuth2 Bearer token from Mappls Security Gateway
+   * OAuth Bearer token is managed server-side.
+   * Mobile client requests authenticate directly via MAPPLS_REST_KEY.
    */
   async getOAuthToken(): Promise<string | null> {
     if (this.cachedToken && Date.now() < this.tokenExpiresAt) {
       return this.cachedToken;
     }
-
-    if (!MAPPLS_CLIENT_ID || !MAPPLS_CLIENT_SECRET) {
-      return null;
-    }
-
-    try {
-      const response = await fetch('https://outpost.mapmyindia.com/api/security/oauth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `grant_type=client_credentials&client_id=${encodeURIComponent(
-          MAPPLS_CLIENT_ID
-        )}&client_secret=${encodeURIComponent(MAPPLS_CLIENT_SECRET)}`,
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
-      if (data?.access_token) {
-        this.cachedToken = data.access_token;
-        // Expire 2 minutes early for safety buffer
-        this.tokenExpiresAt = Date.now() + (data.expires_in - 120) * 1000;
-        return this.cachedToken;
-      }
-      return null;
-    } catch (err) {
-      console.warn('[MapplsService] OAuth token fetch error:', err);
-      return null;
-    }
+    return null;
   }
 
   /**

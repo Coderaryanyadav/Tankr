@@ -60,10 +60,15 @@ export const AddAddressModal: React.FC<AddAddressModalProps> = ({
       return;
     }
 
+    if (!user?.id) {
+      setErrorText('Please sign in to save an address');
+      return;
+    }
+
     setIsSaving(true);
     setErrorText(null);
 
-    const userId = user?.id || '2644c504-f611-40d3-a1c1-0d97214bf6f9';
+    const userId = user.id;
 
     const res = await addSavedAddress(userId, {
       label,

@@ -147,8 +147,8 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({ onBack }
 
   // Auto-fetch user bookings if store has not loaded them yet
   useEffect(() => {
-    if (userBookings.length === 0) {
-      fetchUserBookings(user?.id || '2644c504-f611-40d3-a1c1-0d97214bf6f9');
+    if (user?.id && userBookings.length === 0) {
+      fetchUserBookings(user.id);
     }
   }, [userBookings.length, user?.id, fetchUserBookings]);
 

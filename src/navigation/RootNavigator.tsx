@@ -74,37 +74,24 @@ export const RootNavigator: React.FC = () => {
       return <DesignSystemShowcase />;
     }
 
-    // Role-gated route overrides: only allowed with an authenticated session matching role or in __DEV__ preview mode without session
-    if (__DEV__) {
-      if (urlParams.app === 'admin') {
-        if (!session?.user || profile?.role === 'admin') {
-          return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
-        }
-      }
-
-      if (urlParams.app === 'supplier') {
-        if (urlParams.screen === 'registration') {
-          return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
-        }
-        if (!session?.user || profile?.role === 'supplier') {
-          return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
-        }
-      }
-
-      if (urlParams.app === 'driver') {
-        if (!session?.user || profile?.role === 'driver') {
-          return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
-        }
-      }
-    } else {
-      // In production, verify that the authenticated profile role matches the requested portal
-      if (urlParams.app === 'admin' && profile?.role === 'admin') {
+    // Role-gated route overrides: strictly require an authenticated session matching the profile role
+    if (urlParams.app === 'admin') {
+      if (profile?.role === 'admin') {
         return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
       }
-      if (urlParams.app === 'supplier' && profile?.role === 'supplier') {
+    }
+
+    if (urlParams.app === 'supplier') {
+      if (urlParams.screen === 'registration') {
+        return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
+      }
+      if (profile?.role === 'supplier') {
         return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
       }
-      if (urlParams.app === 'driver' && profile?.role === 'driver') {
+    }
+
+    if (urlParams.app === 'driver') {
+      if (profile?.role === 'driver') {
         return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
       }
     }

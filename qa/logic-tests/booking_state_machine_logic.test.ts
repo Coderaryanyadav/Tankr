@@ -157,5 +157,29 @@ describe('LOGIC-03: Booking State Machine & Transition Logic Audit', () => {
 
       expect(resZero.valid).toBe(false);
     });
+
+    it('rejects delivery if delivered volume is less than 95% of booked capacity', () => {
+      const resUnder = validateDeliveryCompletion({
+        expectedPin: '5582',
+        enteredPin: '5582',
+        meterStart: 1000,
+        meterEnd: 5500, // 4500L delivered out of 5000L booked (90% < 95%)
+        bookedCapacity: 5000,
+      });
+
+      expect(resUnder.valid).toBe(false);
+      expect(resUnder.error).toMatch(/must be at least 95% of booked capacity/i);
+
+      const resValidThreshold = validateDeliveryCompletion({
+        expectedPin: '5582',
+        enteredPin: '5582',
+        meterStart: 1000,
+        meterEnd: 5750, // 4750L delivered (exactly 95%)
+        bookedCapacity: 5000,
+      });
+
+      expect(resValidThreshold.valid).toBe(true);
+      expect(resValidThreshold.volumeDelivered).toBe(4750);
+    });
   });
 });

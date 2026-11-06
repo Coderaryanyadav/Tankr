@@ -18,6 +18,7 @@ DO $$ BEGIN
     CREATE TYPE booking_status AS ENUM (
         'pending', 
         'accepted', 
+        'supplier_assigned',
         'driver_assigned', 
         'en_route', 
         'arrived', 
@@ -346,7 +347,7 @@ CREATE TABLE IF NOT EXISTS public.community_pool_contributions (
     flat_number TEXT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
     amount_paid NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-    payment_status TEXT NOT NULL DEFAULT 'paid',
+    payment_status TEXT NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -440,15 +441,16 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-    -- Allow direct database migrations, maintenance, postgres superusers, service_role, and admins
-    IF current_user IN ('postgres', 'supabase_admin') 
-       OR auth.role() = 'service_role' 
-       OR public.is_admin(auth.uid()) 
-       OR nullif(current_setting('request.jwt.claim.role', true), '') IS NULL THEN
+    -- Only service_role, verified admins, or direct migration session_user may insert non-customer roles
+    IF auth.role() = 'service_role' OR public.is_admin(auth.uid()) THEN
         RETURN NEW;
     END IF;
 
-    -- For client API requests, force non-customer role inserts back to customer
+    IF session_user IN ('postgres', 'supabase_admin') AND auth.role() IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    -- For all API clients, force role to customer
     IF NEW.role != 'customer'::user_role THEN
         NEW.role := 'customer'::user_role;
     END IF;
@@ -470,11 +472,12 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     IF NEW.role IS DISTINCT FROM OLD.role THEN
-        -- Allow direct database migrations, maintenance, postgres superusers, service_role, and admins
-        IF current_user IN ('postgres', 'supabase_admin') 
-           OR auth.role() = 'service_role' 
-           OR public.is_admin(auth.uid()) 
-           OR nullif(current_setting('request.jwt.claim.role', true), '') IS NULL THEN
+        -- Strictly allow only service_role, verified platform admins, or direct migration session_user
+        IF auth.role() = 'service_role' OR public.is_admin(auth.uid()) THEN
+            RETURN NEW;
+        END IF;
+
+        IF session_user IN ('postgres', 'supabase_admin') AND auth.role() IS NULL THEN
             RETURN NEW;
         END IF;
 
@@ -908,21 +911,25 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Payment verification failed: Gateway reported unverified signature.');
     END IF;
 
-    -- 4. Cryptographic HMAC-SHA256 signature verification if platform gateway secret is configured
+    -- Enforce quote expiration: payment cannot be reconciled on an expired quote/reservation
+    IF v_booking.quote_expires_at IS NOT NULL AND v_booking.quote_expires_at < NOW() THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation rejected: Booking quote reservation has expired.');
+    END IF;
+
+    -- 4. Authoritative Cryptographic HMAC-SHA256 signature verification
     SELECT value->>'razorpay_key_secret' INTO v_secret
     FROM public.platform_settings
     WHERE key = 'payment_gateway';
 
-    IF v_secret IS NOT NULL AND length(v_secret) > 0 THEN
-        v_expected_sig := encode(hmac((p_gateway_order_id || '|' || p_gateway_payment_id)::bytea, v_secret::bytea, 'sha256'), 'hex');
-        IF lower(trim(p_gateway_signature)) <> lower(trim(v_expected_sig)) THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Cryptographic HMAC signature mismatch: Payment verification rejected.');
-        END IF;
-    ELSE
-        -- If no secret configured (test/staging/simulated environment), verify format and reject dummy invalid signatures
-        IF lower(p_gateway_signature) LIKE '%invalid%' OR lower(p_gateway_signature) = 'fail' THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Simulated gateway rejection: Invalid signature payload.');
-        END IF;
+    IF v_secret IS NULL OR length(trim(v_secret)) = 0 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation refused: Gateway secret is not configured in platform settings.');
+    END IF;
+
+    v_expected_sig := encode(hmac((p_gateway_order_id || '|' || p_gateway_payment_id)::bytea, v_secret::bytea, 'sha256'), 'hex');
+
+    -- Constant-time comparison via fixed 32-byte SHA256 message digests to prevent timing attacks
+    IF digest(lower(trim(p_gateway_signature)), 'sha256') <> digest(lower(trim(v_expected_sig)), 'sha256') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Cryptographic HMAC signature mismatch: Payment verification rejected.');
     END IF;
 
     -- 5. Locate payment record with row lock
@@ -1145,6 +1152,20 @@ DECLARE
     v_default_lat DOUBLE PRECISION := 19.1171;
     v_default_lng DOUBLE PRECISION := 72.8809;
 BEGIN
+    -- Enforce caller authorization: caller must be service_role, platform admin, or owner of p_supplier_id
+    IF auth.role() <> 'service_role' AND NOT public.is_admin(auth.uid()) THEN
+        IF auth.uid() IS NULL OR NOT EXISTS (
+            SELECT 1 FROM public.suppliers 
+            WHERE id = p_supplier_id AND (
+                owner_id = auth.uid() 
+                OR contact_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid())
+                OR contact_phone IN (SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
+            )
+        ) THEN
+            RAISE EXCEPTION 'Access Denied: Caller does not own this supplier organization (ERRCODE 42501)';
+        END IF;
+    END IF;
+
     v_clean_veh := UPPER(TRIM(p_vehicle_number));
 
     IF LENGTH(v_clean_veh) < 8 THEN
@@ -1769,8 +1790,11 @@ CREATE POLICY "Admins manage community_pools" ON public.community_pools FOR ALL 
 
 CREATE POLICY "Users read pool contributions" ON public.community_pool_contributions FOR SELECT USING (TRUE);
 CREATE POLICY "Authenticated users contribute to pool" ON public.community_pool_contributions FOR INSERT WITH CHECK (
-    auth.uid() IS NOT NULL AND (user_id IS NULL OR user_id = auth.uid())
+    auth.uid() IS NOT NULL AND (user_id IS NULL OR user_id = auth.uid()) AND payment_status IN ('pending', 'pending_payment')
 );
+
+-- SEC-002: Revoke direct read of driver_phone from public.tankers to prevent PII scraping
+REVOKE SELECT (driver_phone) ON public.tankers FROM anon, authenticated;
 
 CREATE POLICY "Public read water certificates" ON public.water_quality_certificates FOR SELECT USING (TRUE);
 
@@ -2011,7 +2035,7 @@ INSERT INTO public.bookings (
     final_payable_amount, payment_preference, payment_status, driver_name, driver_phone, vehicle_number,
     supplier_name, quote_expires_at
 ) VALUES 
-    ('b1111111-1111-1111-1111-111111111111', 'TKR-2026-88101', '65cee903-3554-49b1-9729-55552d400087', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Marol Military Road, Andheri East', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 1.8, 12, 750, 45, 0, 39.75, 834.75, 'upi', 'paid', 'Rajesh Sharma', '+919820011001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
+    ('b1111111-1111-1111-1111-111111111111', 'TKR-2026-88101', '65cee903-3554-49b1-9729-55552d400087', 'ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Marol Military Road, Andheri East', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 1.8, 12, 750, 45, 0, 39.75, 834.75, 'upi', 'paid', 'Dhananjay Patil', '+919820011005', 'MH-02-HV-2002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
     ('b2222222-2222-2222-2222-222222222222', 'TKR-2026-88102', '65cee903-3554-49b1-9729-55552d400087', 'ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'driver_assigned', 5000, 'Potable (Drinking)', 'MIDC Central Road, Marol, Andheri East', 19.1185, 72.8795, ST_SetSRID(ST_MakePoint(72.8795, 19.1185), 4326)::geography, '7392', 2.1, 15, 750, 52, 0, 40.10, 842.10, 'upi', 'paid', 'Dhananjay Patil', '+919820011005', 'MH-02-HV-2002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
     ('b3333333-3333-3333-3333-333333333333', 'TKR-2026-88103', 'bca75357-3da7-4106-b7e8-bd275857efbc', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Marol Maroshi Rd, Near SevenHills', 19.1210, 72.8820, ST_SetSRID(ST_MakePoint(72.8820, 19.1210), 4326)::geography, '5129', 2.4, 18, 750, 60, 0, 40.50, 850.50, 'upi', 'authorized', 'Suresh Shinde', '+919820011002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
     ('b4444444-4444-4444-4444-444444444444', 'TKR-2026-88104', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 10000, 'Potable (Drinking)', 'Sakinaka Metro Station, Andheri-Kurla Rd', 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, '8410', 3.2, 22, 1200, 96, 0, 64.80, 1360.80, 'upi', 'paid', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
@@ -2058,7 +2082,8 @@ ON CONFLICT (invoice_number) DO NOTHING;
 INSERT INTO public.platform_settings (key, value)
 VALUES 
     ('pricing_config', '{"base_rate_5kl": 750, "price_per_km": 25, "gst_rate": 0.05, "platform_commission": 0.10, "peak_surge_multiplier": 1.25}'::jsonb),
-    ('compliance_rules', '{"max_tds_potable": 250, "min_ph": 6.5, "max_ph": 8.5, "cert_validity_days": 90}'::jsonb)
+    ('compliance_rules', '{"max_tds_potable": 250, "min_ph": 6.5, "max_ph": 8.5, "cert_validity_days": 90}'::jsonb),
+    ('payment_gateway', '{"provider": "razorpay", "razorpay_key_id": "rzp_test_TuCCnOeHyd9KdO", "razorpay_key_secret": "tankr_sec_webhook_server_2026"}'::jsonb)
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 23k. Admin Audit Logs
@@ -2310,6 +2335,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_tanker_id UUID;
+    v_supplier_id UUID;
     v_vehicle_number TEXT;
     v_driver_name TEXT;
     v_driver_phone TEXT;
@@ -2327,8 +2353,8 @@ BEGIN
     END;
 
     -- Select nearest available online tanker
-    SELECT id, vehicle_number, driver_name, driver_phone
-    INTO v_tanker_id, v_vehicle_number, v_driver_name, v_driver_phone
+    SELECT id, supplier_id, vehicle_number, driver_name, driver_phone
+    INTO v_tanker_id, v_supplier_id, v_vehicle_number, v_driver_name, v_driver_phone
     FROM public.tankers
     WHERE is_online = true AND is_available = true
     ORDER BY ST_Distance(
@@ -2385,6 +2411,45 @@ BEGIN
         v_driver_phone
     )
     RETURNING id INTO v_dispatch_id;
+
+    -- Insert active driver-visible trip booking
+    INSERT INTO public.bookings (
+        booking_reference,
+        customer_id,
+        tanker_id,
+        supplier_id,
+        status,
+        capacity_liters,
+        water_type,
+        delivery_address,
+        delivery_latitude,
+        delivery_longitude,
+        delivery_coordinates,
+        delivery_pin,
+        payment_preference,
+        payment_status,
+        driver_name,
+        driver_phone,
+        vehicle_number
+    ) VALUES (
+        'EMRG-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::text, 5, '0'),
+        COALESCE(auth.uid(), 'a0000000-0000-0000-0000-000000000001'::uuid),
+        v_tanker_id,
+        v_supplier_id,
+        'driver_assigned',
+        p_required_liters,
+        p_water_type,
+        p_delivery_address || ' [EMERGENCY: ' || p_institution_name || ']',
+        p_latitude,
+        p_longitude,
+        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::geography,
+        '9999',
+        'cash_on_delivery',
+        'authorized',
+        v_driver_name,
+        v_driver_phone,
+        v_vehicle_number
+    );
 
     -- Log to admin audit trail
     INSERT INTO public.admin_audit_logs (
@@ -2720,7 +2785,8 @@ BEGIN
     END IF;
 
     UPDATE public.tankers
-    SET is_available = FALSE,
+    SET is_available = TRUE,
+        is_online = TRUE,
         latitude = v_target_lat,
         longitude = v_target_lng,
         current_location = ST_SetSRID(ST_MakePoint(v_target_lng, v_target_lat), 4326)::geography
@@ -2803,7 +2869,7 @@ BEGIN
 END;
 $$;
 
--- Explicit Routine Permissions: Restrict privileged administrative routines
+-- Explicit Routine Permissions: Restrict privileged operational and administrative routines from anon/PUBLIC (TNK-C04)
 REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.get_service_zone_liquidity_health() FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.admin_emergency_dispatch(TEXT, TEXT, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, TEXT, INTEGER) FROM PUBLIC, anon;
@@ -2811,6 +2877,13 @@ REVOKE EXECUTE ON FUNCTION public.admin_execute_batch_payout() FROM PUBLIC, anon
 REVOKE EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) FROM PUBLIC, anon;
 
 GRANT EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_service_zone_liquidity_health() TO authenticated, service_role;
@@ -2820,3 +2893,9 @@ GRANT EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) TO auth
 GRANT EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;

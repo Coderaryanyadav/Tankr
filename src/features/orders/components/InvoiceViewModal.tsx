@@ -162,8 +162,8 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({
             <View style={styles.lineItem}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.lineItemTitle}>
-                  {booking?.capacity_liters || invoice?.capacity_liters || 5000}L{' '}
-                  {booking?.water_type || 'Potable Water'}
+                  {invoice?.volume_liters || invoice?.capacity_liters || booking?.capacity_liters || '—'}L{' '}
+                  {booking?.water_type || invoice?.water_type || 'Potable Water'}
                 </Text>
                 <Text style={styles.lineItemSubtitle}>
                   Certified clean bulk water delivery

@@ -175,19 +175,19 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({ in
           text: 'Confirm No-Show (₹200 Fee)',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await supabase.rpc('customer_cancel_booking_with_policy', {
+            const { data, error } = await supabase.rpc('customer_cancel_booking_with_policy', {
               p_booking_id: activeTrip.id,
               p_reason: 'Customer no-show at delivery gate (10 min wait timer elapsed)',
             });
 
-            if (!error) {
+            if (!error && data?.success) {
               Alert.alert(
                 'No-Show Recorded',
                 'Tanker has been freed for next dispatch. ₹200 gate arrival compensation has been credited to your payout ledger.'
               );
               loadDriverData(user?.id || '', user?.phone);
             } else {
-              Alert.alert('Error', error.message);
+              Alert.alert('Error', data?.error || error?.message || 'Failed to record customer no-show.');
             }
           },
         },

@@ -307,6 +307,10 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         if (atomicErr) {
           if (process.env.NODE_ENV !== 'test') {
             console.warn('[bookingStore] Remote cancellation warning:', atomicErr.message);
+            return {
+              success: false,
+              error: atomicErr.message || error.message || 'Remote cancellation rejected.',
+            };
           }
         }
       }

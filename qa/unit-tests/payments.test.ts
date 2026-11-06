@@ -42,20 +42,10 @@ describe('Payment Idempotency & Gateway Reconciliation', () => {
     expect(paymentService.verifySignature(orderId, paymentId, 'invalid_signature_format', secret)).toBe(false);
   });
 
-  test('guarantees payment failure does NOT return mock success', () => {
-    const processPayment = (hasNetworkError: boolean) => {
-      if (hasNetworkError) {
-        return {
-          success: false,
-          error: 'Network timeout: Failed to connect to payment gateway.',
-        };
-      }
-      return { success: true };
-    };
-
-    const result = processPayment(true);
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
+  test('refuses digital payment processing when gateway callback tokens are missing', async () => {
+    const res = await paymentService.processBookingPayment('b001', 750, 'upi');
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('Payment authorization required');
   });
 });
 

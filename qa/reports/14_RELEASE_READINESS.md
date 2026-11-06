@@ -22,7 +22,7 @@
 
 ### DECISION: **REMEDIATION AUDIT COMPLETE — CONDITIONAL PILOT READY**
 
-The independent engineering and QA organization certifies that all 33 defects from the audit register have been remediated across the PostgreSQL schema, operational RPCs, TypeScript services, and Jest test harness (31 suites, 216 tests passing). 
+The independent engineering and QA organization certifies that all 33 defects from the audit register have been remediated across the PostgreSQL schema, operational RPCs, TypeScript services, and Jest test harness (31 suites, 217 tests passing). 
 
 **Production Pre-requisites for Live Financial Deployment:**
 1. Configure live Razorpay Key ID and Key Secret in `platform_settings` (`payment_gateway` key).

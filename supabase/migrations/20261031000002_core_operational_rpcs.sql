@@ -490,7 +490,8 @@ CREATE OR REPLACE FUNCTION public.contribute_to_community_pool(
     p_pool_code TEXT,
     p_contributor_name TEXT,
     p_flat_number TEXT,
-    p_amount NUMERIC
+    p_amount NUMERIC,
+    p_payment_captured BOOLEAN DEFAULT FALSE
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -537,24 +538,30 @@ BEGIN
         p_contributor_name,
         p_flat_number,
         p_amount,
-        p_amount,
-        'paid'
+        CASE WHEN p_payment_captured THEN p_amount ELSE 0.00 END,
+        CASE WHEN p_payment_captured THEN 'paid' ELSE 'pending' END
     );
 
-    v_new_amount := v_pool.collected_amount + p_amount;
-    v_new_status := CASE WHEN v_new_amount >= v_pool.target_amount THEN 'funded' ELSE v_pool.status END;
+    IF p_payment_captured THEN
+        v_new_amount := v_pool.collected_amount + p_amount;
+        v_new_status := CASE WHEN v_new_amount >= v_pool.target_amount THEN 'funded' ELSE v_pool.status END;
 
-    UPDATE public.community_pools
-    SET collected_amount = v_new_amount,
-        status = v_new_status,
-        updated_at = NOW()
-    WHERE id = v_pool.id;
+        UPDATE public.community_pools
+        SET collected_amount = v_new_amount,
+            status = v_new_status,
+            updated_at = NOW()
+        WHERE id = v_pool.id;
+    ELSE
+        v_new_amount := v_pool.collected_amount;
+        v_new_status := v_pool.status;
+    END IF;
 
     RETURN jsonb_build_object(
         'success', true,
         'pool_id', v_pool.id,
         'collected_amount', v_new_amount,
-        'status', v_new_status
+        'status', v_new_status,
+        'payment_status', CASE WHEN p_payment_captured THEN 'paid' ELSE 'pending' END
     );
 END;
 $$;
@@ -702,7 +709,7 @@ BEGIN
 END;
 $$;
 
--- 9. get_nearby_tankers (TNK-H01 & SEC-002: PostGIS Radius Engine with 1.25 Road Routing & 5% GST)
+-- 9. get_nearby_tankers (TNK-H01 & SEC-002: PostGIS Radius Engine with 1.25 Road Routing, Peak Surge & 5% GST)
 CREATE OR REPLACE FUNCTION public.get_nearby_tankers(
     user_lat DOUBLE PRECISION,
     user_lng DOUBLE PRECISION,
@@ -737,12 +744,17 @@ AS $$
 DECLARE
     user_point GEOGRAPHY;
     v_caller_is_admin BOOLEAN := FALSE;
+    v_hour INT;
+    v_is_peak BOOLEAN := FALSE;
 BEGIN
     user_point := ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326)::geography;
 
     IF auth.uid() IS NOT NULL THEN
         v_caller_is_admin := public.is_admin(auth.uid()) OR auth.role() = 'service_role';
     END IF;
+
+    v_hour := EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'Asia/Kolkata'))::int;
+    v_is_peak := (v_hour >= 18 AND v_hour <= 22);
 
     RETURN QUERY
     SELECT 
@@ -763,9 +775,14 @@ BEGIN
         t.water_type,
         t.base_price,
         t.price_per_km,
-        ROUND(((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0)::numeric, 1) AS distance_km,
-        GREATEST(5, ROUND(8 + ((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0) * 3.2)::int) AS eta_minutes,
-        ROUND(((t.base_price + ((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0)::numeric * t.price_per_km) * 1.05), 0) AS estimated_total_price,
+        ROUND(((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0)::numeric, 2) AS distance_km,
+        GREATEST(5, ROUND(6 + (((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0) * 3.3))::int) AS eta_minutes,
+        ROUND((
+            (t.base_price 
+             + (ROUND(((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0)::numeric, 2) * t.price_per_km) 
+             + (CASE WHEN v_is_peak THEN ROUND((t.base_price * 0.10)::numeric, 2) ELSE 0.00 END)
+            ) * 1.05
+        ), 2) AS estimated_total_price,
         t.latitude,
         t.longitude,
         COALESCE(t.heading_degrees, 0.0) AS heading_degrees,

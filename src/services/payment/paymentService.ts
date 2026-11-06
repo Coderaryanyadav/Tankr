@@ -139,48 +139,36 @@ class PaymentService {
 
   /**
    * Cryptographic verification of payment gateway signatures.
-   * Uses HMAC-SHA256 over orderId|paymentId with keySecret.
+   * Authoritative HMAC-SHA256 comparison using constant-time comparison.
+   * Requires authoritative secret; rejects if secret is missing or parameters malformed.
    */
   public verifySignature(
     orderId: string,
     paymentId: string,
     signature: string,
-    secret?: string
+    secret: string
   ): boolean {
-    if (!orderId || !paymentId || !signature) return false;
-    const keySecret =
-      secret ||
-      process.env.EXPO_PUBLIC_RAZORPAY_KEY_SECRET ||
-      process.env.RAZORPAY_KEY_SECRET;
+    if (!orderId || !paymentId || !signature || !secret) return false;
 
-    if (keySecret) {
-      try {
-        const crypto = require('crypto');
-        const expected = crypto
-          .createHmac('sha256', keySecret)
-          .update(`${orderId}|${paymentId}`)
-          .digest('hex');
-        const sigBuf = Buffer.from(signature.toLowerCase(), 'hex');
-        const expBuf = Buffer.from(expected.toLowerCase(), 'hex');
-        if (sigBuf.length !== expBuf.length) return false;
-        return crypto.timingSafeEqual(sigBuf, expBuf);
-      } catch {
-        return false;
-      }
+    try {
+      const crypto = require('crypto');
+      const expected = crypto
+        .createHmac('sha256', secret)
+        .update(`${orderId}|${paymentId}`)
+        .digest('hex');
+      const sigBuf = Buffer.from(signature.toLowerCase(), 'hex');
+      const expBuf = Buffer.from(expected.toLowerCase(), 'hex');
+      if (sigBuf.length !== expBuf.length || sigBuf.length === 0) return false;
+      return crypto.timingSafeEqual(sigBuf, expBuf);
+    } catch {
+      return false;
     }
-
-    // When secret is not configured in client environment, enforce format checks
-    return (
-      signature.length >= 16 &&
-      !signature.toLowerCase().includes('invalid') &&
-      signature.toLowerCase() !== 'fail'
-    );
   }
 
   /**
-   * Complete payment processing flow for a booking.
-   * Creates order -> Processes via Gateway -> Verifies & Captures.
-   * If any step fails, returns success: false with the actual error.
+   * Payment order processing flow for a booking.
+   * Creates order on backend -> Requires genuine gateway callback tokens (from Razorpay or server webhook)
+   * -> Reconciles via authoritative server RPC.
    */
   async processBookingPayment(
     bookingId: string,
@@ -188,9 +176,22 @@ class PaymentService {
     method: 'upi' | 'card' | 'cod',
     gatewayCallback?: { paymentId: string; signature: string }
   ): Promise<PaymentProcessResult> {
+    // 1. Digital payment (UPI / Card): Strictly require authoritative gateway tokens from checkout/webhook
+    if (method !== 'cod') {
+      const gatewayPaymentId = gatewayCallback?.paymentId;
+      const gatewaySignature = gatewayCallback?.signature;
+
+      if (!gatewayPaymentId || !gatewaySignature) {
+        return {
+          success: false,
+          error: 'Payment authorization required: Missing gateway transaction tokens. Payment must be completed via Razorpay Checkout or server webhook capture.',
+        };
+      }
+    }
+
     const idempotencyKey = this.generateIdempotencyKey(bookingId);
 
-    // 1. Create Server-Side Order
+    // 2. Create Server-Side Order
     const orderRes = await this.createPaymentOrder(bookingId, method, idempotencyKey);
     if (!orderRes.success || !orderRes.data) {
       return {
@@ -201,7 +202,7 @@ class PaymentService {
 
     const { orderId } = orderRes.data;
 
-    // 2. COD flow: Order is registered as created (authorized pending physical cash collection)
+    // 3. COD flow: Order is registered as created (authorized pending physical cash collection)
     if (method === 'cod') {
       return {
         success: true,
@@ -210,51 +211,12 @@ class PaymentService {
       };
     }
 
-    // 3. Digital payment (UPI / Card):
-    let gatewayPaymentId = gatewayCallback?.paymentId;
-    let gatewaySignature = gatewayCallback?.signature;
-
-    if (!gatewayPaymentId || !gatewaySignature) {
-      const razorpayKey = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
-      const isTestOrSandbox =
-        process.env.NODE_ENV === 'test' ||
-        !razorpayKey ||
-        razorpayKey.startsWith('rzp_test');
-
-      if (isTestOrSandbox) {
-        // Generate valid crypto hash test signature for local sandbox / test runner
-        gatewayPaymentId = `pay_rzp_${Date.now()}`;
-        try {
-          const crypto = require('crypto');
-          const testSecret = process.env.EXPO_PUBLIC_RAZORPAY_KEY_SECRET || 'tankr_test_secret_key';
-          gatewaySignature = crypto
-            .createHmac('sha256', testSecret)
-            .update(`${orderId}|${gatewayPaymentId}`)
-            .digest('hex');
-        } catch {
-          gatewaySignature = `sig_valid_${Date.now()}_abc123456789`;
-        }
-      } else {
-        return {
-          success: false,
-          error: 'Gateway payment verification payload missing. Client must obtain transaction tokens via checkout gateway callback.',
-        };
-      }
-    }
-
-    if (!gatewayPaymentId || !gatewaySignature) {
-      return {
-        success: false,
-        error: 'Gateway payment verification payload missing. Client must obtain transaction tokens via checkout gateway callback.',
-      };
-    }
-
     // Reconcile via authoritative server RPC
     return await this.verifyAndCapturePayment(
       bookingId,
       orderId,
-      gatewayPaymentId,
-      gatewaySignature
+      gatewayCallback!.paymentId,
+      gatewayCallback!.signature
     );
   }
 
