@@ -889,7 +889,7 @@ REVOKE EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) FROM PUBLIC
 REVOKE EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC, BOOLEAN) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) FROM PUBLIC, anon;
@@ -899,7 +899,7 @@ GRANT EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) TO authentic
 GRANT EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC, BOOLEAN) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_nearby_tankers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, anon, service_role;

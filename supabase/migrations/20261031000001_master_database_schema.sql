@@ -4,9 +4,15 @@
 -- ==============================================================================
 
 -- 1. EXTENSIONS
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Compatibility fallback for uuid_generate_v4()
+CREATE OR REPLACE FUNCTION public.uuid_generate_v4()
+RETURNS uuid
+LANGUAGE sql
+AS $$ SELECT gen_random_uuid(); $$;
 
 -- 2. ENUMS
 DO $$ BEGIN
@@ -58,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 -- 4. SAVED ADDRESSES
 CREATE TABLE IF NOT EXISTS public.saved_addresses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     label TEXT NOT NULL,
     custom_name TEXT,
@@ -77,7 +83,7 @@ CREATE TABLE IF NOT EXISTS public.saved_addresses (
 
 -- 5. SERVICE ZONES (Mumbai Operational Hubs & Demand Sectors)
 CREATE TABLE IF NOT EXISTS public.service_zones (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     zone_name TEXT NOT NULL UNIQUE,
     center_lat DOUBLE PRECISION NOT NULL,
     center_lng DOUBLE PRECISION NOT NULL,
@@ -90,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.service_zones (
 
 -- 6. SUPPLIERS
 CREATE TABLE IF NOT EXISTS public.suppliers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     business_name TEXT NOT NULL,
     contact_phone TEXT NOT NULL,
@@ -107,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
 
 -- 7. TANKERS (Fleet Vehicles)
 CREATE TABLE IF NOT EXISTS public.tankers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     supplier_id UUID NOT NULL REFERENCES public.suppliers(id) ON DELETE CASCADE,
     vehicle_number TEXT NOT NULL UNIQUE,
     driver_name TEXT NOT NULL,
@@ -133,7 +139,7 @@ CREATE TABLE IF NOT EXISTS public.tankers (
 
 -- 7b. DRIVER PROFILES (Link to Tankers & Authentication)
 CREATE TABLE IF NOT EXISTS public.driver_profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL,
     license_number TEXT NOT NULL,
@@ -144,7 +150,7 @@ CREATE TABLE IF NOT EXISTS public.driver_profiles (
 
 -- 8. BOOKINGS
 CREATE TABLE IF NOT EXISTS public.bookings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_reference TEXT NOT NULL UNIQUE,
     customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     tanker_id UUID NOT NULL REFERENCES public.tankers(id) ON DELETE RESTRICT,
@@ -194,7 +200,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 
 -- 9. PAYMENTS
 CREATE TABLE IF NOT EXISTS public.payments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
     gateway_order_id TEXT,
     gateway_payment_id TEXT,
@@ -210,7 +216,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
 
 -- 10. INVOICES
 CREATE TABLE IF NOT EXISTS public.invoices (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL UNIQUE REFERENCES public.bookings(id) ON DELETE CASCADE,
     invoice_number TEXT NOT NULL UNIQUE,
     customer_name TEXT,
@@ -238,7 +244,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
 
 -- 11. NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS public.notifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
@@ -250,7 +256,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 
 -- 12. TRACKING BREADCRUMBS
 CREATE TABLE IF NOT EXISTS public.tracking_breadcrumbs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
     latitude DOUBLE PRECISION NOT NULL,
     longitude DOUBLE PRECISION NOT NULL,
@@ -261,7 +267,7 @@ CREATE TABLE IF NOT EXISTS public.tracking_breadcrumbs (
 
 -- 13. DISPUTES
 CREATE TABLE IF NOT EXISTS public.disputes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
     customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
@@ -278,7 +284,7 @@ CREATE TABLE IF NOT EXISTS public.disputes (
 
 -- 14. EMERGENCY DISPATCHES (Hospitals & Critical Care Sumps)
 CREATE TABLE IF NOT EXISTS public.emergency_dispatches (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     institution_name TEXT NOT NULL,
     institution_type institution_type NOT NULL DEFAULT 'hospital_dialysis',
     contact_person TEXT NOT NULL,
@@ -300,7 +306,7 @@ CREATE TABLE IF NOT EXISTS public.emergency_dispatches (
 
 -- 15. CORPORATE SUBSCRIPTIONS & BULK CONTRACTS
 CREATE TABLE IF NOT EXISTS public.corporate_subscriptions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     client_name TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'tech_park',
     contact_person TEXT NOT NULL,
@@ -323,7 +329,7 @@ CREATE TABLE IF NOT EXISTS public.corporate_subscriptions (
 
 -- 16. COMMUNITY POOLS & COST-SPLITTING
 CREATE TABLE IF NOT EXISTS public.community_pools (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pool_code TEXT NOT NULL UNIQUE,
     community_name TEXT NOT NULL,
     delivery_address TEXT NOT NULL,
@@ -340,7 +346,7 @@ CREATE TABLE IF NOT EXISTS public.community_pools (
 );
 
 CREATE TABLE IF NOT EXISTS public.community_pool_contributions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pool_id UUID NOT NULL REFERENCES public.community_pools(id) ON DELETE CASCADE,
     user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     contributor_name TEXT NOT NULL,
@@ -353,7 +359,7 @@ CREATE TABLE IF NOT EXISTS public.community_pool_contributions (
 
 -- 17. DRIVER PAYOUT LEDGER
 CREATE TABLE IF NOT EXISTS public.driver_payout_ledger (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     driver_phone TEXT NOT NULL,
     booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
     entry_type TEXT NOT NULL DEFAULT 'delivery_earnings',
@@ -366,7 +372,7 @@ CREATE TABLE IF NOT EXISTS public.driver_payout_ledger (
 
 -- 18. WATER QUALITY CERTIFICATES
 CREATE TABLE IF NOT EXISTS public.water_quality_certificates (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     supplier_id UUID NOT NULL REFERENCES public.suppliers(id) ON DELETE CASCADE,
     water_source TEXT NOT NULL,
     tds_ppm INT NOT NULL,
@@ -380,14 +386,14 @@ CREATE TABLE IF NOT EXISTS public.water_quality_certificates (
 
 -- 19. PLATFORM SETTINGS & AUDIT LOGS
 CREATE TABLE IF NOT EXISTS public.platform_settings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key TEXT NOT NULL UNIQUE,
     value JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     admin_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     action TEXT NOT NULL,
     target_entity TEXT NOT NULL,
@@ -397,7 +403,7 @@ CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
 );
 
 CREATE TABLE IF NOT EXISTS public.suspended_entities (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_type TEXT NOT NULL,
     identifier_value TEXT NOT NULL UNIQUE,
     reason TEXT NOT NULL,
@@ -2881,7 +2887,7 @@ REVOKE EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT,
 REVOKE EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) FROM PUBLIC, anon;
 
@@ -2896,6 +2902,6 @@ GRANT EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, 
 GRANT EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;
