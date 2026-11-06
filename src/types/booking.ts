@@ -10,9 +10,10 @@ export type BookingStatus =
   | 'delivering'
   | 'delivered'
   | 'cancelled'
-  | 'disputed';
+  | 'disputed'
+  | 'unfulfilled_refunded';
 
-export type PaymentPreference = 'upi' | 'cash_on_delivery' | 'card_online';
+export type PaymentPreference = 'upi' | 'cash_on_delivery' | 'card_online' | 'credit_debit_card';
 
 export interface BookingQuote {
   tanker_id: string;
@@ -76,7 +77,7 @@ export const CreateBookingSchema = z.object({
   deliveryAddress: z.string().min(5, 'Delivery address is required'),
   deliveryLat: z.number(),
   deliveryLng: z.number(),
-  paymentPreference: z.enum(['upi', 'cash_on_delivery', 'card_online']),
+  paymentPreference: z.enum(['upi', 'cash_on_delivery', 'card_online', 'credit_debit_card']),
 });
 
 export type CreateBookingInput = z.infer<typeof CreateBookingSchema>;
@@ -147,6 +148,12 @@ export const BOOKING_STATUS_CONFIG: Record<
   disputed: {
     label: 'Under Review',
     description: 'Support review in progress',
+    badgeVariant: 'neutral',
+    stepIndex: 0,
+  },
+  unfulfilled_refunded: {
+    label: 'Unfulfilled & Refunded',
+    description: 'Order unfulfilled by supplier and payment refunded',
     badgeVariant: 'neutral',
     stepIndex: 0,
   },

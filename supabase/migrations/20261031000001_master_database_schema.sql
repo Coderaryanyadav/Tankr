@@ -89,15 +89,18 @@ CREATE TABLE IF NOT EXISTS public.service_zones (
 -- 6. SUPPLIERS
 CREATE TABLE IF NOT EXISTS public.suppliers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     business_name TEXT NOT NULL,
     contact_phone TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
     verification_status TEXT NOT NULL DEFAULT 'pending_review',
     rating NUMERIC(2,1) NOT NULL DEFAULT 5.0,
     total_deliveries INT NOT NULL DEFAULT 0,
     water_source TEXT NOT NULL DEFAULT 'BMC Bhandup Potable Filtration Reservoir',
     gstin TEXT UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 7. TANKERS (Fleet Vehicles)
@@ -160,7 +163,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
     tax_amount NUMERIC(10,2) NOT NULL,
     final_payable_amount NUMERIC(10,2) NOT NULL,
     payment_preference payment_preference NOT NULL DEFAULT 'upi',
-    payment_status TEXT NOT NULL DEFAULT 'authorized',
+    payment_status TEXT NOT NULL DEFAULT 'pending_payment',
     driver_name TEXT,
     driver_phone TEXT,
     vehicle_number TEXT,
@@ -175,6 +178,9 @@ CREATE TABLE IF NOT EXISTS public.bookings (
     quote_expires_at TIMESTAMPTZ NOT NULL,
     cancellation_reason TEXT,
     cancelled_at TIMESTAMPTZ,
+    dispatched_at TIMESTAMPTZ,
+    arrived_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
     delivery_type TEXT DEFAULT 'instant',
     scheduled_for TIMESTAMPTZ,
     recurring_days TEXT,
@@ -196,7 +202,8 @@ CREATE TABLE IF NOT EXISTS public.payments (
     method TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'created',
     idempotency_key TEXT UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 10. INVOICES
@@ -214,9 +221,16 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     base_price NUMERIC(10,2),
     delivery_charge NUMERIC(10,2),
     surcharge NUMERIC(10,2),
-    tax_amount NUMERIC(10,2),
+    tax_amount NUMERIC(10,2) DEFAULT 0.00,
+    cgst_amount NUMERIC(10,2) DEFAULT 0.00,
+    sgst_amount NUMERIC(10,2) DEFAULT 0.00,
     final_amount NUMERIC(10,2),
+    total_amount NUMERIC(10,2),
+    payment_method TEXT,
     payment_status TEXT NOT NULL DEFAULT 'PAID',
+    payment_reference TEXT,
+    delivered_at TIMESTAMPTZ,
+    status TEXT NOT NULL DEFAULT 'issued',
     issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -248,8 +262,11 @@ CREATE TABLE IF NOT EXISTS public.disputes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
     customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
+    category TEXT DEFAULT 'delivery_issue',
     reason TEXT NOT NULL,
     evidence_url TEXT,
+    liters_received INT,
     claimed_refund_amount NUMERIC(10,2),
     status TEXT NOT NULL DEFAULT 'pending_review',
     admin_notes TEXT,
@@ -316,15 +333,18 @@ CREATE TABLE IF NOT EXISTS public.community_pools (
     status TEXT NOT NULL DEFAULT 'collecting',
     created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '4 hours')
 );
 
 CREATE TABLE IF NOT EXISTS public.community_pool_contributions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     pool_id UUID NOT NULL REFERENCES public.community_pools(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     contributor_name TEXT NOT NULL,
     flat_number TEXT NOT NULL,
     amount NUMERIC(10,2) NOT NULL,
+    amount_paid NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     payment_status TEXT NOT NULL DEFAULT 'paid',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -337,6 +357,8 @@ CREATE TABLE IF NOT EXISTS public.driver_payout_ledger (
     entry_type TEXT NOT NULL DEFAULT 'delivery_earnings',
     amount NUMERIC(10,2) NOT NULL,
     notes TEXT,
+    settlement_batch_id TEXT,
+    is_settled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -384,7 +406,7 @@ CREATE TABLE IF NOT EXISTS public.suspended_entities (
 -- 20. SECURITY TRIGGERS & FUNCTIONS
 -- ==============================================================================
 
--- 20a. Auto-create profile on signup
+-- 20a. Auto-create profile on signup (SEC-002: Hardened to strictly customer role)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -397,7 +419,7 @@ BEGIN
         NEW.id,
         COALESCE(NEW.phone, '98200' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::text, 5, '0')),
         COALESCE(NEW.raw_user_meta_data->>'full_name', 'Verified User'),
-        COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'customer'::user_role)
+        'customer'::user_role
     )
     ON CONFLICT (id) DO NOTHING;
     RETURN NEW;
@@ -409,6 +431,26 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- 20a-2. Protect profile insert role (TNK-C02: Prevent role tampering on direct profile inserts)
+CREATE OR REPLACE FUNCTION public.protect_profile_insert_role()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.role != 'customer'::user_role AND auth.role() != 'service_role' AND NOT public.is_admin(auth.uid()) THEN
+        NEW.role := 'customer'::user_role;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_insert_role ON public.profiles;
+CREATE TRIGGER trg_protect_profile_insert_role
+    BEFORE INSERT ON public.profiles
+    FOR EACH ROW EXECUTE FUNCTION public.protect_profile_insert_role();
+
 -- 20b. Protect role escalation
 CREATE OR REPLACE FUNCTION public.protect_profile_role_escalation()
 RETURNS TRIGGER
@@ -418,16 +460,17 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     IF NEW.role IS DISTINCT FROM OLD.role THEN
-        IF auth.role() != 'service_role' THEN
-            IF NOT EXISTS (
-                SELECT 1 FROM public.profiles
-                WHERE id = auth.uid() AND role = 'admin'
-            ) THEN
+        IF auth.role() != 'service_role' AND NOT public.is_admin(auth.uid()) THEN
+            -- Allow verified supplier onboarding transition if initiated within supplier registration RPC
+            IF NOT (OLD.role = 'customer' AND NEW.role = 'supplier' AND current_setting('tankr.in_supplier_registration', true) = 'on') THEN
                 RAISE EXCEPTION 'Privilege escalation denied: You cannot alter your account role.'
                     USING ERRCODE = '42501';
             END IF;
         END IF;
     END IF;
+    RETURN NEW;
+END;
+$$;
     RETURN NEW;
 END;
 $$;
@@ -543,6 +586,11 @@ DECLARE
     v_booking_id UUID;
     v_pref payment_preference;
 BEGIN
+    IF auth.uid() IS NULL AND auth.role() != 'service_role' THEN
+        RAISE EXCEPTION 'Authentication required: You must be logged in to create a water delivery booking.'
+            USING ERRCODE = '42501';
+    END IF;
+
     IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' AND auth.uid() != p_customer_id THEN
         RAISE EXCEPTION 'Unauthorized: You can only create bookings for your own customer account.'
             USING ERRCODE = '42501';
@@ -565,16 +613,21 @@ BEGIN
     FROM public.suppliers
     WHERE id = v_tanker.supplier_id;
 
-    BEGIN
-        v_pref := p_payment_preference::payment_preference;
-    EXCEPTION WHEN OTHERS THEN
-        v_pref := 'upi'::payment_preference;
-    END;
+    IF p_payment_preference = 'card_online' THEN
+        v_pref := 'credit_debit_card'::payment_preference;
+    ELSE
+        BEGIN
+            v_pref := p_payment_preference::payment_preference;
+        EXCEPTION WHEN OTHERS THEN
+            v_pref := 'upi'::payment_preference;
+        END;
+    END IF;
 
     SELECT * INTO v_quote
     FROM public.calculate_booking_quote(p_tanker_id, p_delivery_lat, p_delivery_lng);
 
-    v_pin := LPAD(FLOOR(RANDOM() * 9000 + 1000)::text, 4, '0');
+    -- TNK-L03: Cryptographically random 4-digit verification PIN using pgcrypto
+    v_pin := LPAD((ABS(get_byte(gen_random_bytes(2), 0) * 256 + get_byte(gen_random_bytes(2), 1)) % 9000 + 1000)::text, 4, '0');
     v_ref := 'TKR-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::text, 5, '0');
 
     INSERT INTO public.bookings (
@@ -626,7 +679,7 @@ BEGIN
         v_quote.tax_amount,
         v_quote.final_payable_amount,
         v_pref,
-        CASE WHEN v_pref = 'cash_on_delivery' THEN 'pending_delivery' ELSE 'authorized' END,
+        CASE WHEN v_pref = 'cash_on_delivery' THEN 'pending_delivery' ELSE 'pending_payment' END,
         v_tanker.driver_phone,
         v_tanker.driver_name,
         v_tanker.vehicle_number,
@@ -650,7 +703,7 @@ BEGIN
 END;
 $$;
 
--- 20e. cancel_booking_atomic
+-- 20e. cancel_booking_atomic (SEC-005 & TNK-C05: Enforce Caller Identity)
 CREATE OR REPLACE FUNCTION public.cancel_booking_atomic(
     p_booking_id uuid,
     p_reason text DEFAULT 'Customer requested cancellation'::text
@@ -672,7 +725,22 @@ BEGIN
         RAISE EXCEPTION 'Booking not found';
     END IF;
 
-    IF v_b.status IN ('delivering', 'delivered', 'cancelled') THEN
+    -- TNK-C05: Caller authorization verification
+    IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' THEN
+        IF v_b.customer_id != auth.uid() 
+           AND NOT public.is_admin(auth.uid()) 
+           AND NOT EXISTS (
+               SELECT 1 FROM public.tankers t 
+               JOIN public.suppliers s ON t.supplier_id = s.id 
+               WHERE t.id = v_b.tanker_id AND (s.owner_id = auth.uid() OR t.driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid()))
+           ) THEN
+            RAISE EXCEPTION 'Access Denied: You are not authorized to cancel this booking (ERRCODE 42501)' USING ERRCODE = '42501';
+        END IF;
+    ELSIF auth.uid() IS NULL AND auth.role() != 'service_role' THEN
+        RAISE EXCEPTION 'Authentication required to cancel a booking (ERRCODE 42501)' USING ERRCODE = '42501';
+    END IF;
+
+    IF v_b.status IN ('delivering', 'delivered', 'cancelled', 'disputed') THEN
         RAISE EXCEPTION 'Cannot cancel booking in % status', v_b.status;
     END IF;
 
@@ -692,7 +760,7 @@ BEGIN
 END;
 $$;
 
--- 20f. customer_cancel_booking_with_policy
+-- 20f. customer_cancel_booking_with_policy (TNK-C05 & TNK-H04: Persist Fee & Ledger Credit)
 CREATE OR REPLACE FUNCTION public.customer_cancel_booking_with_policy(
     p_booking_id uuid,
     p_reason text DEFAULT 'Customer cancellation'::text
@@ -715,6 +783,20 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
     END IF;
 
+    -- TNK-C05: Caller must be the customer who booked the trip, an admin, or service_role
+    IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' AND NOT public.is_admin(auth.uid()) THEN
+        IF v_b.customer_id != auth.uid() THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: You can only cancel your own bookings');
+        END IF;
+    ELSIF auth.uid() IS NULL AND auth.role() != 'service_role' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required to cancel booking');
+    END IF;
+
+    -- TNK-H04: Reject terminal states
+    IF v_b.status IN ('delivering', 'delivered', 'cancelled', 'disputed') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Cannot cancel booking in status: ' || v_b.status);
+    END IF;
+
     IF v_b.status = 'arrived' THEN
         v_fee := 200.00;
     ELSIF v_b.status = 'en_route' THEN
@@ -733,11 +815,30 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_b.tanker_id;
 
+    -- TNK-H04: Credit driver compensation ledger when fee applies
+    IF v_fee > 0 AND v_b.driver_phone IS NOT NULL THEN
+        INSERT INTO public.driver_payout_ledger (
+            driver_phone,
+            booking_id,
+            entry_type,
+            amount,
+            notes
+        ) VALUES (
+            v_b.driver_phone,
+            p_booking_id,
+            'cancellation_compensation',
+            v_fee,
+            'Customer cancelled trip while ' || v_b.status || '. Driver dispatch compensation credited.'
+        );
+    END IF;
+
     RETURN jsonb_build_object(
         'success', true,
         'cancellation_fee', v_fee,
         'message', 'Booking cancelled successfully'
     );
+END;
+$$;
 END;
 $$;
 
@@ -859,6 +960,35 @@ BEGIN
         RAISE EXCEPTION 'Booking not found' USING ERRCODE = '02000';
     END IF;
 
+    -- TNK-C05: Reject terminal states and multiple executions
+    IF v_b.status = 'delivered' THEN
+        RAISE EXCEPTION 'Booking has already been completed and settled' USING ERRCODE = '22000';
+    END IF;
+    IF v_b.status NOT IN ('delivering', 'arrived', 'en_route') THEN
+        RAISE EXCEPTION 'Cannot complete delivery for booking in % status', v_b.status USING ERRCODE = '22000';
+    END IF;
+
+    -- TNK-C05: Enforce driver/supplier/admin caller authorization
+    IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' THEN
+        IF NOT (
+            public.is_admin(auth.uid())
+            OR EXISTS (
+                SELECT 1 FROM public.profiles p 
+                WHERE p.id = auth.uid() 
+                  AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone)
+            )
+            OR EXISTS (
+                SELECT 1 FROM public.tankers t
+                JOIN public.suppliers s ON t.supplier_id = s.id
+                WHERE t.id = v_b.tanker_id AND (s.owner_id = auth.uid() OR t.driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid()))
+            )
+        ) THEN
+            RAISE EXCEPTION 'Access Denied: Only the assigned driver or operating supplier can complete delivery' USING ERRCODE = '42501';
+        END IF;
+    ELSIF auth.uid() IS NULL AND auth.role() != 'service_role' THEN
+        RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+    END IF;
+
     IF v_b.delivery_pin != p_delivery_pin THEN
         RAISE EXCEPTION 'Invalid Delivery PIN. Ask customer for the 4-digit code shown on their tracking screen.'
             USING ERRCODE = '28000';
@@ -887,6 +1017,7 @@ BEGIN
     UPDATE public.bookings
     SET 
         status = 'delivered'::booking_status,
+        delivered_at = NOW(),
         flow_meter_start = p_flow_start,
         flow_meter_end = p_flow_end,
         delivered_liters = v_calc_liters,
@@ -901,18 +1032,39 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_b.tanker_id;
 
-    INSERT INTO public.driver_payout_ledger (
-        driver_phone,
-        booking_id,
-        entry_type,
-        amount,
-        notes
+    -- TNK-C05: Idempotent payout ledger write (only insert if not already recorded)
+    IF NOT EXISTS (
+        SELECT 1 FROM public.driver_payout_ledger 
+        WHERE booking_id = p_booking_id AND entry_type = 'delivery_earnings'
+    ) THEN
+        INSERT INTO public.driver_payout_ledger (
+            driver_phone,
+            booking_id,
+            entry_type,
+            amount,
+            notes
+        ) VALUES (
+            v_driver_phone,
+            p_booking_id,
+            'delivery_earnings',
+            v_driver_share,
+            'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
+        );
+    END IF;
+
+    -- TNK-H06: Notify customer on delivery completion
+    INSERT INTO public.notifications (
+        user_id,
+        title,
+        body,
+        type,
+        booking_id
     ) VALUES (
-        v_driver_phone,
-        p_booking_id,
-        'delivery_earnings',
-        v_driver_share,
-        'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
+        v_b.customer_id,
+        'Delivery Completed! 💧',
+        'Your water tanker order #' || v_b.booking_reference || ' has been verified and completed (' || v_calc_liters || 'L).',
+        'delivery_completed',
+        p_booking_id
     );
 
     RETURN jsonb_build_object(
@@ -1022,6 +1174,27 @@ BEGIN
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Booking not found';
+    END IF;
+
+    -- TNK-C05: Enforce driver/admin identity authorization for GPS pings
+    IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' THEN
+        IF NOT (
+            public.is_admin(auth.uid())
+            OR EXISTS (
+                SELECT 1 FROM public.profiles p 
+                WHERE p.id = auth.uid() 
+                  AND (p.phone_number = v_booking.driver_phone OR '+' || p.phone_number = v_booking.driver_phone)
+            )
+            OR EXISTS (
+                SELECT 1 FROM public.tankers t
+                WHERE t.id = v_booking.tanker_id 
+                  AND t.driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
+            )
+        ) THEN
+            RAISE EXCEPTION 'Access Denied: Only the assigned driver can record location telemetry' USING ERRCODE = '42501';
+        END IF;
+    ELSIF auth.uid() IS NULL AND auth.role() != 'service_role' THEN
+        RAISE EXCEPTION 'Authentication required to record telemetry' USING ERRCODE = '42501';
     END IF;
 
     IF p_speed_kmh > 120 THEN
@@ -1202,13 +1375,25 @@ BEGIN
         RAISE EXCEPTION 'Access Denied: Administrative authorization required for dashboard metrics (ERRCODE 42501)';
     END IF;
 
-    SELECT COALESCE(SUM(final_payable_amount), 0.00), COUNT(*)
-    INTO v_total_gmv, v_total_b
-    FROM public.bookings;
+    -- TNK-M01: GMV calculation counts actual captured transactions (or delivered bookings)
+    SELECT COALESCE(SUM(amount), 0.00)
+    INTO v_total_gmv
+    FROM public.payments
+    WHERE status = 'captured';
+
+    IF v_total_gmv = 0.00 THEN
+        SELECT COALESCE(SUM(final_payable_amount), 0.00)
+        INTO v_total_gmv
+        FROM public.bookings
+        WHERE status = 'delivered';
+    END IF;
+
+    SELECT COUNT(*) INTO v_total_b FROM public.bookings;
 
     v_platform_rev := ROUND(v_total_gmv * 0.10, 2);
 
-    SELECT COUNT(*), COALESCE(SUM(capacity_liters), 0)
+    -- TNK-M01: Completed delivered volume counts actual delivered_liters
+    SELECT COUNT(*), COALESCE(SUM(COALESCE(delivered_liters, capacity_liters)), 0)
     INTO v_comp_b, v_liters
     FROM public.bookings
     WHERE status = 'delivered';
@@ -1224,10 +1409,16 @@ BEGIN
     FROM public.suppliers
     WHERE verification_status = 'pending_review';
 
-    SELECT COALESCE((value->>'surge_multiplier')::NUMERIC, 1.25)
+    -- TNK-M01: Read configured peak surge multiplier from pricing_config or pricing_defaults
+    SELECT COALESCE(
+        (value->>'peak_surge_multiplier')::NUMERIC,
+        (value->>'surge_multiplier')::NUMERIC,
+        1.25
+    )
     INTO v_surge
     FROM public.platform_settings
-    WHERE key = 'pricing_defaults';
+    WHERE key IN ('pricing_config', 'pricing_defaults')
+    LIMIT 1;
 
     RETURN QUERY
     SELECT 
@@ -1252,6 +1443,7 @@ ALTER TABLE public.saved_addresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_zones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tankers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.driver_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
@@ -1290,6 +1482,10 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
 
 -- 3. Authenticated Role: Access strictly moderated by Row-Level Security (RLS)
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+-- TNK-H03: Disallow direct arbitrary UPDATE on bookings from client REST API; enforce RPC status transitions
+REVOKE UPDATE, DELETE ON public.bookings FROM authenticated;
+GRANT SELECT, INSERT ON public.bookings TO authenticated;
+
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO authenticated;
 
@@ -1299,7 +1495,6 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
 REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM anon;
 
 GRANT SELECT ON public.service_zones, public.water_quality_certificates, public.community_pools, public.community_pool_contributions TO anon;
-GRANT INSERT ON public.community_pool_contributions TO anon;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO anon;
 
 -- Default Privileges: ensure newly created objects do not leak blanket privileges to anon
@@ -1326,10 +1521,16 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Users can manage own addresses" ON public.saved_addresses;
 
     DROP POLICY IF EXISTS "Public read on service_zones" ON public.service_zones;
+    DROP POLICY IF EXISTS "Admins manage service_zones" ON public.service_zones;
     DROP POLICY IF EXISTS "Public read on suppliers" ON public.suppliers;
+    DROP POLICY IF EXISTS "Public read verified suppliers" ON public.suppliers;
+    DROP POLICY IF EXISTS "Admins and owners manage suppliers" ON public.suppliers;
     DROP POLICY IF EXISTS "Public read on tankers" ON public.tankers;
+    DROP POLICY IF EXISTS "Public read active tankers" ON public.tankers;
     DROP POLICY IF EXISTS "Suppliers can update own tankers" ON public.tankers;
+    DROP POLICY IF EXISTS "Admins manage tankers" ON public.tankers;
     DROP POLICY IF EXISTS "Public read on driver_profiles" ON public.driver_profiles;
+    DROP POLICY IF EXISTS "Drivers and suppliers read driver_profiles" ON public.driver_profiles;
     DROP POLICY IF EXISTS "Drivers manage own driver_profiles" ON public.driver_profiles;
 
     DROP POLICY IF EXISTS "Customers can view own bookings" ON public.bookings;
@@ -1339,6 +1540,7 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Drivers can update assigned bookings" ON public.bookings;
     DROP POLICY IF EXISTS "Suppliers can view hub bookings" ON public.bookings;
     DROP POLICY IF EXISTS "Admins have full access to bookings" ON public.bookings;
+    DROP POLICY IF EXISTS "Admins manage bookings" ON public.bookings;
 
     DROP POLICY IF EXISTS "Users read own invoices" ON public.invoices;
     DROP POLICY IF EXISTS "Users read own payments" ON public.payments;
@@ -1346,8 +1548,12 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Tracking read by booking parties" ON public.tracking_breadcrumbs;
 
     DROP POLICY IF EXISTS "Public read community_pools" ON public.community_pools;
+    DROP POLICY IF EXISTS "Users insert community_pools" ON public.community_pools;
+    DROP POLICY IF EXISTS "Admins manage community_pools" ON public.community_pools;
     DROP POLICY IF EXISTS "Public insert pool contributions" ON public.community_pool_contributions;
     DROP POLICY IF EXISTS "Public read pool contributions" ON public.community_pool_contributions;
+    DROP POLICY IF EXISTS "Users read pool contributions" ON public.community_pool_contributions;
+    DROP POLICY IF EXISTS "Authenticated users contribute to pool" ON public.community_pool_contributions;
     DROP POLICY IF EXISTS "Public read water certificates" ON public.water_quality_certificates;
     DROP POLICY IF EXISTS "Admins full emergency dispatches" ON public.emergency_dispatches;
     DROP POLICY IF EXISTS "Admins full corporate subscriptions" ON public.corporate_subscriptions;
@@ -1357,12 +1563,13 @@ EXCEPTION WHEN OTHERS THEN null;
 END $$;
 
 -- 21a. Profiles
-CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (
+    auth.uid() = id OR public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
 CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
-CREATE POLICY "Admins full read on profiles" ON public.profiles FOR SELECT USING (public.is_admin(auth.uid()));
-CREATE POLICY "Public read driver and supplier basic info" ON public.profiles FOR SELECT USING (
-    role IN ('driver', 'supplier') OR auth.uid() = id OR public.is_admin(auth.uid())
+CREATE POLICY "Admins full read on profiles" ON public.profiles FOR SELECT USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
 );
 
 -- 21b. Saved Addresses
@@ -1374,17 +1581,29 @@ CREATE POLICY "Admins full access on saved_addresses" ON public.saved_addresses 
 
 -- 21c. Service Zones & Suppliers & Tankers (SEC-002: Hardened Discovery & Access Policies)
 CREATE POLICY "Public read on service_zones" ON public.service_zones FOR SELECT USING (TRUE);
+CREATE POLICY "Admins manage service_zones" ON public.service_zones FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
 
 -- Suppliers: Public can only view active, verified business entities; Suppliers view/edit their own; Admins view all
 CREATE POLICY "Public read verified suppliers" ON public.suppliers FOR SELECT USING (
     (is_active = TRUE AND verification_status = 'verified')
     OR public.is_admin(auth.uid())
     OR auth.role() = 'service_role'
+    OR (owner_id IS NOT NULL AND owner_id = auth.uid())
     OR EXISTS (
         SELECT 1 FROM public.profiles p 
         WHERE p.id = auth.uid() 
           AND (p.phone_number = suppliers.contact_phone OR '+' || p.phone_number = suppliers.contact_phone)
     )
+);
+
+CREATE POLICY "Admins and owners manage suppliers" ON public.suppliers FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role' OR (owner_id IS NOT NULL AND owner_id = auth.uid())
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role' OR (owner_id IS NOT NULL AND owner_id = auth.uid())
 );
 
 -- Tankers: Public can only discover online and available fleet units; Suppliers & Drivers manage their assigned units
@@ -1410,15 +1629,26 @@ CREATE POLICY "Suppliers can update own tankers" ON public.tankers FOR UPDATE US
     OR auth.role() = 'service_role'
 );
 
--- Driver Profiles: Strictly restricted to the driver, their operating supplier, and platform administrators
+CREATE POLICY "Admins manage tankers" ON public.tankers FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
+
+-- Driver Profiles: Strictly restricted to the driver, their operating supplier, and platform administrators (TNK-C01 & TNK-C06)
 CREATE POLICY "Drivers and suppliers read driver_profiles" ON public.driver_profiles FOR SELECT USING (
     profile_id = auth.uid()
     OR public.is_admin(auth.uid())
     OR auth.role() = 'service_role'
     OR EXISTS (
-        SELECT 1 FROM public.suppliers s
-        JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number)
-        WHERE p.id = auth.uid() AND s.id = driver_profiles.supplier_id
+        SELECT 1 FROM public.tankers t
+        JOIN public.suppliers s ON t.supplier_id = s.id
+        WHERE t.id = driver_profiles.assigned_tanker_id
+          AND (s.owner_id = auth.uid() OR EXISTS (
+              SELECT 1 FROM public.profiles p 
+              WHERE p.id = auth.uid() 
+                AND (p.phone_number = s.contact_phone OR '+' || p.phone_number = s.contact_phone)
+          ))
     )
 );
 
@@ -1429,32 +1659,29 @@ CREATE POLICY "Drivers manage own driver_profiles" ON public.driver_profiles FOR
 );
 
 -- 21d. Bookings (Strict Isolation)
-CREATE POLICY "Customers can view own bookings" ON public.bookings FOR SELECT USING (auth.uid() = customer_id);
+CREATE POLICY "Customers can view own bookings" ON public.bookings FOR SELECT USING (
+    auth.uid() = customer_id OR public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
 CREATE POLICY "Customers can insert own bookings" ON public.bookings FOR INSERT WITH CHECK (
     auth.uid() = customer_id AND status = 'pending'::booking_status
 );
-CREATE POLICY "Customers can update own bookings" ON public.bookings FOR UPDATE USING (auth.uid() = customer_id) WITH CHECK (
-    auth.uid() = customer_id AND status IN ('pending'::booking_status, 'cancelled'::booking_status)
-);
 CREATE POLICY "Drivers can view assigned bookings" ON public.bookings FOR SELECT USING (
     driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
-);
-CREATE POLICY "Drivers can update assigned bookings" ON public.bookings FOR UPDATE USING (
-    driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid() UNION SELECT '+' || phone_number FROM public.profiles WHERE id = auth.uid())
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
 );
 CREATE POLICY "Suppliers can view hub bookings" ON public.bookings FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.suppliers s JOIN public.profiles p ON (s.contact_phone = p.phone_number OR s.contact_phone = '+' || p.phone_number) WHERE p.id = auth.uid() AND s.id = public.bookings.supplier_id)
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (SELECT 1 FROM public.suppliers s WHERE (s.owner_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND (p.phone_number = s.contact_phone OR '+' || p.phone_number = s.contact_phone))) AND s.id = public.bookings.supplier_id)
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
 );
-CREATE POLICY "Admins have full access to bookings" ON public.bookings FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+CREATE POLICY "Admins manage bookings" ON public.bookings FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
 );
 
 -- 21e. Invoices, Payments, Notifications, Tracking
--- SEC-001 & BUG-002: Invoices and payments are strictly SELECT-only for users/admins via client REST API.
--- Mutations (INSERT, UPDATE) are strictly reserved to authoritative database RPCs running as SECURITY DEFINER or service_role.
 CREATE POLICY "Users read own invoices" ON public.invoices FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.invoices.booking_id AND b.customer_id = auth.uid())
     OR public.is_admin(auth.uid())
@@ -1475,16 +1702,31 @@ CREATE POLICY "Admins manage payments" ON public.payments FOR ALL USING (
 ) WITH CHECK (
     public.is_admin(auth.uid()) OR auth.role() = 'service_role'
 );
-CREATE POLICY "Users read own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users read own notifications" ON public.notifications FOR ALL USING (
+    auth.uid() = user_id OR public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
 CREATE POLICY "Tracking read by booking parties" ON public.tracking_breadcrumbs FOR SELECT USING (
     EXISTS (SELECT 1 FROM public.bookings b WHERE b.id = public.tracking_breadcrumbs.booking_id AND (b.customer_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND (p.phone_number = b.driver_phone OR '+' || p.phone_number = b.driver_phone))))
-    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    OR public.is_admin(auth.uid())
+    OR auth.role() = 'service_role'
 );
 
 -- 21f. Community Pools, Subscriptions & Emergency (SEC-001 & SEC-002: Authenticated / Admin Isolation)
 CREATE POLICY "Public read community_pools" ON public.community_pools FOR SELECT USING (TRUE);
-CREATE POLICY "Public insert pool contributions" ON public.community_pool_contributions FOR INSERT WITH CHECK (TRUE);
-CREATE POLICY "Public read pool contributions" ON public.community_pool_contributions FOR SELECT USING (TRUE);
+CREATE POLICY "Users insert community_pools" ON public.community_pools FOR INSERT WITH CHECK (
+    auth.uid() IS NOT NULL AND (created_by IS NULL OR created_by = auth.uid())
+);
+CREATE POLICY "Admins manage community_pools" ON public.community_pools FOR ALL USING (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+) WITH CHECK (
+    public.is_admin(auth.uid()) OR auth.role() = 'service_role'
+);
+
+CREATE POLICY "Users read pool contributions" ON public.community_pool_contributions FOR SELECT USING (TRUE);
+CREATE POLICY "Authenticated users contribute to pool" ON public.community_pool_contributions FOR INSERT WITH CHECK (
+    auth.uid() IS NOT NULL AND (user_id IS NULL OR user_id = auth.uid())
+);
+
 CREATE POLICY "Public read water certificates" ON public.water_quality_certificates FOR SELECT USING (TRUE);
 
 -- SEC-001: Enforce strict administrator authorization on sensitive operational controls
@@ -1531,7 +1773,17 @@ END $$;
 -- 23. SEED REALISTIC MUMBAI / MAROL OPERATIONAL DATA
 -- ==============================================================================
 
--- 23-zero. Synchronize profiles from auth.users
+-- 23-zero. Synchronize profiles from auth.users and seed seed-dependent demo accounts
+INSERT INTO public.profiles (id, phone_number, full_name, role, is_onboarding_completed)
+VALUES 
+    ('2644c504-f611-40d3-a1c1-0d97214bf6f9', '+919876543210', 'Vikram Malhotra', 'customer', TRUE),
+    ('65cee903-3554-49b1-9729-55552d400087', '+919876572207', 'Demo Customer', 'customer', TRUE),
+    ('bca75357-3da7-4106-b7e8-bd275857efbc', '+919845012345', 'Anand Swamy', 'customer', TRUE),
+    ('d64671d9-665d-4a90-9a45-52be0313978d', '+919000000001', 'Rajesh Sharma', 'driver', TRUE),
+    ('b70a66f3-f265-45af-8bb8-ed463ed6e000', '+919000000002', 'Suresh Shinde', 'driver', TRUE),
+    ('b9a4be98-b394-4c00-b5d8-7b2d6bb7c8de', '+919000000003', 'Sunil Pawar', 'driver', TRUE)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.profiles (id, phone_number, full_name, role, is_onboarding_completed)
 SELECT 
     u.id,
@@ -1544,14 +1796,14 @@ ON CONFLICT (id) DO UPDATE SET
     phone_number = EXCLUDED.phone_number,
     is_onboarding_completed = TRUE;
 
-UPDATE public.profiles SET role = 'admin', full_name = 'Super Admin' WHERE phone_number LIKE '%8888888888';
-UPDATE public.profiles SET role = 'supplier', full_name = 'Marol Potable Water Hub' WHERE phone_number LIKE '%9999999999';
-UPDATE public.profiles SET role = 'driver', full_name = 'Rajesh Sharma' WHERE phone_number LIKE '%9000000001';
-UPDATE public.profiles SET role = 'driver', full_name = 'Suresh Shinde' WHERE phone_number LIKE '%9000000002';
-UPDATE public.profiles SET role = 'driver', full_name = 'Sunil Pawar' WHERE phone_number LIKE '%9000000003';
-UPDATE public.profiles SET role = 'supplier', full_name = 'Marol Express Water Logistics' WHERE phone_number LIKE '%9000000004';
-UPDATE public.profiles SET role = 'customer', full_name = 'Vikram Malhotra' WHERE phone_number LIKE '%9876543210' OR phone_number LIKE '%9876572207';
-UPDATE public.profiles SET role = 'customer', full_name = 'Anand Swamy' WHERE phone_number LIKE '%9845012345';
+UPDATE public.profiles SET role = 'admin', full_name = 'Super Admin' WHERE phone_number IN ('+918888888888', '8888888888');
+UPDATE public.profiles SET role = 'supplier', full_name = 'Marol Potable Water Hub' WHERE phone_number IN ('+919999999999', '9999999999');
+UPDATE public.profiles SET role = 'driver', full_name = 'Rajesh Sharma' WHERE phone_number IN ('+919000000001', '9000000001');
+UPDATE public.profiles SET role = 'driver', full_name = 'Suresh Shinde' WHERE phone_number IN ('+919000000002', '9000000002');
+UPDATE public.profiles SET role = 'driver', full_name = 'Sunil Pawar' WHERE phone_number IN ('+919000000003', '9000000003');
+UPDATE public.profiles SET role = 'supplier', full_name = 'Marol Express Water Logistics' WHERE phone_number IN ('+919000000004', '9000000004');
+UPDATE public.profiles SET role = 'customer', full_name = 'Vikram Malhotra' WHERE phone_number IN ('+919876543210', '9876543210', '+919876572207', '9876572207');
+UPDATE public.profiles SET role = 'customer', full_name = 'Anand Swamy' WHERE phone_number IN ('+919845012345', '9845012345');
 
 -- 23a. Service Zones (Mumbai Metro Hubs)
 INSERT INTO public.service_zones (id, zone_name, center_lat, center_lng, radius_km, traffic_multiplier, minimum_fleet_density, is_operational)
@@ -1690,12 +1942,12 @@ INSERT INTO public.bookings (
     supplier_name, quote_expires_at
 ) VALUES 
     ('b1111111-1111-1111-1111-111111111111', 'TKR-2026-88101', '65cee903-3554-49b1-9729-55552d400087', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Marol Military Road, Andheri East', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 1.8, 12, 750, 45, 0, 39.75, 834.75, 'upi', 'paid', 'Rajesh Sharma', '+919820011001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
-    ('b2222222-2222-2222-2222-222222222222', 'TKR-2026-88102', '65cee903-3554-49b1-9729-55552d400087', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'driver_assigned', 5000, 'Potable (Drinking)', 'MIDC Central Road, Marol, Andheri East', 19.1185, 72.8795, ST_SetSRID(ST_MakePoint(72.8795, 19.1185), 4326)::geography, '7392', 2.1, 15, 750, 52, 0, 40.10, 842.10, 'upi', 'paid', 'Rajesh Sharma', '+919820011001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
+    ('b2222222-2222-2222-2222-222222222222', 'TKR-2026-88102', '65cee903-3554-49b1-9729-55552d400087', 'ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'driver_assigned', 5000, 'Potable (Drinking)', 'MIDC Central Road, Marol, Andheri East', 19.1185, 72.8795, ST_SetSRID(ST_MakePoint(72.8795, 19.1185), 4326)::geography, '7392', 2.1, 15, 750, 52, 0, 40.10, 842.10, 'upi', 'paid', 'Dhananjay Patil', '+919820011005', 'MH-02-HV-2002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
     ('b3333333-3333-3333-3333-333333333333', 'TKR-2026-88103', 'bca75357-3da7-4106-b7e8-bd275857efbc', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Marol Maroshi Rd, Near SevenHills', 19.1210, 72.8820, ST_SetSRID(ST_MakePoint(72.8820, 19.1210), 4326)::geography, '5129', 2.4, 18, 750, 60, 0, 40.50, 850.50, 'upi', 'authorized', 'Suresh Shinde', '+919820011002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
     ('b4444444-4444-4444-4444-444444444444', 'TKR-2026-88104', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 10000, 'Potable (Drinking)', 'Sakinaka Metro Station, Andheri-Kurla Rd', 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, '8410', 3.2, 22, 1200, 96, 0, 64.80, 1360.80, 'upi', 'paid', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
-    ('b5555555-5555-5555-5555-555555555555', 'TKR-2026-88105', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'pending', 10000, 'Potable (Drinking)', 'Asalpha Village, Sakinaka, Mumbai', 19.1040, 72.8910, ST_SetSRID(ST_MakePoint(72.8910, 19.1040), 4326)::geography, '2941', 3.5, 25, 1200, 105, 0, 65.25, 1370.25, 'upi', 'authorized', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
+    ('b5555555-5555-5555-5555-555555555555', 'TKR-2026-88105', 'd64671d9-665d-4a90-9a45-52be0313978d', '3dfcbb4f-77ae-4f6c-94e8-8b9393ebc5e9', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'pending', 10000, 'Potable (Drinking)', 'Asalpha Village, Sakinaka, Mumbai', 19.1040, 72.8910, ST_SetSRID(ST_MakePoint(72.8910, 19.1040), 4326)::geography, '2941', 3.5, 25, 1200, 105, 0, 65.25, 1370.25, 'upi', 'authorized', 'Venkatesh Parab', '+919820011006', 'MH-02-MN-1002', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
     ('b6666666-6666-6666-6666-666666666666', 'TKR-2026-88106', '65cee903-3554-49b1-9729-55552d400087', 'f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 12000, 'Potable (Drinking)', 'SEEPZ Gate 2, Mahakali Caves Rd', 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, '3321', 2.8, 19, 1450, 98, 0, 77.40, 1625.40, 'upi', 'paid', 'Anand Kadam', '+919820011004', 'MH-02-EQ-1201', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
-    ('b7777777-7777-7777-7777-777777777777', 'TKR-2026-90401', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 2.3, 14, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '2 hours'),
+    ('b7777777-7777-7777-7777-777777777777', 'TKR-2026-90401', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '9412', 2.3, 14, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '2 hours'),
     ('b8888888-8888-8888-8888-888888888888', 'TKR-2026-89100', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'delivered', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '3128', 2.3, 0, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() - INTERVAL '1 day'),
     ('b9999999-9999-9999-9999-999999999999', 'TKR-2026-95001', '2644c504-f611-40d3-a1c1-0d97214bf6f9', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Raheja Vihar Wing C, Chandivali, Andheri East, Mumbai', 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, '6219', 2.8, 18, 750, 55, 0, 40.25, 845.25, 'upi', 'authorized', 'Suresh Shinde', '+919000000002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour')
 ON CONFLICT (id) DO UPDATE SET 
@@ -2094,7 +2346,7 @@ BEGIN
 END;
 $$;
 
--- 8. RPC: admin_execute_batch_payout (SEC-004: Admin / Service Role Authorized)
+-- 8. RPC: admin_execute_batch_payout (SEC-004 & TNK-C07: Batch ID & Settlement Tracking)
 CREATE OR REPLACE FUNCTION public.admin_execute_batch_payout()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -2104,6 +2356,7 @@ AS $$
 DECLARE
     v_total_amount NUMERIC := 0;
     v_records_count INTEGER := 0;
+    v_batch_id UUID := gen_random_uuid();
     r RECORD;
 BEGIN
     IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
@@ -2116,19 +2369,31 @@ BEGIN
             COUNT(*) as trip_count,
             SUM(amount) as driver_earnings
         FROM public.driver_payout_ledger
-        WHERE entry_type = 'delivery_earnings'
+        WHERE entry_type = 'delivery_earnings' AND is_settled = FALSE
         GROUP BY driver_phone
     LOOP
+        -- Mark earnings as settled under this batch id
+        UPDATE public.driver_payout_ledger
+        SET is_settled = TRUE,
+            settlement_batch_id = v_batch_id
+        WHERE driver_phone = r.driver_phone
+          AND entry_type = 'delivery_earnings'
+          AND is_settled = FALSE;
+
         INSERT INTO public.driver_payout_ledger (
             driver_phone,
             entry_type,
             amount,
-            notes
+            notes,
+            settlement_batch_id,
+            is_settled
         ) VALUES (
             r.driver_phone,
             'batch_payout_settlement',
             r.driver_earnings,
-            format('Bank NEFT/IMPS payout transfer executed for %s completed deliveries', r.trip_count)
+            format('Bank NEFT/IMPS payout transfer executed for %s completed deliveries (Batch: %s)', r.trip_count, v_batch_id),
+            v_batch_id,
+            TRUE
         );
 
         v_total_amount := v_total_amount + r.driver_earnings;
@@ -2143,8 +2408,9 @@ BEGIN
     ) VALUES (
         'BATCH_PAYOUT_EXECUTED',
         'driver_payout_ledger',
-        'batch-' || to_char(now(), 'YYYYMMDD-HH24MISS'),
+        v_batch_id::text,
         jsonb_build_object(
+            'batch_id', v_batch_id,
             'beneficiaries', v_records_count,
             'total_settled', v_total_amount,
             'method', 'Automated Razorpay Payouts API / Direct Bank Transfer'
@@ -2153,6 +2419,7 @@ BEGIN
 
     RETURN jsonb_build_object(
         'success', true,
+        'batch_id', v_batch_id,
         'beneficiaries_count', v_records_count,
         'total_settled_amount', v_total_amount
     );
@@ -2197,7 +2464,7 @@ BEGIN
 END;
 $$;
 
--- 10. RPC: admin_resolve_dispute (SEC-004: Admin / Service Role Authorized)
+-- 10. RPC: admin_resolve_dispute (SEC-004 & TNK-C07: Capped at captured balance)
 CREATE OR REPLACE FUNCTION public.admin_resolve_dispute(
     p_dispute_id UUID,
     p_status TEXT,
@@ -2212,6 +2479,9 @@ AS $$
 DECLARE
     v_booking_id UUID;
     v_customer_id UUID;
+    v_total_captured NUMERIC := 0;
+    v_already_refunded NUMERIC := 0;
+    v_max_eligible_refund NUMERIC := 0;
 BEGIN
     IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
         RAISE EXCEPTION 'Access Denied: Administrative authorization required for dispute resolution (ERRCODE 42501)';
@@ -2220,13 +2490,24 @@ BEGIN
     SELECT booking_id, customer_id INTO v_booking_id, v_customer_id
     FROM public.disputes WHERE id = p_dispute_id;
 
-    UPDATE public.disputes 
-    SET status = p_status,
-        admin_notes = p_notes,
-        resolved_at = NOW()
-    WHERE id = p_dispute_id;
+    IF v_booking_id IS NULL THEN
+        RAISE EXCEPTION 'Dispute not found';
+    END IF;
 
     IF p_status = 'refunded' AND p_refund_amount > 0 THEN
+        SELECT 
+            COALESCE(SUM(amount) FILTER (WHERE status = 'captured' OR status = 'paid'), 0),
+            COALESCE(SUM(amount) FILTER (WHERE status = 'refunded'), 0)
+        INTO v_total_captured, v_already_refunded
+        FROM public.payments
+        WHERE booking_id = v_booking_id;
+
+        v_max_eligible_refund := GREATEST(0, v_total_captured - v_already_refunded);
+
+        IF p_refund_amount > v_max_eligible_refund THEN
+            RAISE EXCEPTION 'Requested refund amount % exceeds maximum eligible captured balance %', p_refund_amount, v_max_eligible_refund;
+        END IF;
+
         INSERT INTO public.payments (
             booking_id,
             amount,
@@ -2240,7 +2521,17 @@ BEGIN
             'refunded',
             'rfnd_dispute_' || p_dispute_id::text
         );
+
+        UPDATE public.bookings
+        SET payment_status = 'refunded'
+        WHERE id = v_booking_id;
     END IF;
+
+    UPDATE public.disputes 
+    SET status = p_status,
+        admin_notes = p_notes,
+        resolved_at = NOW()
+    WHERE id = p_dispute_id;
 
     INSERT INTO public.admin_audit_logs (
         action,
@@ -2257,6 +2548,74 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'dispute_id', p_dispute_id, 'status', p_status);
 END;
 $$;
+
+-- 10b. RPC: process_booking_refund (TNK-C07: Financial Integrity Server RPC)
+CREATE OR REPLACE FUNCTION public.process_booking_refund(
+    p_booking_id UUID,
+    p_reason TEXT DEFAULT 'Cancellation or Service Failure'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_booking RECORD;
+    v_total_captured NUMERIC := 0;
+    v_already_refunded NUMERIC := 0;
+    v_refundable_amount NUMERIC := 0;
+BEGIN
+    SELECT * INTO v_booking FROM public.bookings WHERE id = p_booking_id;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
+    END IF;
+
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role' OR auth.uid() = v_booking.customer_id) THEN
+        RAISE EXCEPTION 'Access Denied: You cannot trigger a refund for this booking';
+    END IF;
+
+    SELECT 
+        COALESCE(SUM(amount) FILTER (WHERE status = 'captured' OR status = 'paid'), 0),
+        COALESCE(SUM(amount) FILTER (WHERE status = 'refunded'), 0)
+    INTO v_total_captured, v_already_refunded
+    FROM public.payments
+    WHERE booking_id = p_booking_id;
+
+    v_refundable_amount := GREATEST(0, v_total_captured - v_already_refunded);
+
+    IF v_refundable_amount <= 0 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'No captured balance available for refund');
+    END IF;
+
+    INSERT INTO public.payments (
+        booking_id,
+        amount,
+        method,
+        status,
+        gateway_payment_id
+    ) VALUES (
+        p_booking_id,
+        v_refundable_amount,
+        'refund',
+        'refunded',
+        'rfnd_' || substr(gen_random_uuid()::text, 1, 12)
+    );
+
+    UPDATE public.bookings
+    SET payment_status = 'refunded'
+    WHERE id = p_booking_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'booking_id', p_booking_id,
+        'refunded_amount', v_refundable_amount,
+        'reason', p_reason
+    );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.process_booking_refund(UUID, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.process_booking_refund(UUID, TEXT) TO authenticated, service_role;
 
 -- 11. RPC: admin_rebalance_tanker (SEC-004: Admin / Service Role Authorized)
 CREATE OR REPLACE FUNCTION public.admin_rebalance_tanker(

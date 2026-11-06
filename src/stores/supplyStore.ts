@@ -255,10 +255,19 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
         }
       }
 
-      // 2. Fetch Active Delivery assigned to driver's phone or profile
+      // 2. Fetch Active Delivery assigned to driver's phone or profile (without exposing delivery_pin)
       let query = supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          id, booking_reference, customer_id, tanker_id, supplier_id,
+          supplier_name, vehicle_number, driver_name, driver_phone,
+          status, capacity_liters, water_type, delivery_address,
+          delivery_latitude, delivery_longitude, delivery_distance_km,
+          estimated_arrival_minutes, base_price, delivery_charge,
+          surcharge, tax_amount, final_payable_amount, payment_preference,
+          payment_status, cancellation_reason, created_at,
+          flow_meter_start, flow_meter_end, delivered_liters, volume_discrepancy_liters
+        `)
         .in('status', ['accepted', 'driver_assigned', 'en_route', 'arrived', 'delivering'])
         .order('created_at', { ascending: false })
         .limit(1);
@@ -367,9 +376,25 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
   },
 
   updateSupplierPricing: async (rates: { [capacity: number]: number }) => {
+    const { supplierId } = get();
     set((state) => ({
       supplierPricing: { ...state.supplierPricing, ...rates },
     }));
+
+    if (supplierId) {
+      try {
+        for (const [capStr, price] of Object.entries(rates)) {
+          const cap = parseInt(capStr, 10);
+          await supabase
+            .from('tankers')
+            .update({ base_price: price, updated_at: new Date().toISOString() })
+            .eq('supplier_id', supplierId)
+            .eq('capacity_liters', cap);
+        }
+      } catch (e) {
+        console.warn('[SupplyStore] Error persisting pricing to tankers:', e);
+      }
+    }
     return { success: true };
   },
 
@@ -429,13 +454,17 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       if (!supplierId) {
         return { success: false, error: 'Supplier ID not found' };
       }
-      const { error: rpcErr } = await supabase.rpc('supplier_accept_booking', {
+      const { data, error: rpcErr } = await supabase.rpc('supplier_accept_booking', {
         p_booking_id: bookingId,
         p_supplier_id: supplierId,
       });
 
+      if (data && data.success === false) {
+        return { success: false, error: data.error || 'Failed to accept booking' };
+      }
+
       if (rpcErr) {
-        // Fallback: direct table update
+        // Dual-layer resilience fallback for offline / test environments: direct table update
         await supabase
           .from('bookings')
           .update({ status: 'accepted', updated_at: new Date().toISOString() })
@@ -458,14 +487,18 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
       if (!supplierId) {
         return { success: false, error: 'Supplier ID not found' };
       }
-      const { error: rpcErr } = await supabase.rpc('supplier_cancel_and_reassign', {
+      const { data, error: rpcErr } = await supabase.rpc('supplier_cancel_and_reassign', {
         p_booking_id: bookingId,
         p_supplier_id: supplierId,
         p_reason: 'Supplier unavailable (automatic fleet reassignment initiated)',
       });
 
+      if (data && data.success === false) {
+        return { success: false, error: data.error || 'Failed to reject and reassign booking' };
+      }
+
       if (rpcErr) {
-        // Fallback: direct table update
+        // Dual-layer resilience fallback for offline / test environments: direct table update
         await supabase
           .from('bookings')
           .update({
@@ -488,14 +521,24 @@ export const useSupplyStore = create<SupplyState>((set, get) => ({
 
   driverUpdateStatus: async (bookingId, newStatus, pin) => {
     try {
-      const { error: rpcErr } = await supabase.rpc('driver_update_delivery_status', {
+      const { data, error: rpcErr } = await supabase.rpc('driver_update_delivery_status', {
         p_booking_id: bookingId,
         p_new_status: newStatus,
         p_delivery_pin: pin || null,
       });
 
+      if (data && data.success === false) {
+        // Explicit rejection (e.g. invalid PIN or state machine violation) - NEVER bypass
+        return { success: false, error: data.error || 'Status update rejected by system' };
+      }
+
       if (rpcErr) {
-        // Fallback: direct table update
+        // If driver attempts to mark delivered without providing PIN, reject fallback
+        if (newStatus === 'delivered' && !pin) {
+          return { success: false, error: 'Delivery PIN is required to complete delivery.' };
+        }
+
+        // Dual-layer resilience fallback: direct table update
         const updatePayload: any = {
           status: newStatus,
           updated_at: new Date().toISOString(),

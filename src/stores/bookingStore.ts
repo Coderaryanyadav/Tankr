@@ -90,7 +90,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
       // If backend RPC is unavailable in offline / mocked unit testing environments,
       // calculate authoritative quote deterministically using pricingService
-      if (process.env.NODE_ENV === 'test' || error) {
+      if (process.env.NODE_ENV === 'test') {
         const { calculateAuthoritativeQuote, calculateDistanceKm } = require('../services/pricingService');
         const distKm = calculateDistanceKm(
           tanker.latitude || 19.1171,
@@ -229,7 +229,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       };
 
       // Phase 8: Authoritative payment processing (Idempotent & Reconciled)
-      const payMethod = paymentPreference === 'cash_on_delivery' ? 'cod' : (paymentPreference as 'upi' | 'card');
+      const payMethod = paymentPreference === 'cash_on_delivery' ? 'cod' : (paymentPreference === 'upi' ? 'upi' : 'card');
       const paymentRes = await paymentService.processBookingPayment(bookingId, finalAmount, payMethod);
 
       if (!paymentRes.success) {
@@ -374,26 +374,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           activeBooking: state.activeBooking || activeTrip || null,
         }));
       } else {
-        // If customer has no bookings or is demo user, check demo customer bookings from live database
-        const { data: demoBookings } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('customer_id', '2644c504-f611-40d3-a1c1-0d97214bf6f9')
-          .order('created_at', { ascending: false });
-
-        if (demoBookings && demoBookings.length > 0) {
-          const list = demoBookings as BookingRecord[];
-          const activeTrip = list.find(
-            (b) => b.status !== 'delivered' && b.status !== 'cancelled'
-          );
-          set((state) => ({
-            userBookings: list,
-            isLoadingBookings: false,
-            activeBooking: state.activeBooking || activeTrip || null,
-          }));
-        } else {
-          set({ isLoadingBookings: false });
-        }
+        set({ userBookings: [], isLoadingBookings: false });
       }
     } catch (err) {
       set({ isLoadingBookings: false });

@@ -12,6 +12,7 @@ const VALID_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
   delivered: ['disputed'],
   cancelled: [], // Terminal
   disputed: ['delivered', 'cancelled'],
+  unfulfilled_refunded: [], // Terminal
 };
 
 function canTransition(current: BookingStatus, target: BookingStatus): boolean {

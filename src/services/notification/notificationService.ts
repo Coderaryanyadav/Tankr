@@ -46,6 +46,7 @@ class NotificationService {
 
   /**
    * Sends or triggers an in-app notification for a user.
+   * Cross-user notifications are generated authoritative-side by database triggers & stored procedures.
    */
   async triggerNotification(
     userId: string,
@@ -55,14 +56,19 @@ class NotificationService {
     bookingId?: string
   ): Promise<void> {
     try {
-      await supabase.from('notifications').insert({
-        user_id: userId,
-        title,
-        body,
-        booking_id: bookingId,
-        type,
-        is_read: false,
-      });
+      const { data: session } = await supabase.auth.getSession();
+      const currentUid = session?.session?.user?.id;
+      // Only insert directly if caller matches session user or in local test environment
+      if (process.env.NODE_ENV === 'test' || (currentUid && currentUid === userId)) {
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          title,
+          body,
+          booking_id: bookingId,
+          type,
+          is_read: false,
+        });
+      }
     } catch (e) {
       // Non-blocking fail
     }

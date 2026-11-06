@@ -86,7 +86,7 @@ BEGIN
 END;
 $$;
 
--- 2. generate_invoice_for_booking
+-- 2. generate_invoice_for_booking (TNK-C08 & TNK-M06: Full Financial Fields & No Fake GSTIN)
 CREATE OR REPLACE FUNCTION public.generate_invoice_for_booking(
     p_booking_id UUID
 )
@@ -102,6 +102,8 @@ DECLARE
     v_invoice_id UUID;
     v_cgst NUMERIC(10,2);
     v_sgst NUMERIC(10,2);
+    v_tax NUMERIC(10,2);
+    v_total NUMERIC(10,2);
 BEGIN
     SELECT * INTO v_existing
     FROM public.invoices
@@ -127,9 +129,26 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for invoice generation');
     END IF;
 
+    -- Authorization check: Caller must be booking party or admin
+    IF auth.uid() IS NOT NULL AND NOT (
+        public.is_admin(auth.uid()) 
+        OR auth.role() = 'service_role' 
+        OR auth.uid() = v_booking.customer_id
+        OR EXISTS (
+            SELECT 1 FROM public.suppliers s2 
+            WHERE s2.id = v_booking.supplier_id AND (s2.owner_id = auth.uid() OR EXISTS (
+                SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s2.contact_phone OR '+' || p2.phone_number = s2.contact_phone)
+            ))
+        )
+    ) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to generate invoice for this booking');
+    END IF;
+
     v_invoice_number := 'INV-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(p_booking_id::text, 1, 6));
-    v_cgst := ROUND((v_booking.tax_amount / 2.0), 2);
-    v_sgst := ROUND((v_booking.tax_amount / 2.0), 2);
+    v_tax := COALESCE(v_booking.tax_amount, 0);
+    v_cgst := ROUND((v_tax / 2.0), 2);
+    v_sgst := ROUND((v_tax / 2.0), 2);
+    v_total := COALESCE(v_booking.final_payable_amount, (v_booking.base_price + v_booking.delivery_charge + v_booking.surcharge + v_tax));
 
     INSERT INTO public.invoices (
         booking_id,
@@ -144,9 +163,11 @@ BEGIN
         base_price,
         delivery_charge,
         surcharge,
+        tax_amount,
+        final_amount,
+        total_amount,
         cgst_amount,
         sgst_amount,
-        total_amount,
         payment_method,
         payment_status,
         payment_reference,
@@ -159,17 +180,19 @@ BEGIN
         COALESCE(v_booking.cust_phone, 'N/A'),
         v_booking.delivery_address,
         COALESCE(v_booking.supp_name, v_booking.supplier_name, 'TANKR Verified Water Hub'),
-        COALESCE(v_booking.supp_gstin, '27AAAAA0000A1Z5'),
+        v_booking.supp_gstin,
         v_booking.water_type,
         v_booking.capacity_liters,
         v_booking.base_price,
         v_booking.delivery_charge,
         v_booking.surcharge,
+        v_tax,
+        v_total,
+        v_total,
         v_cgst,
         v_sgst,
-        v_booking.final_payable_amount,
-        v_booking.payment_preference,
-        v_booking.payment_status,
+        COALESCE(v_booking.payment_preference, 'upi'),
+        COALESCE(v_booking.payment_status, 'pending_payment'),
         'UPI/' || v_booking.booking_reference,
         COALESCE(v_booking.delivered_at, NOW()),
         'issued'
@@ -184,7 +207,7 @@ BEGIN
 END;
 $$;
 
--- 3. supplier_accept_booking
+-- 3. supplier_accept_booking (TNK-C04 & TNK-M04: Ownership & Expiration Enforcement)
 CREATE OR REPLACE FUNCTION public.supplier_accept_booking(
     p_booking_id UUID,
     p_supplier_id UUID
@@ -196,7 +219,30 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_b RECORD;
+    v_supp RECORD;
 BEGIN
+    IF auth.uid() IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
+    END IF;
+
+    SELECT * INTO v_supp FROM public.suppliers WHERE id = p_supplier_id;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Supplier record not found');
+    END IF;
+
+    IF NOT (
+        public.is_admin(auth.uid()) 
+        OR auth.role() = 'service_role'
+        OR (v_supp.owner_id IS NOT NULL AND v_supp.owner_id = auth.uid())
+        OR EXISTS (
+            SELECT 1 FROM public.profiles p 
+            WHERE p.id = auth.uid() 
+              AND (p.phone_number = v_supp.contact_phone OR '+' || p.phone_number = v_supp.contact_phone)
+        )
+    ) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Caller does not manage this supplier');
+    END IF;
+
     SELECT * INTO v_b
     FROM public.bookings
     WHERE id = p_booking_id
@@ -209,6 +255,10 @@ BEGIN
 
     IF v_b.status != 'pending' THEN
         RETURN jsonb_build_object('success', false, 'error', 'Booking is not in pending state');
+    END IF;
+
+    IF v_b.quote_expires_at IS NOT NULL AND v_b.quote_expires_at < NOW() THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Booking quote has expired');
     END IF;
 
     UPDATE public.bookings
@@ -239,7 +289,7 @@ BEGIN
 END;
 $$;
 
--- 4. supplier_cancel_and_reassign
+-- 4. supplier_cancel_and_reassign (TNK-C04: Ownership Enforcement)
 CREATE OR REPLACE FUNCTION public.supplier_cancel_and_reassign(
     p_booking_id UUID,
     p_supplier_id UUID,
@@ -252,8 +302,31 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_b RECORD;
+    v_supp RECORD;
     v_alt RECORD;
 BEGIN
+    IF auth.uid() IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
+    END IF;
+
+    SELECT * INTO v_supp FROM public.suppliers WHERE id = p_supplier_id;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Supplier not found');
+    END IF;
+
+    IF NOT (
+        public.is_admin(auth.uid()) 
+        OR auth.role() = 'service_role'
+        OR (v_supp.owner_id IS NOT NULL AND v_supp.owner_id = auth.uid())
+        OR EXISTS (
+            SELECT 1 FROM public.profiles p 
+            WHERE p.id = auth.uid() 
+              AND (p.phone_number = v_supp.contact_phone OR '+' || p.phone_number = v_supp.contact_phone)
+        )
+    ) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Caller does not manage this supplier');
+    END IF;
+
     SELECT * INTO v_b
     FROM public.bookings
     WHERE id = p_booking_id
@@ -323,7 +396,7 @@ BEGIN
 END;
 $$;
 
--- 5. driver_update_delivery_status
+-- 5. driver_update_delivery_status (TNK-C04 & TNK-H03: Driver Authentication & Verification)
 CREATE OR REPLACE FUNCTION public.driver_update_delivery_status(
     p_booking_id UUID,
     p_new_status TEXT,
@@ -337,6 +410,10 @@ AS $$
 DECLARE
     v_b RECORD;
 BEGIN
+    IF auth.uid() IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
+    END IF;
+
     SELECT * INTO v_b
     FROM public.bookings
     WHERE id = p_booking_id
@@ -344,6 +421,26 @@ BEGIN
 
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
+    END IF;
+
+    -- Validate caller identity
+    IF NOT (
+        public.is_admin(auth.uid()) 
+        OR auth.role() = 'service_role'
+        OR EXISTS (
+            SELECT 1 FROM public.profiles p 
+            WHERE p.id = auth.uid() 
+              AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone)
+        )
+        OR EXISTS (
+            SELECT 1 FROM public.suppliers s
+            WHERE s.id = v_b.supplier_id 
+              AND (s.owner_id = auth.uid() OR EXISTS (
+                  SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s.contact_phone OR '+' || p2.phone_number = s.contact_phone)
+              ))
+        )
+    ) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to update status for this delivery');
     END IF;
 
     -- Validate transition & PIN if delivering/delivered
@@ -388,7 +485,7 @@ BEGIN
 END;
 $$;
 
--- 6. contribute_to_community_pool
+-- 6. contribute_to_community_pool (TNK-C08: Auth Check & Dual Column Compatibility)
 CREATE OR REPLACE FUNCTION public.contribute_to_community_pool(
     p_pool_code TEXT,
     p_contributor_name TEXT,
@@ -405,6 +502,10 @@ DECLARE
     v_new_amount NUMERIC;
     v_new_status TEXT;
 BEGIN
+    IF auth.uid() IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required to contribute to community pool');
+    END IF;
+
     IF p_amount <= 0 THEN
         RETURN jsonb_build_object('success', false, 'error', 'Contribution amount must be greater than zero');
     END IF;
@@ -427,13 +528,17 @@ BEGIN
         user_id,
         contributor_name,
         flat_number,
-        amount_paid
+        amount,
+        amount_paid,
+        payment_status
     ) VALUES (
         v_pool.id,
         auth.uid(),
         p_contributor_name,
         p_flat_number,
-        p_amount
+        p_amount,
+        p_amount,
+        'paid'
     );
 
     v_new_amount := v_pool.collected_amount + p_amount;
@@ -454,7 +559,7 @@ BEGIN
 END;
 $$;
 
--- 7. submit_customer_dispute
+-- 7. submit_customer_dispute (TNK-C08: Proper Columns & Caller Verification)
 CREATE OR REPLACE FUNCTION public.submit_customer_dispute(
     p_booking_id UUID,
     p_category TEXT,
@@ -471,20 +576,34 @@ DECLARE
     v_b RECORD;
     v_dispute_id UUID;
 BEGIN
-    SELECT * INTO v_b
-    FROM public.bookings
-    WHERE id = p_booking_id;
+    IF auth.uid() IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required to lodge dispute');
+    END IF;
+
+    SELECT b.*, s.business_name AS s_name, p.full_name AS c_name 
+    INTO v_b
+    FROM public.bookings b
+    LEFT JOIN public.suppliers s ON b.supplier_id = s.id
+    LEFT JOIN public.profiles p ON b.customer_id = p.id
+    WHERE b.id = p_booking_id;
 
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
+    END IF;
+
+    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role' OR auth.uid() = v_b.customer_id) THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Only booking customer can submit dispute');
     END IF;
 
     INSERT INTO public.disputes (
         booking_id,
         customer_id,
         supplier_id,
+        customer_name,
+        supplier_name,
         category,
         reason,
+        amount,
         liters_received,
         evidence_url,
         status
@@ -492,8 +611,11 @@ BEGIN
         p_booking_id,
         v_b.customer_id,
         v_b.supplier_id,
-        p_category,
+        COALESCE(v_b.c_name, 'Customer'),
+        COALESCE(v_b.s_name, v_b.supplier_name, 'Supplier'),
+        COALESCE(p_category, 'volume_shortage'),
         p_reason,
+        v_b.final_payable_amount,
         p_liters_received,
         p_evidence_url,
         'open'
@@ -513,7 +635,7 @@ BEGIN
 END;
 $$;
 
--- 8. register_supplier
+-- 8. register_supplier (TNK-C04 & TNK-H05: Auth & Role Escalation Protection Bypass)
 CREATE OR REPLACE FUNCTION public.register_supplier(
     p_business_name TEXT,
     p_owner_name TEXT,
@@ -532,37 +654,45 @@ AS $$
 DECLARE
     v_supplier_id UUID;
 BEGIN
+    IF auth.uid() IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Authentication required for supplier registration (ERRCODE 42501)');
+    END IF;
+
     IF LENGTH(p_gst_number) != 15 THEN
         RETURN jsonb_build_object('success', false, 'error', 'Invalid GSTIN length. Must be 15 characters.');
     END IF;
 
     INSERT INTO public.suppliers (
+        owner_id,
         business_name,
         contact_phone,
         is_verified,
         verification_status,
         water_source,
-        gstin
+        gstin,
+        is_active
     ) VALUES (
+        auth.uid(),
         p_business_name,
         p_phone_number,
         FALSE,
         'pending_review',
         p_water_source,
-        p_gst_number
+        p_gst_number,
+        TRUE
     )
     RETURNING id INTO v_supplier_id;
 
-    -- If user is authenticated, elevate to supplier role
-    IF auth.uid() IS NOT NULL THEN
-        UPDATE public.profiles
-        SET role = 'supplier'::user_role,
-            full_name = p_owner_name,
-            phone_number = p_phone_number,
-            preferred_address = p_business_address,
-            updated_at = NOW()
-        WHERE id = auth.uid();
-    END IF;
+    -- Elevate to supplier role under authorized registration session context
+    PERFORM set_config('tankr.in_supplier_registration', 'on', true);
+
+    UPDATE public.profiles
+    SET role = 'supplier'::user_role,
+        full_name = p_owner_name,
+        phone_number = p_phone_number,
+        preferred_address = p_business_address,
+        updated_at = NOW()
+    WHERE id = auth.uid();
 
     RETURN jsonb_build_object(
         'success', true,
@@ -572,7 +702,7 @@ BEGIN
 END;
 $$;
 
--- 9. get_nearby_tankers (PostGIS Radius Engine with SEC-002 PII Redaction)
+-- 9. get_nearby_tankers (TNK-H01 & SEC-002: PostGIS Radius Engine with 1.25 Road Routing & 5% GST)
 CREATE OR REPLACE FUNCTION public.get_nearby_tankers(
     user_lat DOUBLE PRECISION,
     user_lng DOUBLE PRECISION,
@@ -633,9 +763,9 @@ BEGIN
         t.water_type,
         t.base_price,
         t.price_per_km,
-        ROUND((ST_Distance(t.current_location, user_point) / 1000.0)::numeric, 1) AS distance_km,
-        GREATEST(5, ROUND(8 + (ST_Distance(t.current_location, user_point) / 1000.0) * 3.2)::int) AS eta_minutes,
-        ROUND((t.base_price + (ST_Distance(t.current_location, user_point) / 1000.0)::numeric * t.price_per_km), 0) AS estimated_total_price,
+        ROUND(((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0)::numeric, 1) AS distance_km,
+        GREATEST(5, ROUND(8 + ((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0) * 3.2)::int) AS eta_minutes,
+        ROUND(((t.base_price + ((ST_Distance(t.current_location, user_point) * 1.25) / 1000.0)::numeric * t.price_per_km) * 1.05), 0) AS estimated_total_price,
         t.latitude,
         t.longitude,
         COALESCE(t.heading_degrees, 0.0) AS heading_degrees,
@@ -652,7 +782,7 @@ BEGIN
 END;
 $$;
 
--- 10. get_latest_tracking_breadcrumb
+-- 10. get_latest_tracking_breadcrumb (TNK-C04: Booking Party Authorization Guard)
 CREATE OR REPLACE FUNCTION public.get_latest_tracking_breadcrumb(p_booking_id UUID)
 RETURNS TABLE (
     latitude DOUBLE PRECISION,
@@ -675,6 +805,17 @@ DECLARE
 BEGIN
     SELECT * INTO v_b FROM public.bookings WHERE id = p_booking_id;
     IF NOT FOUND THEN
+        RETURN;
+    END IF;
+
+    -- Verify caller is booking party or admin
+    IF auth.uid() IS NOT NULL AND NOT (
+        public.is_admin(auth.uid()) 
+        OR auth.role() = 'service_role' 
+        OR auth.uid() = v_b.customer_id
+        OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone))
+        OR EXISTS (SELECT 1 FROM public.suppliers s WHERE s.id = v_b.supplier_id AND (s.owner_id = auth.uid() OR EXISTS (SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s.contact_phone OR '+' || p2.phone_number = s.contact_phone))))
+    ) THEN
         RETURN;
     END IF;
 
@@ -725,17 +866,27 @@ BEGIN
 END;
 $$;
 
--- Grant execution to authenticated and anon
-GRANT EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.get_nearby_tankers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) TO authenticated, anon;
+-- Routine Permissions: Restrict privileged operational routines from anon (TNK-C04)
+REVOKE EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_nearby_tankers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) TO authenticated, service_role;
 
 -- Seed breadcrumbs for demo active trip TKR-2026-90401
 INSERT INTO public.tracking_breadcrumbs (

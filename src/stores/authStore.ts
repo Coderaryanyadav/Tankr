@@ -56,6 +56,8 @@ interface AuthState {
   clearError: () => void;
 }
 
+let authSubscription: { unsubscribe: () => void } | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
@@ -113,8 +115,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
       }
 
-      // 2. Subscribe to auth state changes
-      supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // 2. Subscribe to auth state changes (clean up existing subscription first)
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+      const { data: subData } = supabase.auth.onAuthStateChange(async (event, newSession) => {
         if (newSession?.user) {
           const profile = await get().fetchProfile(newSession.user.id);
           set({ session: newSession, user: newSession.user, profile });
@@ -122,6 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ session: null, user: null, profile: null });
         }
       });
+      authSubscription = subData.subscription;
     } catch (err: any) {
       console.warn('[AuthStore] Init exception:', err);
       set({ isInitialized: true, isLoading: false });
@@ -362,7 +368,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (user?.id) {
       try {
-        await supabase
+        const { error } = await supabase
           .from('profiles')
           .update({
             full_name: updatedProfile.full_name,
@@ -373,8 +379,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             updated_at: new Date().toISOString(),
           })
           .eq('id', user.id);
-      } catch (err) {
+
+        if (error) {
+          console.warn('[authStore] Profile update network sync failed:', error.message);
+          return { success: false, error: error.message };
+        }
+      } catch (err: any) {
         console.warn('[authStore] Profile update network sync failed:', err);
+        return { success: false, error: err?.message || 'Failed to update profile' };
       }
     }
 

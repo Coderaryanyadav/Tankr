@@ -40,6 +40,10 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# text dumps
+*_FULL_CODEBASE.txt
+*.txt
+
 # supabase temp
 supabase/.temp/
 supabase/.branches/

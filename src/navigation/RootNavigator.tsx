@@ -74,21 +74,27 @@ export const RootNavigator: React.FC = () => {
       return <DesignSystemShowcase />;
     }
 
-    // Role-gated route overrides: only allowed in development with an authenticated session matching role or in __DEV__ preview mode
+    // Role-gated route overrides: only allowed with an authenticated session matching role or in __DEV__ preview mode without session
     if (__DEV__) {
       if (urlParams.app === 'admin') {
-        return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
+        if (!session?.user || profile?.role === 'admin') {
+          return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
+        }
       }
 
       if (urlParams.app === 'supplier') {
         if (urlParams.screen === 'registration') {
           return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
         }
-        return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
+        if (!session?.user || profile?.role === 'supplier') {
+          return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
+        }
       }
 
       if (urlParams.app === 'driver') {
-        return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
+        if (!session?.user || profile?.role === 'driver') {
+          return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
+        }
       }
     } else {
       // In production, verify that the authenticated profile role matches the requested portal

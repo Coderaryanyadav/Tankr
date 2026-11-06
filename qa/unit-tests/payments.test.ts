@@ -1,14 +1,18 @@
-describe('Payment Idempotency & Gateway Reconciliation', () => {
-  const generateIdempotencyKey = (bookingId: string) => {
-    return `pay_${bookingId}_${Date.now()}_testkey`;
-  };
+import { paymentService } from '../../src/services/payment/paymentService';
 
-  test('generates unique deterministic idempotency key format', () => {
+describe('Payment Idempotency & Gateway Reconciliation', () => {
+  test('generates unique deterministic idempotency key format using paymentService', () => {
     const bookingId = 'b001-c882-411a';
-    const key = generateIdempotencyKey(bookingId);
+    const key = paymentService.generateIdempotencyKey(bookingId);
 
     expect(key).toContain(bookingId);
-    expect(key).toMatch(/^pay_b001-c882-411a_\d+_testkey$/);
+    expect(key).toMatch(/^pay_b001-c882-411a_\d+_[a-z0-9_]+$/);
+  });
+
+  test('refuses payment capture when required gateway signatures or tokens are missing', async () => {
+    const res = await paymentService.verifyAndCapturePayment('b001', '', 'pay_123', 'sig_123');
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('Missing gateway orderId, paymentId, or signature');
   });
 
   test('simulates reconciliation verification check', () => {
