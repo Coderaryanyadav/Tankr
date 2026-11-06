@@ -128,7 +128,7 @@ export function validateDeliveryCompletion(
     return {
       valid: false,
       volumeDelivered,
-      error: `Delivered volume (${volumeDelivered}L) must be at least 95% of booked capacity (${input.bookedCapacity}L).`,
+      error: 'Delivered volume below 95 percent of booked capacity',
     };
   }
 

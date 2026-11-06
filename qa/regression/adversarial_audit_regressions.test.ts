@@ -88,6 +88,57 @@ describe('Adversarial QA Audit — Critical Defect Regression Tests', () => {
       expect(res.success).toBe(false);
       expect(res.error).toMatch(/Cannot cancel a delivery in 'delivering' status/i);
     });
+
+    it('leaves local status unchanged when both remote cancel RPCs fail', async () => {
+      // Mock supabase.rpc to simulate server rejection/transport failure on both RPCs
+      const rpcSpy = jest.spyOn(supabase, 'rpc').mockResolvedValue({
+        data: null,
+        error: { message: 'Database connection failure', code: 'PGRST000' },
+      } as any);
+
+      const activeTrip = {
+        id: 'mock-trip-fail-both-rpcs',
+        booking_reference: 'TKR-FAIL-1',
+        customer_id: 'cust-1',
+        tanker_id: 'tank-1',
+        supplier_id: 'sup-1',
+        status: 'en_route' as const,
+        capacity_liters: 5000,
+        water_type: 'Potable (Drinking)',
+        delivery_address: 'Marol',
+        delivery_latitude: 19.117,
+        delivery_longitude: 72.88,
+        delivery_pin: '9999',
+        delivery_distance_km: 2.0,
+        estimated_arrival_minutes: 10,
+        base_price: 750,
+        delivery_charge: 50,
+        surcharge: 0,
+        tax_amount: 40,
+        final_payable_amount: 840,
+        payment_preference: 'upi' as const,
+        payment_status: 'authorized',
+        created_at: new Date().toISOString(),
+      };
+
+      useBookingStore.setState({
+        activeBooking: activeTrip,
+        userBookings: [activeTrip],
+        isSearchingDriver: true,
+      });
+
+      const res = await useBookingStore.getState().cancelBooking('mock-trip-fail-both-rpcs', 'Cancel fail test');
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/Database connection failure|Remote cancellation rejected/i);
+
+      // Local state MUST remain unchanged
+      const state = useBookingStore.getState();
+      expect(state.activeBooking?.status).toBe('en_route');
+      expect(state.userBookings[0].status).toBe('en_route');
+      expect(state.isSearchingDriver).toBe(true);
+
+      rpcSpy.mockRestore();
+    });
   });
 
   // --- REGRESSION 2: Payment Reconciliation Matching Guard ---

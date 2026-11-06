@@ -18,6 +18,7 @@ export interface PaymentProcessResult {
   paymentId?: string;
   orderId?: string;
   transactionRef?: string;
+  requiresCheckout?: boolean;
   error?: string;
 }
 
@@ -167,31 +168,18 @@ class PaymentService {
 
   /**
    * Payment order processing flow for a booking.
-   * Creates order on backend -> Requires genuine gateway callback tokens (from Razorpay or server webhook)
-   * -> Reconciles via authoritative server RPC.
+   * Creates the order on the backend, then stops.
+   * Returns requiresCheckout: true for upi and card without calling verifyAndCapturePayment with fabricated tokens.
+   * COD returns the created order as pending collection.
    */
   async processBookingPayment(
     bookingId: string,
     _amount: number,
-    method: 'upi' | 'card' | 'cod',
-    gatewayCallback?: { paymentId: string; signature: string }
+    method: 'upi' | 'card' | 'cod'
   ): Promise<PaymentProcessResult> {
-    // 1. Digital payment (UPI / Card): Strictly require authoritative gateway tokens from checkout/webhook
-    if (method !== 'cod') {
-      const gatewayPaymentId = gatewayCallback?.paymentId;
-      const gatewaySignature = gatewayCallback?.signature;
-
-      if (!gatewayPaymentId || !gatewaySignature) {
-        return {
-          success: false,
-          error: 'Payment authorization required: Missing gateway transaction tokens. Payment must be completed via Razorpay Checkout or server webhook capture.',
-        };
-      }
-    }
-
     const idempotencyKey = this.generateIdempotencyKey(bookingId);
 
-    // 2. Create Server-Side Order
+    // 1. Create Server-Side Order
     const orderRes = await this.createPaymentOrder(bookingId, method, idempotencyKey);
     if (!orderRes.success || !orderRes.data) {
       return {
@@ -202,33 +190,59 @@ class PaymentService {
 
     const { orderId } = orderRes.data;
 
-    // 3. COD flow: Order is registered as created (authorized pending physical cash collection)
+    // 2. COD flow: Order is registered as created (authorized pending physical cash collection)
     if (method === 'cod') {
       return {
         success: true,
         orderId,
         transactionRef: orderId,
+        requiresCheckout: false,
       };
     }
 
-    // Reconcile via authoritative server RPC
+    // 3. Digital payment (UPI / Card): Create the order, then stop. Return requiresCheckout: true.
+    // Real tokens must be supplied via handleRazorpayCheckoutSuccess boundary.
+    return {
+      success: true,
+      orderId,
+      requiresCheckout: true,
+    };
+  }
+
+  /**
+   * Authoritative checkout boundary that accepts real Razorpay success payload
+   * and reconciles it via server RPC.
+   */
+  async handleRazorpayCheckoutSuccess(
+    bookingId: string,
+    payload: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+    }
+  ): Promise<PaymentProcessResult> {
+    if (!payload?.razorpay_order_id || !payload?.razorpay_payment_id || !payload?.razorpay_signature) {
+      return {
+        success: false,
+        error: 'Missing required Razorpay payment verification tokens.',
+      };
+    }
+
     return await this.verifyAndCapturePayment(
       bookingId,
-      orderId,
-      gatewayCallback!.paymentId,
-      gatewayCallback!.signature
+      payload.razorpay_order_id,
+      payload.razorpay_payment_id,
+      payload.razorpay_signature
     );
   }
 
   /**
-   * Processes a refund when a tanker booking is cancelled prior to tanker dispatch.
-   * Invokes authoritative database RPC `process_booking_refund` to guarantee balance bounds
-   * and record the refund in the authoritative database ledger.
+   * Processes a refund request when a tanker booking is cancelled prior to tanker dispatch.
+   * Invokes authoritative database RPC `request_booking_refund` to record pending_gateway status.
    */
   async processRefund(bookingId: string, reason: string = 'Booking cancelled prior to dispatch'): Promise<{ success: boolean; refundId?: string; error?: string }> {
     try {
-      // 1. Invoke authoritative server RPC
-      const { data, error } = await supabase.rpc('process_booking_refund', {
+      const { data, error } = await supabase.rpc('request_booking_refund', {
         p_booking_id: bookingId,
         p_reason: reason,
       });
@@ -236,54 +250,26 @@ class PaymentService {
       if (!error && data?.success) {
         return {
           success: true,
-          refundId: data.booking_id || `rfnd_${Date.now()}`,
+          refundId: data.booking_id,
         };
       }
 
-      // If server RPC explicitly returned business rejection
-      if (data && data.success === false) {
-        return {
-          success: false,
-          error: data.error || 'Refund rejected by server.',
-        };
-      }
-
-      // 2. If RPC is unavailable (e.g., in unit test mock environment without RPC mock), fall back to safe check
-      const { data: payment, error: pErr } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('booking_id', bookingId)
-        .eq('status', 'captured')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (pErr || !payment) {
-        return {
-          success: false,
-          error: error?.message || 'No captured payment transaction found to refund for this booking.',
-        };
-      }
-
-      const refundRef = `rfnd_${payment.gateway_payment_id || payment.id.slice(0, 8)}_${Date.now()}`;
-      const { error: updateErr } = await supabase
-        .from('payments')
-        .update({
-          status: 'refunded',
-          gateway_payment_id: refundRef,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', payment.id);
-
-      if (updateErr) {
-        return { success: false, error: updateErr.message };
-      }
-
-      return { success: true, refundId: refundRef };
+      return {
+        success: false,
+        error: data?.error || error?.message || 'Failed to request refund from server.',
+      };
     } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to process gateway refund' };
+      return { success: false, error: err?.message || 'Failed to process refund request' };
     }
   }
 }
 
 export const paymentService = new PaymentService();
+export const handleRazorpayCheckoutSuccess = (
+  bookingId: string,
+  payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }
+) => paymentService.handleRazorpayCheckoutSuccess(bookingId, payload);

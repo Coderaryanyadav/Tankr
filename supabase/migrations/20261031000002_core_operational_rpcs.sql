@@ -16,7 +16,8 @@
 CREATE OR REPLACE FUNCTION public.create_payment_order(
     p_booking_id UUID,
     p_method TEXT,
-    p_idempotency_key TEXT
+    p_idempotency_key TEXT,
+    p_gateway_order_id TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -26,7 +27,8 @@ AS $$
 DECLARE
     v_booking RECORD;
     v_payment RECORD;
-    v_order_id TEXT;
+    v_key_id TEXT;
+    v_key_secret TEXT;
 BEGIN
     -- Verify booking exists
     SELECT * INTO v_booking
@@ -36,6 +38,23 @@ BEGIN
 
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for payment initialization');
+    END IF;
+
+    -- Require caller to be the customer of the booking or service_role
+    IF auth.role() <> 'service_role' THEN
+        IF auth.uid() IS NULL OR auth.uid() <> v_booking.customer_id THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Caller does not own this booking');
+        END IF;
+    END IF;
+
+    -- Verify Razorpay credentials in platform_settings
+    SELECT value->>'razorpay_key_id', value->>'razorpay_key_secret'
+    INTO v_key_id, v_key_secret
+    FROM public.platform_settings
+    WHERE key = 'payment_gateway';
+
+    IF v_key_id IS NULL OR length(trim(v_key_id)) = 0 OR v_key_secret IS NULL OR length(trim(v_key_secret)) = 0 THEN
+        RETURN jsonb_build_object('success', false, 'error', 'razorpay_not_configured');
     END IF;
 
     -- Check if active payment with this idempotency key or booking already exists
@@ -54,9 +73,7 @@ BEGIN
         );
     END IF;
 
-    -- Generate unique gateway order reference
-    v_order_id := 'order_' || replace(gen_random_uuid()::text, '-', '');
-
+    -- Store status 'created'. Put a Razorpay order id in gateway_order_id only if provided by server API
     INSERT INTO public.payments (
         booking_id,
         gateway_order_id,
@@ -67,7 +84,7 @@ BEGIN
         idempotency_key
     ) VALUES (
         p_booking_id,
-        v_order_id,
+        p_gateway_order_id,
         v_booking.final_payable_amount,
         'INR',
         p_method,
@@ -78,7 +95,7 @@ BEGIN
 
     RETURN jsonb_build_object(
         'success', true,
-        'order_id', v_order_id,
+        'order_id', v_payment.gateway_order_id,
         'amount', v_booking.final_payable_amount,
         'currency', 'INR',
         'status', 'created'
@@ -443,8 +460,13 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to update status for this delivery');
     END IF;
 
-    -- Validate transition & PIN if delivering/delivered
-    IF p_new_status IN ('delivering', 'delivered') THEN
+    -- Reject delivered status: Delivered is ONLY reachable through driver_complete_delivery_with_meter with verified meter readings
+    IF p_new_status = 'delivered' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Delivered status can only be certified through driver_complete_delivery_with_meter with verified meter readings.');
+    END IF;
+
+    -- Validate transition & PIN if delivering
+    IF p_new_status = 'delivering' THEN
         IF p_delivery_pin IS NULL OR p_delivery_pin != v_b.delivery_pin THEN
             RETURN jsonb_build_object('success', false, 'error', 'Invalid delivery verification PIN');
         END IF;
@@ -884,7 +906,7 @@ END;
 $$;
 
 -- Routine Permissions: Restrict privileged operational routines from anon (TNK-C04)
-REVOKE EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) FROM PUBLIC, anon;
@@ -894,7 +916,7 @@ REVOKE EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUME
 REVOKE EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) FROM PUBLIC, anon;
 
-GRANT EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) TO authenticated, service_role;

@@ -1,5 +1,6 @@
 import { useBookingStore } from '../../src/stores/bookingStore';
 import { useAuthStore } from '../../src/stores/authStore';
+import { supabase } from '../../src/services/supabase/client';
 import { BOOKING_STATUS_CONFIG, BookingRecord, BookingStatus } from '../../src/types/booking';
 
 describe('TANKR Live Tracking & Account Profile Business Logic Verification', () => {
@@ -147,8 +148,15 @@ describe('TANKR Live Tracking & Account Profile Business Logic Verification', ()
         userBookings: [activeTrip],
       });
 
+      const rpcSpy = jest.spyOn(supabase, 'rpc').mockResolvedValue({
+        data: { success: true },
+        error: null,
+      } as any);
+
       const res = await useBookingStore.getState().cancelBooking(activeTrip.id, 'Customer cancelled trip');
       expect(res.success).toBe(true);
+
+      rpcSpy.mockRestore();
 
       const store = useBookingStore.getState();
       expect(store.activeBooking).toBeNull();

@@ -46,6 +46,11 @@ interface BookingState {
     bookingId: string,
     reason?: string
   ) => Promise<{ success: boolean; error?: string }>;
+  reconcileCheckoutSuccess: (payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   fetchUserBookings: (customerId: string) => Promise<void>;
   subscribeToBookingUpdates: (bookingId: string) => () => void;
   clearActiveBooking: () => void;
@@ -305,13 +310,11 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           p_reason: reason,
         });
         if (atomicErr) {
-          if (process.env.NODE_ENV !== 'test') {
-            console.warn('[bookingStore] Remote cancellation warning:', atomicErr.message);
-            return {
-              success: false,
-              error: atomicErr.message || error.message || 'Remote cancellation rejected.',
-            };
-          }
+          console.warn('[bookingStore] Remote cancellation rejected:', atomicErr.message);
+          return {
+            success: false,
+            error: atomicErr.message || error.message || 'Remote cancellation rejected.',
+          };
         }
       }
 
@@ -356,6 +359,23 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to cancel booking' };
     }
+  },
+
+  reconcileCheckoutSuccess: async (payload) => {
+    const active = get().activeBooking;
+    if (!active) return { success: false, error: 'No active booking to reconcile' };
+
+    const res = await paymentService.handleRazorpayCheckoutSuccess(active.id, payload);
+    if (res.success) {
+      set({
+        activeBooking: { ...active, payment_status: 'paid' },
+        userBookings: get().userBookings.map((b) =>
+          b.id === active.id ? { ...b, payment_status: 'paid' } : b
+        ),
+      });
+      return { success: true };
+    }
+    return { success: false, error: res.error };
   },
 
   fetchUserBookings: async (customerId) => {

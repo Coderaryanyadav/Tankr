@@ -869,8 +869,7 @@ CREATE OR REPLACE FUNCTION public.verify_and_reconcile_payment(
     p_booking_id uuid,
     p_gateway_order_id text,
     p_gateway_payment_id text,
-    p_gateway_signature text,
-    p_verified boolean DEFAULT NULL
+    p_gateway_signature text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -912,17 +911,12 @@ BEGIN
         END IF;
     END IF;
 
-    -- 3. Verification enforcement: reject explicitly unverified transactions
-    IF p_verified IS FALSE THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Payment verification failed: Gateway reported unverified signature.');
-    END IF;
-
     -- Enforce quote expiration: payment cannot be reconciled on an expired quote/reservation
     IF v_booking.quote_expires_at IS NOT NULL AND v_booking.quote_expires_at < NOW() THEN
         RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation rejected: Booking quote reservation has expired.');
     END IF;
 
-    -- 4. Authoritative Cryptographic HMAC-SHA256 signature verification
+    -- 3. Authoritative Cryptographic HMAC-SHA256 signature verification
     SELECT value->>'razorpay_key_secret' INTO v_secret
     FROM public.platform_settings
     WHERE key = 'payment_gateway';
@@ -938,36 +932,64 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Cryptographic HMAC signature mismatch: Payment verification rejected.');
     END IF;
 
-    -- 5. Locate payment record with row lock
+    -- 4. Check if payment with this gateway_payment_id is already captured (Repeat capture returns existing row)
+    SELECT * INTO v_payment
+    FROM public.payments
+    WHERE gateway_payment_id = p_gateway_payment_id
+    FOR UPDATE;
+
+    IF FOUND THEN
+        IF v_payment.status = 'captured' THEN
+            RETURN jsonb_build_object(
+                'success', true,
+                'payment_id', v_payment.id,
+                'order_id', v_payment.gateway_order_id,
+                'status', 'captured',
+                'idempotent', true
+            );
+        END IF;
+    END IF;
+
+    -- 5. Locate existing created payment record with row lock, or insert captured row
     SELECT * INTO v_payment
     FROM public.payments
     WHERE booking_id = p_booking_id
-      AND gateway_order_id = p_gateway_order_id
+      AND (gateway_order_id = p_gateway_order_id OR gateway_order_id IS NULL)
+    ORDER BY created_at DESC
+    LIMIT 1
     FOR UPDATE;
 
     IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Payment record not found for order reference.');
+        INSERT INTO public.payments (
+            booking_id,
+            gateway_order_id,
+            gateway_payment_id,
+            gateway_signature,
+            amount,
+            currency,
+            method,
+            status
+        ) VALUES (
+            p_booking_id,
+            p_gateway_order_id,
+            p_gateway_payment_id,
+            p_gateway_signature,
+            v_booking.final_payable_amount,
+            'INR',
+            COALESCE(v_booking.payment_preference, 'upi'),
+            'captured'
+        ) RETURNING * INTO v_payment;
+    ELSE
+        UPDATE public.payments
+        SET status = 'captured',
+            gateway_order_id = p_gateway_order_id,
+            gateway_payment_id = p_gateway_payment_id,
+            gateway_signature = p_gateway_signature,
+            updated_at = NOW()
+        WHERE id = v_payment.id;
     END IF;
 
-    -- 6. Idempotent check: if already captured, return success immediately
-    IF v_payment.status = 'captured' THEN
-        RETURN jsonb_build_object(
-            'success', true,
-            'payment_id', v_payment.id,
-            'order_id', p_gateway_order_id,
-            'status', 'captured',
-            'idempotent', true
-        );
-    END IF;
-
-    -- 7. Reconcile and transition statuses atomically
-    UPDATE public.payments
-    SET status = 'captured',
-        gateway_payment_id = p_gateway_payment_id,
-        gateway_signature = COALESCE(p_gateway_signature, v_payment.gateway_signature),
-        updated_at = NOW()
-    WHERE id = v_payment.id;
-
+    -- 6. Transition booking status atomically
     UPDATE public.bookings
     SET payment_status = 'paid',
         updated_at = NOW()
@@ -1018,16 +1040,22 @@ BEGIN
         RAISE EXCEPTION 'Booking not found' USING ERRCODE = '02000';
     END IF;
 
-    -- TNK-C05: Reject terminal states and multiple executions
+    -- Reject terminal states and already delivered
     IF v_b.status = 'delivered' THEN
         RAISE EXCEPTION 'Booking has already been completed and settled' USING ERRCODE = '22000';
     END IF;
-    IF v_b.status NOT IN ('delivering', 'arrived', 'en_route') THEN
-        RAISE EXCEPTION 'Cannot complete delivery for booking in % status', v_b.status USING ERRCODE = '22000';
+
+    -- Raise unless status is 'delivering'
+    IF v_b.status <> 'delivering' THEN
+        RAISE EXCEPTION 'Cannot complete delivery for booking in % status. Status must be delivering.', v_b.status USING ERRCODE = '22000';
     END IF;
 
-    -- TNK-C05: Enforce driver/supplier/admin caller authorization
-    IF auth.uid() IS NOT NULL AND auth.role() != 'service_role' THEN
+    -- Enforce driver/admin/service_role caller authorization
+    IF auth.role() <> 'service_role' THEN
+        IF auth.uid() IS NULL THEN
+            RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+        END IF;
+
         IF NOT (
             public.is_admin(auth.uid())
             OR EXISTS (
@@ -1035,35 +1063,62 @@ BEGIN
                 WHERE p.id = auth.uid() 
                   AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone)
             )
-            OR EXISTS (
-                SELECT 1 FROM public.tankers t
-                JOIN public.suppliers s ON t.supplier_id = s.id
-                WHERE t.id = v_b.tanker_id AND (s.owner_id = auth.uid() OR t.driver_phone IN (SELECT phone_number FROM public.profiles WHERE id = auth.uid()))
-            )
         ) THEN
-            RAISE EXCEPTION 'Access Denied: Only the assigned driver or operating supplier can complete delivery' USING ERRCODE = '42501';
+            RAISE EXCEPTION 'Access Denied: Only the assigned driver can complete delivery' USING ERRCODE = '42501';
         END IF;
-    ELSIF auth.uid() IS NULL AND auth.role() != 'service_role' THEN
-        RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
     END IF;
 
+    -- Raise if driver_phone is null. No fallback.
+    IF v_b.driver_phone IS NULL OR length(trim(v_b.driver_phone)) = 0 THEN
+        RAISE EXCEPTION 'Delivery completion failed: No driver is assigned to this booking' USING ERRCODE = '22000';
+    END IF;
+    v_driver_phone := v_b.driver_phone;
+
+    -- Verify Delivery PIN
     IF v_b.delivery_pin != p_delivery_pin THEN
         RAISE EXCEPTION 'Invalid Delivery PIN. Ask customer for the 4-digit code shown on their tracking screen.'
             USING ERRCODE = '28000';
     END IF;
 
-    v_driver_phone := COALESCE(v_b.driver_phone, '+919820011001');
-
-    IF p_flow_end IS NOT NULL AND p_flow_start IS NOT NULL AND p_flow_end >= p_flow_start THEN
-        v_calc_liters := ROUND(p_flow_end - p_flow_start);
-    ELSE
-        v_calc_liters := COALESCE(p_delivered_liters, v_b.capacity_liters);
+    -- Compute liters strictly from flow_end - flow_start when both are present and flow_end > flow_start; otherwise raise.
+    -- Do not trust p_delivered_liters over the meter.
+    IF p_flow_end IS NULL OR p_flow_start IS NULL OR p_flow_end <= p_flow_start THEN
+        RAISE EXCEPTION 'Ending flow meter reading must be strictly greater than starting flow meter reading' USING ERRCODE = '22023';
     END IF;
 
+    v_calc_liters := ROUND(p_flow_end - p_flow_start);
+
+    -- Raise 'delivered volume below 95 percent of booked capacity' when liters < capacity_liters * 0.95
+    IF v_calc_liters < ROUND(v_b.capacity_liters * 0.95) THEN
+        RAISE EXCEPTION 'delivered volume below 95 percent of booked capacity' USING ERRCODE = '22023';
+    END IF;
+
+    -- Above threshold: prorate shortfall, set booking to delivered, record refund as pending_gateway
     IF v_calc_liters < v_b.capacity_liters THEN
         v_shortfall := v_b.capacity_liters - v_calc_liters;
         v_refund_amount := ROUND((v_b.final_payable_amount / v_b.capacity_liters) * v_shortfall, 2);
         v_final_settled_amount := v_b.final_payable_amount - v_refund_amount;
+
+        -- Record prorated refund as pending_gateway without fake gateway refund ID
+        IF v_refund_amount > 0 THEN
+            INSERT INTO public.payments (
+                booking_id,
+                amount,
+                currency,
+                method,
+                status
+            ) VALUES (
+                p_booking_id,
+                v_refund_amount,
+                'INR',
+                'refund',
+                'pending_gateway'
+            );
+
+            UPDATE public.bookings
+            SET refund_status = 'pending_gateway'
+            WHERE id = p_booking_id;
+        END IF;
     ELSE
         v_shortfall := 0;
         v_refund_amount := 0.00;
@@ -1090,7 +1145,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_b.tanker_id;
 
-    -- TNK-C05: Idempotent payout ledger write (only insert if not already recorded)
+    -- Insert one driver_payout_ledger row, and do nothing if that booking already has a delivery_earnings row
     IF NOT EXISTS (
         SELECT 1 FROM public.driver_payout_ledger 
         WHERE booking_id = p_booking_id AND entry_type = 'delivery_earnings'
@@ -1098,6 +1153,17 @@ BEGIN
         INSERT INTO public.driver_payout_ledger (
             driver_phone,
             booking_id,
+            entry_type,
+            amount,
+            notes
+        ) VALUES (
+            v_driver_phone,
+            p_booking_id,
+            'delivery_earnings',
+            v_driver_share,
+            'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
+        );
+    END IF;
             entry_type,
             amount,
             notes
@@ -2554,7 +2620,7 @@ BEGIN
             'batch_id', v_batch_id,
             'beneficiaries', v_records_count,
             'total_settled', v_total_amount,
-            'method', 'Automated Razorpay Payouts API / Direct Bank Transfer'
+            'method', 'Queued for banking disbursement'
         )
     );
 
@@ -2652,19 +2718,19 @@ BEGIN
         INSERT INTO public.payments (
             booking_id,
             amount,
+            currency,
             method,
-            status,
-            gateway_payment_id
+            status
         ) VALUES (
             v_booking_id,
             p_refund_amount,
+            'INR',
             'refund',
-            'refunded',
-            'rfnd_dispute_' || p_dispute_id::text
+            'pending_gateway'
         );
 
         UPDATE public.bookings
-        SET payment_status = 'refunded'
+        SET refund_status = 'pending_gateway'
         WHERE id = v_booking_id;
     END IF;
 
@@ -2690,11 +2756,10 @@ BEGIN
 END;
 $$;
 
--- 10b. RPC: process_booking_refund (TNK-C07: Financial Integrity Server RPC)
-CREATE OR REPLACE FUNCTION public.process_booking_refund(
+-- 10b. RPC: request_booking_refund (Authoritative Pending Gateway Refund Record)
+CREATE OR REPLACE FUNCTION public.request_booking_refund(
     p_booking_id UUID,
-    p_reason TEXT DEFAULT 'Cancellation or Service Failure',
-    p_gateway_refund_id TEXT DEFAULT NULL
+    p_reason TEXT DEFAULT 'Cancellation or Service Failure'
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -2706,7 +2771,6 @@ DECLARE
     v_total_captured NUMERIC := 0;
     v_already_refunded NUMERIC := 0;
     v_refundable_amount NUMERIC := 0;
-    v_refund_ref TEXT;
 BEGIN
     SELECT * INTO v_booking FROM public.bookings WHERE id = p_booking_id;
     IF NOT FOUND THEN
@@ -2714,12 +2778,12 @@ BEGIN
     END IF;
 
     IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role' OR auth.uid() = v_booking.customer_id) THEN
-        RAISE EXCEPTION 'Access Denied: You cannot trigger a refund for this booking';
+        RAISE EXCEPTION 'Access Denied: You cannot trigger a refund for this booking' USING ERRCODE = '42501';
     END IF;
 
     SELECT 
         COALESCE(SUM(amount) FILTER (WHERE status = 'captured' OR status = 'paid'), 0),
-        COALESCE(SUM(amount) FILTER (WHERE status = 'refunded'), 0)
+        COALESCE(SUM(amount) FILTER (WHERE status = 'refunded' OR status = 'pending_gateway'), 0)
     INTO v_total_captured, v_already_refunded
     FROM public.payments
     WHERE booking_id = p_booking_id;
@@ -2730,33 +2794,48 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'No captured balance available for refund');
     END IF;
 
-    v_refund_ref := COALESCE(p_gateway_refund_id, 'rfnd_gateway_' || substr(gen_random_uuid()::text, 1, 12));
-
+    -- Record pending_gateway refund row without fake gateway refund ID
     INSERT INTO public.payments (
         booking_id,
         amount,
+        currency,
         method,
-        status,
-        gateway_payment_id
+        status
     ) VALUES (
         p_booking_id,
         v_refundable_amount,
+        'INR',
         'refund',
-        'refunded',
-        v_refund_ref
+        'pending_gateway'
     );
 
     UPDATE public.bookings
-    SET payment_status = 'refunded'
+    SET refund_status = 'pending_gateway'
     WHERE id = p_booking_id;
 
     RETURN jsonb_build_object(
         'success', true,
         'booking_id', p_booking_id,
-        'refunded_amount', v_refundable_amount,
-        'refund_ref', v_refund_ref,
+        'refundable_amount', v_refundable_amount,
+        'refund_status', 'pending_gateway',
         'reason', p_reason
     );
+END;
+$$;
+
+-- Alias for backward compatibility
+CREATE OR REPLACE FUNCTION public.process_booking_refund(
+    p_booking_id UUID,
+    p_reason TEXT DEFAULT 'Cancellation or Service Failure',
+    p_gateway_refund_id TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    RETURN public.request_booking_refund(p_booking_id, p_reason);
 END;
 $$;
 

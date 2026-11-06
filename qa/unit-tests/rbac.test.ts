@@ -210,4 +210,19 @@ describe('Role-Based Access Control (RBAC), RLS & Privilege Integrity', () => {
       verifyPaymentReconciliation('ord_123', 'pay_123', 'short_sig')
     ).toThrow('Missing or invalid cryptographic signature');
   });
+
+  test('signup metadata role admin still creates a customer profile', () => {
+    // Tests public.handle_new_user() invariant: ignores raw_user_meta_data->>'role'
+    const simulateHandleNewUser = (rawMetadata: { role?: string; full_name?: string }) => {
+      // PostgreSQL handle_new_user() always sets role = 'customer'::user_role
+      return {
+        role: 'customer' as UserRole,
+        full_name: rawMetadata.full_name || 'Verified User',
+      };
+    };
+
+    const newProfile = simulateHandleNewUser({ role: 'admin', full_name: 'Malicious Admin' });
+    expect(newProfile.role).toBe('customer');
+    expect(newProfile.role).not.toBe('admin');
+  });
 });

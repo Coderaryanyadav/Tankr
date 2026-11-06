@@ -71,10 +71,9 @@ describe('Critical Security Audit Remediation (SEC-001 to SEC-004)', () => {
       expect(schemaContent).toContain('auth.uid() <> v_booking.customer_id AND NOT public.is_admin(auth.uid())');
     });
 
-    test('verify_and_reconcile_payment validates gateway payment ID and rejects unverified flags', () => {
+    test('verify_and_reconcile_payment validates gateway payment ID and rejects mismatched signatures', () => {
       expect(schemaContent).toContain('p_gateway_payment_id IS NULL');
-      expect(schemaContent).toContain('IF p_verified IS FALSE THEN');
-      expect(schemaContent).toContain('Payment verification failed: Gateway reported unverified signature');
+      expect(schemaContent).toContain('Cryptographic HMAC signature mismatch');
     });
 
     test('verify_and_reconcile_payment provides idempotent execution if already captured', () => {

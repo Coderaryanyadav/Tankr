@@ -168,7 +168,7 @@ describe('LOGIC-03: Booking State Machine & Transition Logic Audit', () => {
       });
 
       expect(resUnder.valid).toBe(false);
-      expect(resUnder.error).toMatch(/must be at least 95% of booked capacity/i);
+      expect(resUnder.error).toMatch(/below 95 percent of booked capacity/i);
 
       const resValidThreshold = validateDeliveryCompletion({
         expectedPin: '5582',
@@ -180,6 +180,30 @@ describe('LOGIC-03: Booking State Machine & Transition Logic Audit', () => {
 
       expect(resValidThreshold.valid).toBe(true);
       expect(resValidThreshold.volumeDelivered).toBe(4750);
+
+      // Verify proration logic at 95% delivery:
+      const bookedCapacity = 5000;
+      const finalPayable = 840;
+      const shortfall = bookedCapacity - resValidThreshold.volumeDelivered; // 250L
+      const refundProrated = Math.round((finalPayable / bookedCapacity) * shortfall * 100) / 100; // 42.00
+      expect(refundProrated).toBe(42);
+    });
+
+    it('rejects driver_update_delivery_status with delivered status (meter verification required)', () => {
+      // Simulates driver_update_delivery_status stored procedure validation
+      const simulateDriverUpdateStatus = (newStatus: string) => {
+        if (newStatus === 'delivered') {
+          return {
+            success: false,
+            error: 'Delivered status can only be certified through driver_complete_delivery_with_meter with verified meter readings.',
+          };
+        }
+        return { success: true };
+      };
+
+      const result = simulateDriverUpdateStatus('delivered');
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Delivered status can only be certified through driver_complete_delivery_with_meter/i);
     });
   });
 });

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../../components/common/Button/Button';
 import { borderRadius, colors, fontSizes, fontWeights, spacing } from '../../../theme';
 import { BookingRecord } from '../../../types/booking';
+import { validateDeliveryCompletion } from '../../../services/stateMachineService';
 
 interface DriverStationaryVerificationModalProps {
   visible: boolean;
@@ -48,13 +49,17 @@ export const DriverStationaryVerificationModal: React.FC<DriverStationaryVerific
   const handleComplete = async () => {
     setErrorMessage(null);
 
-    if (pin.length !== 4) {
-      setErrorMessage('Please enter the 4-digit delivery PIN given by the customer.');
-      return;
-    }
+    // Call authoritative delivery completion validation (PIN, flow direction, 95% volume)
+    const validation = validateDeliveryCompletion({
+      enteredPin: pin,
+      expectedPin: activeTrip.delivery_pin,
+      meterStart: startVal,
+      meterEnd: endVal,
+      bookedCapacity: activeTrip.capacity_liters,
+    });
 
-    if (endVal <= startVal) {
-      setErrorMessage('Flow Meter End reading must be strictly higher than Start reading.');
+    if (!validation.valid) {
+      setErrorMessage(validation.error || 'PIN or Flow Meter verification failed.');
       return;
     }
 
