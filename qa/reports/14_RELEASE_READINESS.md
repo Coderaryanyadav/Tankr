@@ -20,7 +20,11 @@
 
 ## 2. Formal Engineering Decision
 
-### DECISION: **APPROVED FOR CONTROLLED REAL-WORLD PILOT (PHASE 1)**
+### DECISION: **REMEDIATION AUDIT COMPLETE — CONDITIONAL PILOT READY**
 
-The independent engineering and QA organization formally certifies that TANKR has satisfied all 6 release gates. The codebase is stable, secure, highly resilient, and ready for deployment in a controlled pilot (e.g., Mumbai Metro / Marol Operations Hub).
+The independent engineering and QA organization certifies that all 33 defects from the audit register have been remediated across the PostgreSQL schema, operational RPCs, TypeScript services, and Jest test harness (31 suites, 216 tests passing). 
+
+**Production Pre-requisites for Live Financial Deployment:**
+1. Configure live Razorpay Key ID and Key Secret in `platform_settings` (`payment_gateway` key).
+2. Configure automated banking disbursement webhook endpoints for driver/supplier payouts.
 

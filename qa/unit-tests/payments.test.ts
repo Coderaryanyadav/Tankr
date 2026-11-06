@@ -15,21 +15,31 @@ describe('Payment Idempotency & Gateway Reconciliation', () => {
     expect(res.error).toContain('Missing gateway orderId, paymentId, or signature');
   });
 
-  test('simulates reconciliation verification check', () => {
-    const verifyPaymentSignature = (orderId: string, paymentId: string, signature: string) => {
-      if (!signature || signature.includes('invalid')) {
-        return { success: false, error: 'Payment signature could not be verified by gateway.' };
-      }
-      return { success: true, paymentId, orderId, status: 'captured' };
-    };
+  test('cryptographically verifies HMAC-SHA256 signatures with secret key', () => {
+    const crypto = require('crypto');
+    const secret = 'rzp_secret_water_hub_2026';
+    const orderId = 'order_DA294FA1';
+    const paymentId = 'pay_928172BA';
 
-    const validResult = verifyPaymentSignature('rzp_order_991', 'rzp_pay_882', 'sig_valid_hash_99');
-    expect(validResult.success).toBe(true);
-    expect(validResult.status).toBe('captured');
+    // 1. Calculate genuine HMAC-SHA256 signature
+    const validSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
 
-    const invalidResult = verifyPaymentSignature('rzp_order_991', 'rzp_pay_882', 'sig_invalid_bad');
-    expect(invalidResult.success).toBe(false);
-    expect(invalidResult.error).toContain('could not be verified');
+    expect(paymentService.verifySignature(orderId, paymentId, validSignature, secret)).toBe(true);
+
+    // 2. Reject forged signature (single character tamper)
+    const tamperedSignature = validSignature.substring(0, validSignature.length - 1) + (validSignature.slice(-1) === 'a' ? 'b' : 'a');
+    expect(paymentService.verifySignature(orderId, paymentId, tamperedSignature, secret)).toBe(false);
+
+    // 3. Reject wrong orderId or paymentId replay
+    expect(paymentService.verifySignature('order_FORGED', paymentId, validSignature, secret)).toBe(false);
+    expect(paymentService.verifySignature(orderId, 'pay_REPLAY', validSignature, secret)).toBe(false);
+
+    // 4. Reject empty or malformed format
+    expect(paymentService.verifySignature(orderId, paymentId, '', secret)).toBe(false);
+    expect(paymentService.verifySignature(orderId, paymentId, 'invalid_signature_format', secret)).toBe(false);
   });
 
   test('guarantees payment failure does NOT return mock success', () => {
