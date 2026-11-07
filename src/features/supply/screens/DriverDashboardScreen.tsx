@@ -19,6 +19,7 @@ import { Card } from '../../../components/common/Card/Card';
 import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { InteractiveMap } from '../../discovery/components/InteractiveMap';
 import { DriverStationaryVerificationModal } from '../components/DriverStationaryVerificationModal';
+import { validateDeliveryCompletion } from '../../../services/stateMachineService';
 import { useSupplyStore } from '../../../stores/supplyStore';
 import { useAuthStore } from '../../../stores/authStore';
 import { supabase } from '../../../services/supabase/client';
@@ -222,7 +223,19 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({ in
   }) => {
     if (!activeTrip) return { success: false, error: 'No active delivery' };
 
-    const deliveredLiters = Math.round(params.flowEnd - params.flowStart);
+    const validation = validateDeliveryCompletion({
+      enteredPin: params.pin,
+      expectedPin: activeTrip.delivery_pin || '',
+      meterStart: params.flowStart,
+      meterEnd: params.flowEnd,
+      bookedCapacity: activeTrip.capacity_liters || 0,
+    });
+
+    if (!validation.valid) {
+      return { success: false, error: validation.error || 'Delivery validation failed' };
+    }
+
+    const deliveredLiters = validation.volumeDelivered;
 
     try {
       const { data, error } = await supabase.rpc('driver_complete_delivery_with_meter', {
@@ -230,7 +243,7 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({ in
         p_delivery_pin: params.pin,
         p_flow_start: params.flowStart,
         p_flow_end: params.flowEnd,
-        p_delivered_liters: deliveredLiters,
+        p_delivered_liters: Math.round(deliveredLiters),
       });
 
       if (error) {

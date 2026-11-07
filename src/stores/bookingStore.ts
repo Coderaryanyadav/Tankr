@@ -46,6 +46,12 @@ interface BookingState {
     bookingId: string,
     reason?: string
   ) => Promise<{ success: boolean; error?: string }>;
+  completeCheckout: (
+    bookingId: string,
+    orderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string
+  ) => Promise<{ success: boolean; error?: string }>;
   reconcileCheckoutSuccess: (payload: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
@@ -225,7 +231,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         tax_amount: quote?.tax_amount || 0,
         final_payable_amount: finalAmount,
         payment_preference: paymentPreference,
-        payment_status: paymentPreference === 'cash_on_delivery' ? 'pending_delivery' : 'authorized',
+        payment_status: paymentPreference === 'cash_on_delivery' ? 'pending_delivery' : 'pending_payment',
         created_at: new Date().toISOString(),
         delivery_type: scheduleOptions?.delivery_type || 'instant',
         scheduled_for: scheduleOptions?.scheduled_for,
@@ -238,18 +244,42 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       const paymentRes = await paymentService.processBookingPayment(bookingId, finalAmount, payMethod);
 
       if (!paymentRes.success) {
-        // Rollback atomic booking reservation upon payment gateway failure
+        // Rollback atomic booking reservation upon payment gateway / order creation failure
         await supabase.rpc('cancel_booking_atomic', {
           p_booking_id: bookingId,
-          p_reason: `Payment failed: ${paymentRes.error}`,
+          p_reason: `Payment order creation failed: ${paymentRes.error}`,
         });
         set({ isCreatingBooking: false, isSearchingDriver: false, activeBooking: null, bookingError: paymentRes.error });
-        return { success: false, error: paymentRes.error || 'Payment transaction failed' };
+        return { success: false, error: paymentRes.error || 'Payment order creation failed' };
+      }
+
+      const initialPaymentStatus = paymentPreference === 'cash_on_delivery'
+        ? 'pending_delivery'
+        : 'pending_payment'; // A requiresCheckout result must keep the booking and must not set payment_status to paid or authorized.
+
+      const recordWithStatus: BookingRecord = {
+        ...newRecord,
+        payment_status: initialPaymentStatus,
+      };
+
+      if (paymentRes.requiresCheckout) {
+        // Keep the booking, but do NOT set payment_status to paid or authorized.
+        // Confirm the booking only after completeCheckout returns success.
+        set({
+          activeBooking: recordWithStatus,
+          userBookings: [recordWithStatus, ...get().userBookings],
+          isCreatingBooking: false,
+          isSearchingDriver: false,
+        });
+
+        get().subscribeToBookingUpdates(bookingId);
+
+        return { success: true, booking: recordWithStatus };
       }
 
       set({
-        activeBooking: newRecord,
-        userBookings: [newRecord, ...get().userBookings],
+        activeBooking: recordWithStatus,
+        userBookings: [recordWithStatus, ...get().userBookings],
         isCreatingBooking: false,
         isSearchingDriver: true,
       });
@@ -264,7 +294,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         'Tanker Booking Confirmed! 🚛',
         `Your request for ${tanker.capacity_liters.toLocaleString('en-IN')}L water is being dispatched. Reference: ${bookingRef}`,
         bookingId
-      ).catch(() => {});
+      ).catch(() => { });
 
       useNotificationStore.getState().addNotification({
         id: `notif-${Date.now()}`,
@@ -300,20 +330,21 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         p_reason: reason,
       });
 
-      if (data && data.success === false) {
+      if (!error && data && data.success === false) {
         return { success: false, error: data.error || 'Cancellation policy rejected request.' };
       }
 
       if (error) {
-        const { error: atomicErr } = await supabase.rpc('cancel_booking_atomic', {
+        const { data: atomicData, error: atomicErr } = await supabase.rpc('cancel_booking_atomic', {
           p_booking_id: bookingId,
           p_reason: reason,
         });
-        if (atomicErr) {
-          console.warn('[bookingStore] Remote cancellation rejected:', atomicErr.message);
+        if (atomicErr || (atomicData && atomicData.success === false)) {
+          const errMsg = atomicErr?.message || atomicData?.error || error.message || 'Remote cancellation rejected.';
+          console.warn('[bookingStore] Remote cancellation rejected:', errMsg);
           return {
             success: false,
-            error: atomicErr.message || error.message || 'Remote cancellation rejected.',
+            error: errMsg,
           };
         }
       }
@@ -331,8 +362,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         isSearchingDriver: false,
       });
 
-      // Phase 8: Trigger refund & cancellation notification
-      paymentService.processRefund(bookingId, reason).catch(() => {});
+      // Phase 8: Trigger refund & cancellation notification only after remote success
+      paymentService.processRefund(bookingId, reason).catch(() => { });
       const cancelledBooking = get().userBookings.find((b) => b.id === bookingId);
       if (cancelledBooking) {
         notificationService.triggerNotification(
@@ -341,7 +372,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           'Booking Cancelled',
           `Order ${cancelledBooking.booking_reference} has been cancelled. Any pre-authorized charges will be refunded.`,
           bookingId
-        ).catch(() => {});
+        ).catch(() => { });
 
         useNotificationStore.getState().addNotification({
           id: `notif-cancel-${Date.now()}`,
@@ -361,21 +392,68 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     }
   },
 
+  completeCheckout: async (
+    bookingId: string,
+    orderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string
+  ) => {
+    const res = await paymentService.completeCheckout(
+      bookingId,
+      orderId,
+      razorpayPaymentId,
+      razorpaySignature
+    );
+    if (res.success) {
+      set((state) => ({
+        activeBooking:
+          state.activeBooking?.id === bookingId
+            ? { ...state.activeBooking, payment_status: 'paid' }
+            : state.activeBooking,
+        userBookings: state.userBookings.map((b) =>
+          b.id === bookingId ? { ...b, payment_status: 'paid' } : b
+        ),
+        isSearchingDriver: true,
+      }));
+
+      // Confirm the booking only after completeCheckout returns success
+      const active = get().activeBooking;
+      if (active && active.id === bookingId) {
+        notificationService.triggerNotification(
+          active.customer_id,
+          'booking_confirmed',
+          'Tanker Booking Confirmed! 🚛',
+          `Your request for ${active.capacity_liters.toLocaleString('en-IN')}L water is being dispatched. Reference: ${active.booking_reference}`,
+          bookingId
+        ).catch(() => {});
+
+        useNotificationStore.getState().addNotification({
+          id: `notif-${Date.now()}`,
+          user_id: active.customer_id,
+          title: 'Tanker Booking Confirmed! 🚛',
+          body: `Your request for ${active.capacity_liters.toLocaleString('en-IN')}L water is being dispatched. Reference: ${active.booking_reference}`,
+          booking_id: bookingId,
+          type: 'booking_confirmed',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      return { success: true };
+    }
+    return { success: false, error: res.error };
+  },
+
   reconcileCheckoutSuccess: async (payload) => {
     const active = get().activeBooking;
     if (!active) return { success: false, error: 'No active booking to reconcile' };
 
-    const res = await paymentService.handleRazorpayCheckoutSuccess(active.id, payload);
-    if (res.success) {
-      set({
-        activeBooking: { ...active, payment_status: 'paid' },
-        userBookings: get().userBookings.map((b) =>
-          b.id === active.id ? { ...b, payment_status: 'paid' } : b
-        ),
-      });
-      return { success: true };
-    }
-    return { success: false, error: res.error };
+    return await get().completeCheckout(
+      active.id,
+      payload.razorpay_order_id,
+      payload.razorpay_payment_id,
+      payload.razorpay_signature
+    );
   },
 
   fetchUserBookings: async (customerId) => {

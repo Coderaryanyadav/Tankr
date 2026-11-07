@@ -194,9 +194,14 @@ CREATE TABLE IF NOT EXISTS public.bookings (
     recurring_days TEXT,
     recurring_time_slot TEXT,
     is_subscription_active BOOLEAN DEFAULT FALSE,
+    cancellation_fee NUMERIC(10,2) DEFAULT 0.00,
+    refund_status TEXT DEFAULT 'none',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_fee NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_status TEXT DEFAULT 'none';
 
 -- 9. PAYMENTS
 CREATE TABLE IF NOT EXISTS public.payments (
@@ -210,9 +215,16 @@ CREATE TABLE IF NOT EXISTS public.payments (
     method TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'created',
     idempotency_key TEXT UNIQUE,
+    refund_amount NUMERIC(10,2),
+    refund_reason TEXT,
+    refund_requested_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(10,2);
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS refund_reason TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ;
 
 -- 10. INVOICES
 CREATE TABLE IF NOT EXISTS public.invoices (
@@ -369,6 +381,10 @@ CREATE TABLE IF NOT EXISTS public.driver_payout_ledger (
     is_settled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_payout_ledger_booking_entry
+ON public.driver_payout_ledger (booking_id, entry_type)
+WHERE booking_id IS NOT NULL;
 
 -- 18. WATER QUALITY CERTIFICATES
 CREATE TABLE IF NOT EXISTS public.water_quality_certificates (
@@ -825,11 +841,15 @@ BEGIN
         v_fee := 200.00;
     ELSIF v_b.status = 'en_route' THEN
         v_fee := 150.00;
+    ELSE
+        v_fee := 0.00;
     END IF;
 
+    -- Persist the fee on the booking
     UPDATE public.bookings
     SET status = 'cancelled'::booking_status,
         cancellation_reason = p_reason,
+        cancellation_fee = v_fee,
         cancelled_at = NOW(),
         updated_at = NOW()
     WHERE id = p_booking_id;
@@ -839,7 +859,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_b.tanker_id;
 
-    -- TNK-H04: Credit driver compensation ledger when fee applies
+    -- TNK-H04: Credit driver compensation ledger when fee applies without duplicate entries
     IF v_fee > 0 AND v_b.driver_phone IS NOT NULL THEN
         INSERT INTO public.driver_payout_ledger (
             driver_phone,
@@ -853,8 +873,12 @@ BEGIN
             'cancellation_compensation',
             v_fee,
             'Customer cancelled trip while ' || v_b.status || '. Driver dispatch compensation credited.'
-        );
+        )
+        ON CONFLICT (booking_id, entry_type) WHERE booking_id IS NOT NULL DO NOTHING;
     END IF;
+
+    -- Call request_booking_refund after a legal cancel, in the same transaction
+    PERFORM public.request_booking_refund(p_booking_id, p_reason);
 
     RETURN jsonb_build_object(
         'success', true,
@@ -900,7 +924,8 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for payment reference.');
     END IF;
 
-    -- Unauthenticated callers (null uid) must be rejected unless executed under service_role
+    -- Reject when auth.uid() is null unless auth.role() is service_role.
+    -- The booking customer, an admin, or service_role are the only other callers allowed.
     IF auth.role() <> 'service_role' THEN
         IF auth.uid() IS NULL THEN
             RETURN jsonb_build_object('success', false, 'error', 'Authentication required to reconcile payment.');
@@ -916,23 +941,31 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation rejected: Booking quote reservation has expired.');
     END IF;
 
-    -- 3. Authoritative Cryptographic HMAC-SHA256 signature verification
-    SELECT value->>'razorpay_key_secret' INTO v_secret
+    -- 3. Load the Razorpay secret from platform_settings where key = 'razorpay_webhook_secret'
+    SELECT 
+        CASE 
+            WHEN jsonb_typeof(value) = 'string' THEN value #>> '{}'
+            WHEN value ? 'secret' THEN value->>'secret'
+            WHEN value ? 'value' THEN value->>'value'
+            WHEN value ? 'razorpay_key_secret' THEN value->>'razorpay_key_secret'
+            ELSE value #>> '{}'
+        END INTO v_secret
     FROM public.platform_settings
-    WHERE key = 'payment_gateway';
+    WHERE key = 'razorpay_webhook_secret';
 
+    -- If the secret is missing, return success false. Do not capture.
     IF v_secret IS NULL OR length(trim(v_secret)) = 0 THEN
         RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation refused: Gateway secret is not configured in platform settings.');
     END IF;
 
     v_expected_sig := encode(hmac((p_gateway_order_id || '|' || p_gateway_payment_id)::bytea, v_secret::bytea, 'sha256'), 'hex');
 
-    -- Constant-time comparison via fixed 32-byte SHA256 message digests to prevent timing attacks
+    -- Compare with digest(candidate, 'sha256') = digest(expected, 'sha256')
     IF digest(lower(trim(p_gateway_signature)), 'sha256') <> digest(lower(trim(v_expected_sig)), 'sha256') THEN
         RETURN jsonb_build_object('success', false, 'error', 'Cryptographic HMAC signature mismatch: Payment verification rejected.');
     END IF;
 
-    -- 4. Check if payment with this gateway_payment_id is already captured (Repeat capture returns existing row)
+    -- 4. Check if a row already captured with the same payment id exists: returns current idempotent success
     SELECT * INTO v_payment
     FROM public.payments
     WHERE gateway_payment_id = p_gateway_payment_id
@@ -947,49 +980,44 @@ BEGIN
                 'status', 'captured',
                 'idempotent', true
             );
+        ELSE
+            RETURN jsonb_build_object('success', false, 'error', 'Payment already exists with invalid status.');
         END IF;
     END IF;
 
-    -- 5. Locate existing created payment record with row lock, or insert captured row
+    -- 5. Lock the payment row matching this booking and order id
     SELECT * INTO v_payment
     FROM public.payments
     WHERE booking_id = p_booking_id
-      AND (gateway_order_id = p_gateway_order_id OR gateway_order_id IS NULL)
-    ORDER BY created_at DESC
-    LIMIT 1
+      AND gateway_order_id = p_gateway_order_id
     FOR UPDATE;
 
     IF NOT FOUND THEN
-        INSERT INTO public.payments (
-            booking_id,
-            gateway_order_id,
-            gateway_payment_id,
-            gateway_signature,
-            amount,
-            currency,
-            method,
-            status
-        ) VALUES (
-            p_booking_id,
-            p_gateway_order_id,
-            p_gateway_payment_id,
-            p_gateway_signature,
-            v_booking.final_payable_amount,
-            'INR',
-            COALESCE(v_booking.payment_preference, 'upi'),
-            'captured'
-        ) RETURNING * INTO v_payment;
-    ELSE
-        UPDATE public.payments
-        SET status = 'captured',
-            gateway_order_id = p_gateway_order_id,
-            gateway_payment_id = p_gateway_payment_id,
-            gateway_signature = p_gateway_signature,
-            updated_at = NOW()
-        WHERE id = v_payment.id;
+        RETURN jsonb_build_object('success', false, 'error', 'Payment record not found for this order.');
     END IF;
 
-    -- 6. Transition booking status atomically
+    -- Require the locked payment row to be status created, the amount to match the booking, and the order id to match.
+    -- Any other state returns success false.
+    IF v_payment.status <> 'created' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Payment record is not in created status.');
+    END IF;
+
+    IF v_payment.amount <> v_booking.final_payable_amount THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Payment amount does not match booking final payable amount.');
+    END IF;
+
+    IF v_payment.gateway_order_id IS DISTINCT FROM p_gateway_order_id THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Gateway order ID mismatch.');
+    END IF;
+
+    -- On success set payments.status = captured and bookings.payment_status = paid. Never invent a payment id.
+    UPDATE public.payments
+    SET status = 'captured',
+        gateway_payment_id = p_gateway_payment_id,
+        gateway_signature = p_gateway_signature,
+        updated_at = NOW()
+    WHERE id = v_payment.id;
+
     UPDATE public.bookings
     SET payment_status = 'paid',
         updated_at = NOW()
@@ -999,8 +1027,7 @@ BEGIN
         'success', true,
         'payment_id', v_payment.id,
         'order_id', p_gateway_order_id,
-        'status', 'captured',
-        'idempotent', false
+        'status', 'captured'
     );
 END;
 $$;
@@ -1145,36 +1172,21 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_b.tanker_id;
 
-    -- Insert one driver_payout_ledger row, and do nothing if that booking already has a delivery_earnings row
-    IF NOT EXISTS (
-        SELECT 1 FROM public.driver_payout_ledger 
-        WHERE booking_id = p_booking_id AND entry_type = 'delivery_earnings'
-    ) THEN
-        INSERT INTO public.driver_payout_ledger (
-            driver_phone,
-            booking_id,
-            entry_type,
-            amount,
-            notes
-        ) VALUES (
-            v_driver_phone,
-            p_booking_id,
-            'delivery_earnings',
-            v_driver_share,
-            'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
-        );
-    END IF;
-            entry_type,
-            amount,
-            notes
-        ) VALUES (
-            v_driver_phone,
-            p_booking_id,
-            'delivery_earnings',
-            v_driver_share,
-            'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
-        );
-    END IF;
+    -- Insert one driver_payout_ledger row without duplicating delivery_earnings
+    INSERT INTO public.driver_payout_ledger (
+        driver_phone,
+        booking_id,
+        entry_type,
+        amount,
+        notes
+    ) VALUES (
+        v_driver_phone,
+        p_booking_id,
+        'delivery_earnings',
+        v_driver_share,
+        'Settled ' || v_calc_liters || 'L delivered for order #' || v_b.booking_reference
+    )
+    ON CONFLICT (booking_id, entry_type) WHERE booking_id IS NOT NULL DO NOTHING;
 
     -- TNK-H06: Notify customer on delivery completion
     INSERT INTO public.notifications (
@@ -2155,7 +2167,8 @@ INSERT INTO public.platform_settings (key, value)
 VALUES 
     ('pricing_config', '{"base_rate_5kl": 750, "price_per_km": 25, "gst_rate": 0.05, "platform_commission": 0.10, "peak_surge_multiplier": 1.25}'::jsonb),
     ('compliance_rules', '{"max_tds_potable": 250, "min_ph": 6.5, "max_ph": 8.5, "cert_validity_days": 90}'::jsonb),
-    ('payment_gateway', '{"provider": "razorpay", "razorpay_key_id": "rzp_test_TuCCnOeHyd9KdO", "razorpay_key_secret": "tankr_sec_webhook_server_2026"}'::jsonb)
+    ('payment_gateway', '{"provider": "razorpay", "razorpay_key_id": "rzp_test_TuCCnOeHyd9KdO", "razorpay_key_secret": "tankr_sec_webhook_server_2026"}'::jsonb),
+    ('razorpay_webhook_secret', '{"secret": "tankr_sec_webhook_server_2026"}'::jsonb)
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 23k. Admin Audit Logs
@@ -2686,9 +2699,8 @@ AS $$
 DECLARE
     v_booking_id UUID;
     v_customer_id UUID;
-    v_total_captured NUMERIC := 0;
-    v_already_refunded NUMERIC := 0;
-    v_max_eligible_refund NUMERIC := 0;
+    v_payment RECORD;
+    v_actual_refund NUMERIC(10, 2) := 0.00;
 BEGIN
     IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
         RAISE EXCEPTION 'Access Denied: Administrative authorization required for dispute resolution (ERRCODE 42501)';
@@ -2701,37 +2713,31 @@ BEGIN
         RAISE EXCEPTION 'Dispute not found';
     END IF;
 
+    -- admin_resolve_dispute, on a refund, updates that captured payment to refund_pending for the approved amount, capped at the captured amount.
     IF p_status = 'refunded' AND p_refund_amount > 0 THEN
-        SELECT 
-            COALESCE(SUM(amount) FILTER (WHERE status = 'captured' OR status = 'paid'), 0),
-            COALESCE(SUM(amount) FILTER (WHERE status = 'refunded'), 0)
-        INTO v_total_captured, v_already_refunded
+        SELECT * INTO v_payment
         FROM public.payments
-        WHERE booking_id = v_booking_id;
+        WHERE booking_id = v_booking_id
+          AND status IN ('captured', 'paid', 'refund_pending')
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE;
 
-        v_max_eligible_refund := GREATEST(0, v_total_captured - v_already_refunded);
+        IF FOUND THEN
+            v_actual_refund := LEAST(p_refund_amount, v_payment.amount);
+            UPDATE public.payments
+            SET status = 'refund_pending',
+                refund_amount = v_actual_refund,
+                refund_reason = COALESCE(p_notes, 'Admin dispute resolution refund'),
+                refund_requested_at = NOW(),
+                updated_at = NOW()
+            WHERE id = v_payment.id;
 
-        IF p_refund_amount > v_max_eligible_refund THEN
-            RAISE EXCEPTION 'Requested refund amount % exceeds maximum eligible captured balance %', p_refund_amount, v_max_eligible_refund;
+            UPDATE public.bookings
+            SET refund_status = 'refund_pending',
+                updated_at = NOW()
+            WHERE id = v_booking_id;
         END IF;
-
-        INSERT INTO public.payments (
-            booking_id,
-            amount,
-            currency,
-            method,
-            status
-        ) VALUES (
-            v_booking_id,
-            p_refund_amount,
-            'INR',
-            'refund',
-            'pending_gateway'
-        );
-
-        UPDATE public.bookings
-        SET refund_status = 'pending_gateway'
-        WHERE id = v_booking_id;
     END IF;
 
     UPDATE public.disputes 
@@ -2749,17 +2755,17 @@ BEGIN
         'RESOLVE_CUSTOMER_DISPUTE',
         'disputes',
         p_dispute_id::text,
-        jsonb_build_object('status', p_status, 'refund_amount', p_refund_amount, 'notes', p_notes)
+        jsonb_build_object('status', p_status, 'refund_amount', v_actual_refund, 'notes', p_notes)
     );
 
-    RETURN jsonb_build_object('success', true, 'dispute_id', p_dispute_id, 'status', p_status);
+    RETURN jsonb_build_object('success', true, 'dispute_id', p_dispute_id, 'status', p_status, 'refund_amount', v_actual_refund);
 END;
 $$;
 
 -- 10b. RPC: request_booking_refund (Authoritative Pending Gateway Refund Record)
 CREATE OR REPLACE FUNCTION public.request_booking_refund(
     p_booking_id UUID,
-    p_reason TEXT DEFAULT 'Cancellation or Service Failure'
+    p_reason TEXT DEFAULT 'Customer requested cancellation'
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -2768,57 +2774,70 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_booking RECORD;
-    v_total_captured NUMERIC := 0;
-    v_already_refunded NUMERIC := 0;
-    v_refundable_amount NUMERIC := 0;
+    v_payment RECORD;
+    v_fee NUMERIC(10,2) := 0.00;
+    v_refund_amount NUMERIC(10,2) := 0.00;
 BEGIN
     SELECT * INTO v_booking FROM public.bookings WHERE id = p_booking_id;
     IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
+        RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for refund request');
     END IF;
 
-    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role' OR auth.uid() = v_booking.customer_id) THEN
-        RAISE EXCEPTION 'Access Denied: You cannot trigger a refund for this booking' USING ERRCODE = '42501';
+    -- The caller is the booking customer, an admin, or service_role
+    IF auth.role() <> 'service_role' THEN
+        IF auth.uid() IS NULL THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Authentication required for refund processing');
+        END IF;
+
+        IF auth.uid() <> v_booking.customer_id AND NOT public.is_admin(auth.uid()) THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: You can only request refunds for your own bookings');
+        END IF;
     END IF;
 
-    SELECT 
-        COALESCE(SUM(amount) FILTER (WHERE status = 'captured' OR status = 'paid'), 0),
-        COALESCE(SUM(amount) FILTER (WHERE status = 'refunded' OR status = 'pending_gateway'), 0)
-    INTO v_total_captured, v_already_refunded
+    -- Delivering, delivered, or un-cancelled bookings are refused with success false and no row changes
+    IF v_booking.status <> 'cancelled' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Refund refused: Booking is not in cancelled status');
+    END IF;
+
+    -- The latest captured payment is locked
+    SELECT * INTO v_payment
     FROM public.payments
-    WHERE booking_id = p_booking_id;
+    WHERE booking_id = p_booking_id
+      AND status IN ('captured', 'paid')
+    ORDER BY created_at DESC
+    LIMIT 1
+    FOR UPDATE;
 
-    v_refundable_amount := GREATEST(0, v_total_captured - v_already_refunded);
-
-    IF v_refundable_amount <= 0 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'No captured balance available for refund');
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'success', true,
+            'message', 'No captured payment requires gateway refund'
+        );
     END IF;
 
-    -- Record pending_gateway refund row without fake gateway refund ID
-    INSERT INTO public.payments (
-        booking_id,
-        amount,
-        currency,
-        method,
-        status
-    ) VALUES (
-        p_booking_id,
-        v_refundable_amount,
-        'INR',
-        'refund',
-        'pending_gateway'
-    );
+    -- Set status refund_pending, refund_amount to captured amount minus the cancellation fee, and refund_reason.
+    -- Leave gateway_payment_id and gateway_signature as the gateway sent them.
+    v_fee := COALESCE(v_booking.cancellation_fee, 0.00);
+    v_refund_amount := GREATEST(0.00, v_payment.amount - v_fee);
+
+    UPDATE public.payments
+    SET status = 'refund_pending',
+        refund_amount = v_refund_amount,
+        refund_reason = p_reason,
+        refund_requested_at = NOW(),
+        updated_at = NOW()
+    WHERE id = v_payment.id;
 
     UPDATE public.bookings
-    SET refund_status = 'pending_gateway'
+    SET refund_status = 'refund_pending',
+        updated_at = NOW()
     WHERE id = p_booking_id;
 
     RETURN jsonb_build_object(
         'success', true,
-        'booking_id', p_booking_id,
-        'refundable_amount', v_refundable_amount,
-        'refund_status', 'pending_gateway',
-        'reason', p_reason
+        'payment_id', v_payment.id,
+        'status', 'refund_pending',
+        'refund_amount', v_refund_amount
     );
 END;
 $$;
@@ -2955,20 +2974,20 @@ END;
 $$;
 
 -- Explicit Routine Permissions: Restrict privileged operational and administrative routines from anon/PUBLIC (TNK-C04)
-REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.get_service_zone_liquidity_health() FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.admin_emergency_dispatch(TEXT, TEXT, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, TEXT, INTEGER) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.admin_execute_batch_payout() FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) FROM PUBLIC, anon;
+REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION public.is_admin(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.uuid_generate_v4() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.calculate_booking_quote(UUID, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.verify_and_reconcile_payment(UUID, TEXT, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.request_booking_refund(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
 
 GRANT EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_service_zone_liquidity_health() TO authenticated, service_role;
@@ -2977,10 +2996,3 @@ GRANT EXECUTE ON FUNCTION public.admin_execute_batch_payout() TO authenticated, 
 GRANT EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.complete_customer_onboarding(TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;

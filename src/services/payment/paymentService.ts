@@ -19,6 +19,9 @@ export interface PaymentProcessResult {
   orderId?: string;
   transactionRef?: string;
   requiresCheckout?: boolean;
+  amount?: number;
+  currency?: string;
+  keyId?: string;
   error?: string;
 }
 
@@ -71,7 +74,7 @@ class PaymentService {
             orderId: data.order_id,
             amount: Number(data.amount),
             currency: data.currency || 'INR',
-            keyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || (process.env.NODE_ENV === 'test' ? 'rzp_test_mock_harness' : ''),
+            keyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || '',
           },
         };
       }
@@ -168,9 +171,9 @@ class PaymentService {
 
   /**
    * Payment order processing flow for a booking.
-   * Creates the order on the backend, then stops.
-   * Returns requiresCheckout: true for upi and card without calling verifyAndCapturePayment with fabricated tokens.
-   * COD returns the created order as pending collection.
+   * May only call createPaymentOrder.
+   * For COD, returns { success: true, orderId } leaving the payment row at status created.
+   * For UPI and card, returns { success: true, requiresCheckout: true, orderId, amount, currency, keyId }.
    */
   async processBookingPayment(
     bookingId: string,
@@ -179,7 +182,7 @@ class PaymentService {
   ): Promise<PaymentProcessResult> {
     const idempotencyKey = this.generateIdempotencyKey(bookingId);
 
-    // 1. Create Server-Side Order
+    // May ONLY call createPaymentOrder
     const orderRes = await this.createPaymentOrder(bookingId, method, idempotencyKey);
     if (!orderRes.success || !orderRes.data) {
       return {
@@ -188,25 +191,42 @@ class PaymentService {
       };
     }
 
-    const { orderId } = orderRes.data;
+    const { orderId, amount, currency, keyId } = orderRes.data;
 
-    // 2. COD flow: Order is registered as created (authorized pending physical cash collection)
+    // For COD, return { success: true, orderId } and leave payment row at status created
     if (method === 'cod') {
       return {
         success: true,
         orderId,
-        transactionRef: orderId,
-        requiresCheckout: false,
       };
     }
 
-    // 3. Digital payment (UPI / Card): Create the order, then stop. Return requiresCheckout: true.
-    // Real tokens must be supplied via handleRazorpayCheckoutSuccess boundary.
+    // For UPI and card, return { success: true, requiresCheckout: true, orderId, amount, currency, keyId }
     return {
       success: true,
-      orderId,
       requiresCheckout: true,
+      orderId,
+      amount,
+      currency,
+      keyId: keyId || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || '',
     };
+  }
+
+  /**
+   * Completes checkout by reconciling gateway tokens with authoritative backend RPC.
+   */
+  async completeCheckout(
+    bookingId: string,
+    orderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string
+  ): Promise<PaymentProcessResult> {
+    return await this.verifyAndCapturePayment(
+      bookingId,
+      orderId,
+      razorpayPaymentId,
+      razorpaySignature
+    );
   }
 
   /**
@@ -228,7 +248,7 @@ class PaymentService {
       };
     }
 
-    return await this.verifyAndCapturePayment(
+    return await this.completeCheckout(
       bookingId,
       payload.razorpay_order_id,
       payload.razorpay_payment_id,

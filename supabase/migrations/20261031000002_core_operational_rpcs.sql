@@ -12,6 +12,8 @@
 -- 9. get_nearby_tankers (PostGIS Radius Engine)
 -- ==============================================================================
 
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- 1. create_payment_order
 CREATE OR REPLACE FUNCTION public.create_payment_order(
     p_booking_id UUID,
@@ -40,9 +42,12 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for payment initialization');
     END IF;
 
-    -- Require caller to be the customer of the booking or service_role
+    -- Require caller to be the customer of the booking, is_admin, or service_role
     IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL OR auth.uid() <> v_booking.customer_id THEN
+        IF auth.uid() IS NULL THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
+        END IF;
+        IF auth.uid() <> v_booking.customer_id AND NOT public.is_admin(auth.uid()) THEN
             RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: Caller does not own this booking');
         END IF;
     END IF;
@@ -146,19 +151,24 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for invoice generation');
     END IF;
 
-    -- Authorization check: Caller must be booking party or admin
-    IF auth.uid() IS NOT NULL AND NOT (
-        public.is_admin(auth.uid()) 
-        OR auth.role() = 'service_role' 
-        OR auth.uid() = v_booking.customer_id
-        OR EXISTS (
-            SELECT 1 FROM public.suppliers s2 
-            WHERE s2.id = v_booking.supplier_id AND (s2.owner_id = auth.uid() OR EXISTS (
-                SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s2.contact_phone OR '+' || p2.phone_number = s2.contact_phone)
-            ))
-        )
-    ) THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to generate invoice for this booking');
+    -- Authorization check: Caller must be owning customer, supplier, admin, or service_role
+    IF auth.role() <> 'service_role' THEN
+        IF auth.uid() IS NULL THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
+        END IF;
+
+        IF NOT (
+            public.is_admin(auth.uid()) 
+            OR auth.uid() = v_booking.customer_id
+            OR EXISTS (
+                SELECT 1 FROM public.suppliers s2 
+                WHERE s2.id = v_booking.supplier_id AND (s2.owner_id = auth.uid() OR EXISTS (
+                    SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s2.contact_phone OR '+' || p2.phone_number = s2.contact_phone)
+                ))
+            )
+        ) THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to generate invoice for this booking');
+        END IF;
     END IF;
 
     v_invoice_number := 'INV-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(p_booking_id::text, 1, 6));
@@ -440,29 +450,49 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
     END IF;
 
-    -- Validate caller identity
-    IF NOT (
-        public.is_admin(auth.uid()) 
-        OR auth.role() = 'service_role'
-        OR EXISTS (
-            SELECT 1 FROM public.profiles p 
-            WHERE p.id = auth.uid() 
-              AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone)
-        )
-        OR EXISTS (
-            SELECT 1 FROM public.suppliers s
-            WHERE s.id = v_b.supplier_id 
-              AND (s.owner_id = auth.uid() OR EXISTS (
-                  SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s.contact_phone OR '+' || p2.phone_number = s.contact_phone)
-              ))
-        )
-    ) THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to update status for this delivery');
+    -- Validate caller identity: assigned driver, admin, or service_role
+    IF auth.role() <> 'service_role' THEN
+        IF auth.uid() IS NULL THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
+        END IF;
+
+        IF NOT (
+            public.is_admin(auth.uid()) 
+            OR (
+                v_b.driver_phone IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM public.profiles p 
+                    WHERE p.id = auth.uid() 
+                      AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone)
+                )
+            )
+        ) THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Only the assigned driver can update delivery status');
+        END IF;
     END IF;
 
-    -- Reject delivered status: Delivered is ONLY reachable through driver_complete_delivery_with_meter with verified meter readings
-    IF p_new_status = 'delivered' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Delivered status can only be certified through driver_complete_delivery_with_meter with verified meter readings.');
+    -- driver_update_delivery_status must not accept delivered or cancelled. Delivery completion stays on the meter function.
+    IF p_new_status IN ('delivered', 'cancelled') THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Invalid status: ' || p_new_status || ' cannot be set through driver_update_delivery_status. Delivery completion must use driver_complete_delivery_with_meter.');
+    END IF;
+
+    -- Enforce the same transition table as src/services/stateMachineService.ts:
+    -- driver_assigned -> en_route
+    -- en_route -> arrived, delivering
+    -- arrived -> delivering
+    IF v_b.status = p_new_status::booking_status THEN
+        -- Idempotent no-op
+        RETURN jsonb_build_object('success', true, 'status', p_new_status, 'idempotent', true);
+    ELSIF v_b.status = 'driver_assigned' AND p_new_status = 'en_route' THEN
+        -- Allowed
+        NULL;
+    ELSIF v_b.status = 'en_route' AND p_new_status IN ('arrived', 'delivering') THEN
+        -- Allowed
+        NULL;
+    ELSIF v_b.status = 'arrived' AND p_new_status = 'delivering' THEN
+        -- Allowed
+        NULL;
+    ELSE
+        RETURN jsonb_build_object('success', false, 'error', 'Invalid status transition from ' || v_b.status || ' to ' || p_new_status);
     END IF;
 
     -- Validate transition & PIN if delivering
@@ -905,16 +935,17 @@ BEGIN
 END;
 $$;
 
--- Routine Permissions: Restrict privileged operational routines from anon (TNK-C04)
-REVOKE EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.supplier_accept_booking(UUID, UUID) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.supplier_cancel_and_reassign(UUID, UUID, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC, BOOLEAN) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) FROM PUBLIC, anon;
+-- Seed breadcrumbs for demo active trip TKR-2026-90401
+INSERT INTO public.tracking_breadcrumbs (
+    booking_id, latitude, longitude, heading, speed_kmh, created_at
+) VALUES
+    ('b7777777-7777-7777-7777-777777777777', 19.1245, 72.8720, 135, 28, NOW() - INTERVAL '2 minutes'),
+    ('b7777777-7777-7777-7777-777777777777', 19.1215, 72.8755, 135, 25, NOW() - INTERVAL '1 minute'),
+    ('b7777777-7777-7777-7777-777777777777', 19.1190, 72.8785, 130, 22, NOW())
+ON CONFLICT DO NOTHING;
+
+-- Explicit Routine Permissions: Restrict privileged operational routines from anon/PUBLIC (TNK-C04)
+REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;
 
 GRANT EXECUTE ON FUNCTION public.create_payment_order(UUID, TEXT, TEXT, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.generate_invoice_for_booking(UUID) TO authenticated, service_role;
@@ -924,15 +955,6 @@ GRANT EXECUTE ON FUNCTION public.driver_update_delivery_status(UUID, TEXT, TEXT)
 GRANT EXECUTE ON FUNCTION public.contribute_to_community_pool(TEXT, TEXT, TEXT, NUMERIC, BOOLEAN) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.submit_customer_dispute(UUID, TEXT, TEXT, NUMERIC, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.register_supplier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], INT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.get_nearby_tankers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, anon, service_role;
+GRANT EXECUTE ON FUNCTION public.get_nearby_tankers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_latest_tracking_breadcrumb(UUID) TO authenticated, service_role;
-
--- Seed breadcrumbs for demo active trip TKR-2026-90401
-INSERT INTO public.tracking_breadcrumbs (
-    booking_id, latitude, longitude, heading, speed_kmh, created_at
-) VALUES
-    ('b7777777-7777-7777-7777-777777777777', 19.1245, 72.8720, 135, 28, NOW() - INTERVAL '2 minutes'),
-    ('b7777777-7777-7777-7777-777777777777', 19.1215, 72.8755, 135, 25, NOW() - INTERVAL '1 minute'),
-    ('b7777777-7777-7777-7777-777777777777', 19.1190, 72.8785, 130, 22, NOW())
-ON CONFLICT DO NOTHING;
 

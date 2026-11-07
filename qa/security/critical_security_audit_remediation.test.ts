@@ -1,16 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('Critical Security Audit Remediation (SEC-001 to SEC-004)', () => {
+describe('Critical Security Audit Remediation (SEC-001 to SEC-005)', () => {
   const schemaPath = path.resolve(process.cwd(), 'supabase/migrations/20261031000001_master_database_schema.sql');
   const rpcPath = path.resolve(process.cwd(), 'supabase/migrations/20261031000002_core_operational_rpcs.sql');
-  let schemaContent = '';
-  let rpcContent = '';
+  const forwardPath = path.resolve(process.cwd(), 'supabase/migrations/20261107000003_payment_delivery_invariants.sql');
 
-  beforeAll(() => {
-    schemaContent = fs.readFileSync(schemaPath, 'utf8');
-    rpcContent = fs.readFileSync(rpcPath, 'utf8');
-  });
+  const schemaContent = fs.readFileSync(schemaPath, 'utf8');
+  const rpcContent = fs.readFileSync(rpcPath, 'utf8');
+  const forwardContent = fs.existsSync(forwardPath) ? fs.readFileSync(forwardPath, 'utf8') : '';
 
   describe('SEC-001: Database Permissions & Least-Privilege Grants', () => {
     test('Migration eliminates blanket GRANT ALL to anon and authenticated roles', () => {
@@ -21,7 +19,7 @@ describe('Critical Security Audit Remediation (SEC-001 to SEC-004)', () => {
       // Must explicitly revoke blanket tables and sequences from anon
       expect(schemaContent).toContain('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;');
       expect(schemaContent).toContain('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;');
-      expect(schemaContent).toContain('REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM anon;');
+      expect(schemaContent).toContain('REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;');
     });
 
     test('Administrative-only RLS policies do not use USING (TRUE)', () => {
@@ -100,13 +98,46 @@ describe('Critical Security Audit Remediation (SEC-001 to SEC-004)', () => {
       expect(funcSnippet).toContain('Access Denied: Administrative authorization required');
     });
 
-    test('Administrative stored procedures have execute privileges revoked from PUBLIC and anon', () => {
-      expect(schemaContent).toContain('REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_metrics() FROM PUBLIC, anon;');
-      expect(schemaContent).toContain('REVOKE EXECUTE ON FUNCTION public.admin_emergency_dispatch(TEXT, TEXT, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, TEXT, INTEGER) FROM PUBLIC, anon;');
-      expect(schemaContent).toContain('REVOKE EXECUTE ON FUNCTION public.admin_execute_batch_payout() FROM PUBLIC, anon;');
-      expect(schemaContent).toContain('REVOKE EXECUTE ON FUNCTION public.admin_verify_supplier(UUID, TEXT, TEXT) FROM PUBLIC, anon;');
-      expect(schemaContent).toContain('REVOKE EXECUTE ON FUNCTION public.admin_resolve_dispute(UUID, TEXT, NUMERIC, TEXT) FROM PUBLIC, anon;');
-      expect(schemaContent).toContain('REVOKE EXECUTE ON FUNCTION public.admin_rebalance_tanker(UUID, TEXT) FROM PUBLIC, anon;');
+    test('Both migrations end with blanket REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon', () => {
+      expect(schemaContent).toContain('REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;');
+      expect(rpcContent).toContain('REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;');
+      expect(forwardContent).toContain('REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;');
+    });
+  });
+
+  describe('SEC-005: Strict Invariant Audit (No Forbidden Strings or Anon Execution)', () => {
+    const allMigrations = [
+      { name: '20261031000001_master_database_schema.sql', content: schemaContent },
+      { name: '20261031000002_core_operational_rpcs.sql', content: rpcContent },
+      { name: '20261107000003_payment_delivery_invariants.sql', content: forwardContent },
+    ];
+
+    test.each(allMigrations)('Migration $name contains no GRANT EXECUTE to anon', ({ content }) => {
+      const grantExecuteAnon = /GRANT\s+EXECUTE[^;]+TO[^;]*\banon\b/i;
+      expect(grantExecuteAnon.test(content)).toBe(false);
+    });
+
+    test.each(allMigrations)('Migration $name contains no p_verified, pay_tx_, sig_tx_, rfnd_, or +919820011001', ({ content }) => {
+      expect(content).not.toContain('p_verified');
+      expect(content).not.toContain('pay_tx_');
+      expect(content).not.toContain('sig_tx_');
+      expect(content).not.toContain('rfnd_');
+      expect(content).not.toContain('+919820011001');
+    });
+
+    test.each(allMigrations)('Migration $name requires pgcrypto', ({ content }) => {
+      expect(content).toMatch(/CREATE\s+EXTENSION\s+IF\s+NOT\s+EXISTS\s+["']?pgcrypto["']?/i);
+    });
+
+    test.each([
+      { name: '20261031000001_master_database_schema.sql', content: schemaContent },
+      { name: '20261107000003_payment_delivery_invariants.sql', content: forwardContent },
+    ])('Migration $name enforces HMAC equality check and 95% meter delivery guard', ({ content }) => {
+      // HMAC digest equality comparison
+      expect(content).toContain("digest(lower(trim(p_gateway_signature)), 'sha256') <> digest(lower(trim(v_expected_sig)), 'sha256')");
+      // 95% delivery guard
+      expect(content).toMatch(/0\.95/);
+      expect(content).toContain('delivered volume below 95 percent of booked capacity');
     });
   });
 });
