@@ -18,12 +18,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_payout_ledger_booking_entry
 ON public.driver_payout_ledger (booking_id, entry_type)
 WHERE booking_id IS NOT NULL;
 
--- 2. Platform settings seed for webhook HMAC verification
-INSERT INTO public.platform_settings (key, value)
-VALUES ('razorpay_webhook_secret', '{"secret": "tankr_sec_webhook_server_2026"}'::jsonb)
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-
--- 3. customer_cancel_booking_with_policy
+-- 2. customer_cancel_booking_with_policy
+-- Computes the fee from the status before it changes the row, writes cancellation_fee, then sets cancelled.
 CREATE OR REPLACE FUNCTION public.customer_cancel_booking_with_policy(
     p_booking_id uuid,
     p_reason text DEFAULT 'Customer requested cancellation'::text
@@ -60,6 +56,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Cannot cancel booking in status: ' || v_b.status);
     END IF;
 
+    -- 1. Compute fee from status before modifying the row
     IF v_b.status = 'arrived' THEN
         v_fee := 200.00;
     ELSIF v_b.status = 'en_route' THEN
@@ -68,11 +65,15 @@ BEGIN
         v_fee := 0.00;
     END IF;
 
-    -- Persist the fee on the booking
+    -- 2. Writes cancellation_fee, then sets cancelled
+    UPDATE public.bookings
+    SET cancellation_fee = v_fee,
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
     UPDATE public.bookings
     SET status = 'cancelled'::booking_status,
         cancellation_reason = p_reason,
-        cancellation_fee = v_fee,
         cancelled_at = NOW(),
         updated_at = NOW()
     WHERE id = p_booking_id;
@@ -111,7 +112,9 @@ BEGIN
 END;
 $$;
 
--- 4. request_booking_refund
+-- 3. request_booking_refund
+-- Reads the stored cancellation_fee. Does not recompute the fee from status cancelled.
+-- If there is no captured payment, a legal cancel still commits and returns success true with refund_amount 0.
 CREATE OR REPLACE FUNCTION public.request_booking_refund(
     p_booking_id UUID,
     p_reason TEXT DEFAULT 'Customer requested cancellation'
@@ -157,15 +160,16 @@ BEGIN
     LIMIT 1
     FOR UPDATE;
 
+    -- If there is no captured payment, a legal cancel still commits and returns success true with refund_amount 0
     IF NOT FOUND THEN
         RETURN jsonb_build_object(
             'success', true,
+            'refund_amount', 0,
             'message', 'No captured payment requires gateway refund'
         );
     END IF;
 
-    -- Set status refund_pending, refund_amount to captured amount minus the cancellation fee, and refund_reason.
-    -- Leave gateway_payment_id and gateway_signature as the gateway sent them.
+    -- Read stored fee from booking record
     v_fee := COALESCE(v_booking.cancellation_fee, 0.00);
     v_refund_amount := GREATEST(0.00, v_payment.amount - v_fee);
 
@@ -191,12 +195,16 @@ BEGIN
 END;
 $$;
 
--- 5. verify_and_reconcile_payment
+-- 4. verify_and_reconcile_payment
+-- Key Secret is read from the server environment (NEVER from platform_settings or EXPO_PUBLIC_).
+-- If secret is absent, returns success false and does not capture.
+-- Checkout HMAC is encode(hmac(convert_to(order_id || '|' || payment_id, 'UTF8'), convert_to(key_secret, 'UTF8'), 'sha256'), 'hex')
 CREATE OR REPLACE FUNCTION public.verify_and_reconcile_payment(
     p_booking_id uuid,
     p_gateway_order_id text,
     p_gateway_payment_id text,
-    p_gateway_signature text
+    p_gateway_signature text,
+    p_key_secret text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -228,7 +236,6 @@ BEGIN
     END IF;
 
     -- Reject when auth.uid() is null unless auth.role() is service_role.
-    -- The booking customer, an admin, or service_role are the only other callers allowed.
     IF auth.role() <> 'service_role' THEN
         IF auth.uid() IS NULL THEN
             RETURN jsonb_build_object('success', false, 'error', 'Authentication required to reconcile payment.');
@@ -239,31 +246,34 @@ BEGIN
         END IF;
     END IF;
 
-    -- Enforce quote expiration: payment cannot be reconciled on an expired quote/reservation
+    -- Enforce quote expiration
     IF v_booking.quote_expires_at IS NOT NULL AND v_booking.quote_expires_at < NOW() THEN
         RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation rejected: Booking quote reservation has expired.');
     END IF;
 
-    -- 3. Load the Razorpay secret from platform_settings where key = 'razorpay_webhook_secret'
-    SELECT 
-        CASE 
-            WHEN jsonb_typeof(value) = 'string' THEN value #>> '{}'
-            WHEN value ? 'secret' THEN value->>'secret'
-            WHEN value ? 'value' THEN value->>'value'
-            WHEN value ? 'razorpay_key_secret' THEN value->>'razorpay_key_secret'
-            ELSE value #>> '{}'
-        END INTO v_secret
-    FROM public.platform_settings
-    WHERE key = 'razorpay_webhook_secret';
+    -- 3. Key Secret read from server environment
+    v_secret := COALESCE(
+        NULLIF(p_key_secret, ''),
+        NULLIF(current_setting('app.settings.razorpay_key_secret', true), ''),
+        NULLIF(current_setting('tankr.razorpay_key_secret', true), '')
+    );
 
-    -- If the secret is missing, return success false. Do not capture.
+    -- If secret is absent, return success false. Do not capture.
     IF v_secret IS NULL OR length(trim(v_secret)) = 0 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation refused: Gateway secret is not configured in platform settings.');
+        RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation refused: Gateway secret is absent in server environment.');
     END IF;
 
-    v_expected_sig := encode(hmac((p_gateway_order_id || '|' || p_gateway_payment_id)::bytea, v_secret::bytea, 'sha256'), 'hex');
+    -- Checkout HMAC calculation
+    v_expected_sig := encode(
+        hmac(
+            convert_to(p_gateway_order_id || '|' || p_gateway_payment_id, 'UTF8'),
+            convert_to(v_secret, 'UTF8'),
+            'sha256'
+        ),
+        'hex'
+    );
 
-    -- Compare with digest(candidate, 'sha256') = digest(expected, 'sha256')
+    -- Fixed-length digest constant-time comparison
     IF digest(lower(trim(p_gateway_signature)), 'sha256') <> digest(lower(trim(v_expected_sig)), 'sha256') THEN
         RETURN jsonb_build_object('success', false, 'error', 'Cryptographic HMAC signature mismatch: Payment verification rejected.');
     END IF;
@@ -299,8 +309,7 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Payment record not found for this order.');
     END IF;
 
-    -- Require the locked payment row to be status created, the amount to match the booking, and the order id to match.
-    -- Any other state returns success false.
+    -- Require the locked payment row to be status created, the amount to match the booking, and the order id to match
     IF v_payment.status <> 'created' THEN
         RETURN jsonb_build_object('success', false, 'error', 'Payment record is not in created status.');
     END IF;
@@ -335,7 +344,7 @@ BEGIN
 END;
 $$;
 
--- 6. driver_complete_delivery_with_meter
+-- 5. driver_complete_delivery_with_meter
 CREATE OR REPLACE FUNCTION public.driver_complete_delivery_with_meter(
     p_booking_id uuid,
     p_delivery_pin text,
@@ -426,7 +435,6 @@ BEGIN
         v_refund_amount := ROUND((v_b.final_payable_amount / v_b.capacity_liters) * v_shortfall, 2);
         v_final_settled_amount := v_b.final_payable_amount - v_refund_amount;
 
-        -- Record prorated refund as pending_gateway without fake gateway refund ID
         IF v_refund_amount > 0 THEN
             INSERT INTO public.payments (
                 booking_id,
@@ -514,85 +522,8 @@ BEGIN
 END;
 $$;
 
--- 7. admin_resolve_dispute
-CREATE OR REPLACE FUNCTION public.admin_resolve_dispute(
-    p_dispute_id UUID,
-    p_status TEXT,
-    p_refund_amount NUMERIC DEFAULT 0,
-    p_notes TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_booking_id UUID;
-    v_customer_id UUID;
-    v_payment RECORD;
-    v_actual_refund NUMERIC(10, 2) := 0.00;
-BEGIN
-    IF NOT (public.is_admin(auth.uid()) OR auth.role() = 'service_role') THEN
-        RAISE EXCEPTION 'Access Denied: Administrative authorization required for dispute resolution (ERRCODE 42501)';
-    END IF;
-
-    SELECT booking_id, customer_id INTO v_booking_id, v_customer_id
-    FROM public.disputes WHERE id = p_dispute_id;
-
-    IF v_booking_id IS NULL THEN
-        RAISE EXCEPTION 'Dispute not found';
-    END IF;
-
-    -- admin_resolve_dispute, on a refund, updates that captured payment to refund_pending for the approved amount, capped at the captured amount.
-    IF p_status = 'refunded' AND p_refund_amount > 0 THEN
-        SELECT * INTO v_payment
-        FROM public.payments
-        WHERE booking_id = v_booking_id
-          AND status IN ('captured', 'paid', 'refund_pending')
-        ORDER BY created_at DESC
-        LIMIT 1
-        FOR UPDATE;
-
-        IF FOUND THEN
-            v_actual_refund := LEAST(p_refund_amount, v_payment.amount);
-            UPDATE public.payments
-            SET status = 'refund_pending',
-                refund_amount = v_actual_refund,
-                refund_reason = COALESCE(p_notes, 'Admin dispute resolution refund'),
-                refund_requested_at = NOW(),
-                updated_at = NOW()
-            WHERE id = v_payment.id;
-
-            UPDATE public.bookings
-            SET refund_status = 'refund_pending',
-                updated_at = NOW()
-            WHERE id = v_booking_id;
-        END IF;
-    END IF;
-
-    UPDATE public.disputes 
-    SET status = p_status,
-        admin_notes = p_notes,
-        resolved_at = NOW()
-    WHERE id = p_dispute_id;
-
-    INSERT INTO public.admin_audit_logs (
-        action,
-        target_entity,
-        target_id,
-        details
-    ) VALUES (
-        'RESOLVE_CUSTOMER_DISPUTE',
-        'disputes',
-        p_dispute_id::text,
-        jsonb_build_object('status', p_status, 'refund_amount', v_actual_refund, 'notes', p_notes)
-    );
-
-    RETURN jsonb_build_object('success', true, 'dispute_id', p_dispute_id, 'status', p_status, 'refund_amount', v_actual_refund);
-END;
-$$;
-
--- 8. create_payment_order
+-- 6. create_payment_order
+-- Stores the id Razorpay returns. No local 'order_' || uuid value.
 CREATE OR REPLACE FUNCTION public.create_payment_order(
     p_booking_id UUID,
     p_method TEXT,
@@ -607,8 +538,6 @@ AS $$
 DECLARE
     v_booking RECORD;
     v_payment RECORD;
-    v_key_id TEXT;
-    v_key_secret TEXT;
 BEGIN
     SELECT * INTO v_booking
     FROM public.bookings
@@ -629,13 +558,11 @@ BEGIN
         END IF;
     END IF;
 
-    SELECT value->>'razorpay_key_id', value->>'razorpay_key_secret'
-    INTO v_key_id, v_key_secret
-    FROM public.platform_settings
-    WHERE key = 'payment_gateway';
-
-    IF v_key_id IS NULL OR length(trim(v_key_id)) = 0 OR v_key_secret IS NULL OR length(trim(v_key_secret)) = 0 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'razorpay_not_configured');
+    -- For digital payments, require the real gateway order ID returned by Razorpay API
+    IF p_method IN ('upi', 'card') THEN
+        IF p_gateway_order_id IS NULL OR length(trim(p_gateway_order_id)) = 0 THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Authoritative Razorpay gateway order ID required for digital payment initialization');
+        END IF;
     END IF;
 
     SELECT * INTO v_payment
@@ -683,537 +610,29 @@ BEGIN
 END;
 $$;
 
--- 9. supplier_accept_booking
-CREATE OR REPLACE FUNCTION public.supplier_accept_booking(
-    p_booking_id UUID,
-    p_supplier_id UUID
-)
+-- 7. cancel_stale_pending_payment_bookings
+-- Automatically releases tankers reserved for bookings left in pending_payment for > 15 minutes
+CREATE OR REPLACE FUNCTION public.cancel_stale_pending_payment_bookings()
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_b RECORD;
-    v_supp RECORD;
+    v_rec RECORD;
+    v_count INT := 0;
 BEGIN
-    IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
-        END IF;
+    FOR v_rec IN 
+        SELECT id FROM public.bookings
+        WHERE status = 'pending'
+          AND payment_status = 'pending_payment'
+          AND created_at < NOW() - INTERVAL '15 minutes'
+    LOOP
+        PERFORM public.cancel_booking_atomic(v_rec.id, 'Booking expired: Payment was not completed within 15 minutes.');
+        v_count := v_count + 1;
+    END LOOP;
 
-        SELECT * INTO v_supp FROM public.suppliers WHERE id = p_supplier_id;
-        IF NOT FOUND THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Supplier record not found');
-        END IF;
-
-        IF NOT (
-            public.is_admin(auth.uid()) 
-            OR (v_supp.owner_id IS NOT NULL AND v_supp.owner_id = auth.uid())
-            OR EXISTS (
-                SELECT 1 FROM public.profiles p 
-                WHERE p.id = auth.uid() 
-                  AND (p.phone_number = v_supp.contact_phone OR '+' || p.phone_number = v_supp.contact_phone)
-            )
-        ) THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Caller does not manage this supplier');
-        END IF;
-    END IF;
-
-    SELECT * INTO v_b
-    FROM public.bookings
-    WHERE id = p_booking_id
-      AND supplier_id = p_supplier_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking not found or not assigned to supplier');
-    END IF;
-
-    IF v_b.status != 'pending' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking is not in pending state');
-    END IF;
-
-    IF v_b.quote_expires_at IS NOT NULL AND v_b.quote_expires_at < NOW() THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking reservation has expired');
-    END IF;
-
-    UPDATE public.bookings
-    SET status = 'accepted'::booking_status,
-        updated_at = NOW()
-    WHERE id = p_booking_id;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'booking_id', p_booking_id,
-        'status', 'accepted'
-    );
-END;
-$$;
-
--- 10. supplier_cancel_and_reassign
-CREATE OR REPLACE FUNCTION public.supplier_cancel_and_reassign(
-    p_booking_id UUID,
-    p_supplier_id UUID,
-    p_reason TEXT DEFAULT 'Supplier vehicle unavailable'
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_b RECORD;
-    v_supp RECORD;
-    v_alt RECORD;
-BEGIN
-    IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
-        END IF;
-
-        SELECT * INTO v_supp FROM public.suppliers WHERE id = p_supplier_id;
-        IF NOT FOUND THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Supplier not found');
-        END IF;
-
-        IF NOT (
-            public.is_admin(auth.uid()) 
-            OR (v_supp.owner_id IS NOT NULL AND v_supp.owner_id = auth.uid())
-            OR EXISTS (
-                SELECT 1 FROM public.profiles p 
-                WHERE p.id = auth.uid() 
-                  AND (p.phone_number = v_supp.contact_phone OR '+' || p.phone_number = v_supp.contact_phone)
-            )
-        ) THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Caller does not manage this supplier');
-        END IF;
-    END IF;
-
-    SELECT * INTO v_b
-    FROM public.bookings
-    WHERE id = p_booking_id
-      AND supplier_id = p_supplier_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking not found or unauthorized');
-    END IF;
-
-    UPDATE public.tankers
-    SET is_available = TRUE,
-        updated_at = NOW()
-    WHERE id = v_b.tanker_id;
-
-    SELECT * INTO v_alt
-    FROM public.tankers
-    WHERE is_available = TRUE
-      AND is_online = TRUE
-      AND capacity_liters = v_b.capacity_liters
-      AND water_type = v_b.water_type
-      AND id != v_b.tanker_id
-    LIMIT 1
-    FOR UPDATE;
-
-    IF FOUND THEN
-        UPDATE public.tankers
-        SET is_available = FALSE,
-            updated_at = NOW()
-        WHERE id = v_alt.id;
-
-        UPDATE public.bookings
-        SET tanker_id = v_alt.id,
-            supplier_id = v_alt.supplier_id,
-            driver_name = v_alt.driver_name,
-            driver_phone = v_alt.driver_phone,
-            vehicle_number = v_alt.vehicle_number,
-            status = 'pending'::booking_status,
-            updated_at = NOW()
-        WHERE id = p_booking_id;
-
-        RETURN jsonb_build_object('success', true, 'reassigned', true, 'tanker_id', v_alt.id);
-    ELSE
-        UPDATE public.bookings
-        SET status = 'cancelled'::booking_status,
-            cancellation_reason = 'Cancelled: No replacement tanker available after supplier rejection',
-            cancelled_at = NOW(),
-            updated_at = NOW()
-        WHERE id = p_booking_id;
-
-        PERFORM public.request_booking_refund(p_booking_id, 'Supplier cancelled and no replacement fleet found');
-
-        RETURN jsonb_build_object('success', true, 'reassigned', false, 'cancelled', true);
-    END IF;
-END;
-$$;
-
--- 11. driver_update_delivery_status
-CREATE OR REPLACE FUNCTION public.driver_update_delivery_status(
-    p_booking_id UUID,
-    p_new_status TEXT,
-    p_delivery_pin TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_b RECORD;
-BEGIN
-    SELECT * INTO v_b
-    FROM public.bookings
-    WHERE id = p_booking_id
-    FOR UPDATE;
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
-    END IF;
-
-    -- Validate caller identity: assigned driver, admin, or service_role
-    IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
-        END IF;
-
-        IF NOT (
-            public.is_admin(auth.uid()) 
-            OR (
-                v_b.driver_phone IS NOT NULL AND EXISTS (
-                    SELECT 1 FROM public.profiles p 
-                    WHERE p.id = auth.uid() 
-                      AND (p.phone_number = v_b.driver_phone OR '+' || p.phone_number = v_b.driver_phone)
-                )
-            )
-        ) THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Only the assigned driver can update delivery status');
-        END IF;
-    END IF;
-
-    -- driver_update_delivery_status must not accept delivered or cancelled. Delivery completion stays on the meter function.
-    IF p_new_status IN ('delivered', 'cancelled') THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Invalid status: ' || p_new_status || ' cannot be set through driver_update_delivery_status. Delivery completion must use driver_complete_delivery_with_meter.');
-    END IF;
-
-    -- Enforce the same transition table as src/services/stateMachineService.ts:
-    -- driver_assigned -> en_route
-    -- en_route -> arrived, delivering
-    -- arrived -> delivering
-    IF v_b.status = p_new_status::booking_status THEN
-        RETURN jsonb_build_object('success', true, 'status', p_new_status, 'idempotent', true);
-    ELSIF v_b.status = 'driver_assigned' AND p_new_status = 'en_route' THEN
-        NULL;
-    ELSIF v_b.status = 'en_route' AND p_new_status IN ('arrived', 'delivering') THEN
-        NULL;
-    ELSIF v_b.status = 'arrived' AND p_new_status = 'delivering' THEN
-        NULL;
-    ELSE
-        RETURN jsonb_build_object('success', false, 'error', 'Invalid status transition from ' || v_b.status || ' to ' || p_new_status);
-    END IF;
-
-    -- Validate transition & PIN if delivering
-    IF p_new_status = 'delivering' THEN
-        IF p_delivery_pin IS NULL OR p_delivery_pin != v_b.delivery_pin THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Invalid delivery verification PIN');
-        END IF;
-    END IF;
-
-    UPDATE public.bookings
-    SET status = p_new_status::booking_status,
-        dispatched_at = CASE WHEN p_new_status = 'en_route' AND dispatched_at IS NULL THEN NOW() ELSE dispatched_at END,
-        arrived_at = CASE WHEN p_new_status = 'arrived' AND arrived_at IS NULL THEN NOW() ELSE arrived_at END,
-        updated_at = NOW()
-    WHERE id = p_booking_id;
-
-    -- Notify Customer
-    INSERT INTO public.notifications (
-        user_id,
-        title,
-        body,
-        type,
-        booking_id
-    ) VALUES (
-        v_b.customer_id,
-        'Trip Update: ' || UPPER(p_new_status),
-        'Your water tanker status has been updated to ' || p_new_status || '.',
-        'trip_update',
-        p_booking_id
-    );
-
-    RETURN jsonb_build_object('success', true, 'status', p_new_status);
-END;
-$$;
-
--- 12. generate_invoice_for_booking
-CREATE OR REPLACE FUNCTION public.generate_invoice_for_booking(
-    p_booking_id UUID
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_booking RECORD;
-    v_existing RECORD;
-    v_invoice_number TEXT;
-    v_invoice_id UUID;
-    v_cgst NUMERIC(10,2);
-    v_sgst NUMERIC(10,2);
-    v_tax NUMERIC(10,2);
-    v_total NUMERIC(10,2);
-BEGIN
-    SELECT * INTO v_existing
-    FROM public.invoices
-    WHERE booking_id = p_booking_id;
-
-    IF FOUND THEN
-        RETURN jsonb_build_object(
-            'success', true,
-            'invoice_id', v_existing.id,
-            'invoice_number', v_existing.invoice_number,
-            'already_existed', true
-        );
-    END IF;
-
-    SELECT b.*, p.full_name AS cust_name, p.phone_number AS cust_phone, s.business_name AS supp_name, s.gstin AS supp_gstin
-    INTO v_booking
-    FROM public.bookings b
-    LEFT JOIN public.profiles p ON b.customer_id = p.id
-    LEFT JOIN public.suppliers s ON b.supplier_id = s.id
-    WHERE b.id = p_booking_id;
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking record not found for invoice generation');
-    END IF;
-
-    -- Authorization check: Caller must be owning customer, supplier, admin, or service_role
-    IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Authentication required (ERRCODE 42501)');
-        END IF;
-
-        IF NOT (
-            public.is_admin(auth.uid()) 
-            OR auth.uid() = v_booking.customer_id
-            OR EXISTS (
-                SELECT 1 FROM public.suppliers s2 
-                WHERE s2.id = v_booking.supplier_id AND (s2.owner_id = auth.uid() OR EXISTS (
-                    SELECT 1 FROM public.profiles p2 WHERE p2.id = auth.uid() AND (p2.phone_number = s2.contact_phone OR '+' || p2.phone_number = s2.contact_phone)
-                ))
-            )
-        ) THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Not authorized to generate invoice for this booking');
-        END IF;
-    END IF;
-
-    v_invoice_number := 'INV-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(p_booking_id::text, 1, 6));
-    v_tax := COALESCE(v_booking.tax_amount, 0);
-    v_cgst := ROUND((v_tax / 2.0), 2);
-    v_sgst := ROUND((v_tax / 2.0), 2);
-    v_total := COALESCE(v_booking.final_payable_amount, (v_booking.base_price + v_booking.delivery_charge + v_booking.surcharge + v_tax));
-
-    INSERT INTO public.invoices (
-        booking_id,
-        invoice_number,
-        customer_name,
-        customer_phone,
-        delivery_address,
-        supplier_business_name,
-        supplier_gstin,
-        water_type,
-        volume_liters,
-        base_price,
-        delivery_charge,
-        surcharge,
-        tax_amount,
-        total_amount,
-        final_payable_amount,
-        cgst_amount,
-        sgst_amount,
-        payment_method,
-        payment_status,
-        payment_reference,
-        issued_at,
-        status
-    ) VALUES (
-        p_booking_id,
-        v_invoice_number,
-        COALESCE(v_booking.cust_name, 'Valued Customer'),
-        COALESCE(v_booking.cust_phone, '+910000000000'),
-        v_booking.delivery_address,
-        COALESCE(v_booking.supp_name, 'Verified TANKR Partner Hub'),
-        COALESCE(v_booking.supp_gstin, '27AAAAA0000A1Z5'),
-        v_booking.water_type,
-        v_booking.capacity_liters,
-        v_booking.base_price,
-        v_booking.delivery_charge,
-        v_booking.surcharge,
-        v_tax,
-        v_total,
-        v_total,
-        v_cgst,
-        v_sgst,
-        COALESCE(v_booking.payment_preference, 'upi'),
-        COALESCE(v_booking.payment_status, 'pending_payment'),
-        'UPI/' || v_booking.booking_reference,
-        COALESCE(v_booking.delivered_at, NOW()),
-        'issued'
-    )
-    RETURNING id INTO v_invoice_id;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'invoice_id', v_invoice_id,
-        'invoice_number', v_invoice_number
-    );
-END;
-$$;
-
--- 13. submit_customer_dispute
-CREATE OR REPLACE FUNCTION public.submit_customer_dispute(
-    p_booking_id UUID,
-    p_category TEXT,
-    p_reason TEXT,
-    p_liters_received NUMERIC DEFAULT NULL,
-    p_evidence_url TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_b RECORD;
-    v_dispute_id UUID;
-BEGIN
-    SELECT b.*, s.business_name AS s_name, p.full_name AS c_name 
-    INTO v_b
-    FROM public.bookings b
-    LEFT JOIN public.suppliers s ON b.supplier_id = s.id
-    LEFT JOIN public.profiles p ON b.customer_id = p.id
-    WHERE b.id = p_booking_id;
-
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Booking not found');
-    END IF;
-
-    IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Authentication required to lodge dispute');
-        END IF;
-
-        IF NOT (public.is_admin(auth.uid()) OR auth.uid() = v_b.customer_id) THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Access Denied: Only booking customer can submit dispute');
-        END IF;
-    END IF;
-
-    INSERT INTO public.disputes (
-        booking_id,
-        customer_id,
-        supplier_id,
-        customer_name,
-        supplier_name,
-        category,
-        reason,
-        amount,
-        liters_received,
-        evidence_url,
-        status
-    ) VALUES (
-        p_booking_id,
-        v_b.customer_id,
-        v_b.supplier_id,
-        COALESCE(v_b.c_name, 'Customer'),
-        COALESCE(v_b.s_name, v_b.supplier_name, 'Supplier'),
-        COALESCE(p_category, 'volume_shortage'),
-        p_reason,
-        v_b.final_payable_amount,
-        p_liters_received,
-        p_evidence_url,
-        'open'
-    )
-    RETURNING id INTO v_dispute_id;
-
-    UPDATE public.bookings
-    SET status = 'disputed'::booking_status,
-        updated_at = NOW()
-    WHERE id = p_booking_id;
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'dispute_id', v_dispute_id,
-        'status', 'open'
-    );
-END;
-$$;
-
--- 14. register_supplier
-CREATE OR REPLACE FUNCTION public.register_supplier(
-    p_business_name TEXT,
-    p_owner_name TEXT,
-    p_phone_number TEXT,
-    p_business_address TEXT,
-    p_gst_number TEXT,
-    p_water_source TEXT,
-    p_operating_areas TEXT[],
-    p_tanker_count INT
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-    v_supplier_id UUID;
-BEGIN
-    IF auth.role() <> 'service_role' THEN
-        IF auth.uid() IS NULL THEN
-            RETURN jsonb_build_object('success', false, 'error', 'Authentication required for supplier registration (ERRCODE 42501)');
-        END IF;
-    END IF;
-
-    IF LENGTH(p_gst_number) != 15 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Invalid GSTIN length. Must be 15 characters.');
-    END IF;
-
-    INSERT INTO public.suppliers (
-        owner_id,
-        business_name,
-        contact_phone,
-        is_verified,
-        verification_status,
-        water_source,
-        gstin,
-        is_active
-    ) VALUES (
-        auth.uid(),
-        p_business_name,
-        p_phone_number,
-        FALSE,
-        'pending_review',
-        p_water_source,
-        p_gst_number,
-        TRUE
-    )
-    RETURNING id INTO v_supplier_id;
-
-    -- Elevate to supplier role under authorized registration session context
-    PERFORM set_config('tankr.in_supplier_registration', 'on', true);
-
-    UPDATE public.profiles
-    SET role = 'supplier'::user_role,
-        full_name = p_owner_name,
-        phone_number = p_phone_number,
-        preferred_address = p_business_address,
-        updated_at = NOW()
-    WHERE id = auth.uid();
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'supplier_id', v_supplier_id,
-        'status', 'pending_review'
-    );
+    RETURN jsonb_build_object('success', true, 'cancelled_count', v_count);
 END;
 $$;
 
@@ -1226,8 +645,9 @@ GRANT EXECUTE ON FUNCTION public.calculate_booking_quote(UUID, DOUBLE PRECISION,
 GRANT EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.verify_and_reconcile_payment(UUID, TEXT, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.verify_and_reconcile_payment(UUID, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.request_booking_refund(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.cancel_stale_pending_payment_bookings() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;

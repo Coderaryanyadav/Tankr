@@ -52,14 +52,11 @@ BEGIN
         END IF;
     END IF;
 
-    -- Verify Razorpay credentials in platform_settings
-    SELECT value->>'razorpay_key_id', value->>'razorpay_key_secret'
-    INTO v_key_id, v_key_secret
-    FROM public.platform_settings
-    WHERE key = 'payment_gateway';
-
-    IF v_key_id IS NULL OR length(trim(v_key_id)) = 0 OR v_key_secret IS NULL OR length(trim(v_key_secret)) = 0 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'razorpay_not_configured');
+    -- For digital payments, require the real gateway order ID returned by Razorpay API
+    IF p_method IN ('upi', 'card') THEN
+        IF p_gateway_order_id IS NULL OR length(trim(p_gateway_order_id)) = 0 THEN
+            RETURN jsonb_build_object('success', false, 'error', 'Authoritative Razorpay gateway order ID required for digital payment initialization');
+        END IF;
     END IF;
 
     -- Check if active payment with this idempotency key or booking already exists

@@ -41,7 +41,18 @@ interface BookingState {
       recurring_days?: string[];
       recurring_time_slot?: string;
     }
-  ) => Promise<{ success: boolean; booking?: BookingRecord; error?: string }>;
+  ) => Promise<{
+    success: boolean;
+    booking?: BookingRecord;
+    requiresCheckout?: boolean;
+    checkoutData?: {
+      orderId: string;
+      amount: number;
+      currency: string;
+      keyId: string;
+    };
+    error?: string;
+  }>;
   cancelBooking: (
     bookingId: string,
     reason?: string
@@ -198,7 +209,9 @@ export const useBookingStore = create<BookingState>((set, get) => ({
           .update({
             delivery_type: scheduleOptions.delivery_type,
             scheduled_for: scheduleOptions.scheduled_for || null,
-            recurring_days: scheduleOptions.recurring_days || null,
+            recurring_days: Array.isArray(scheduleOptions.recurring_days)
+              ? scheduleOptions.recurring_days.join(',')
+              : (scheduleOptions.recurring_days || null),
             recurring_time_slot: scheduleOptions.recurring_time_slot || null,
           })
           .eq('id', bookingId);
@@ -274,7 +287,17 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
         get().subscribeToBookingUpdates(bookingId);
 
-        return { success: true, booking: recordWithStatus };
+        return {
+          success: true,
+          booking: recordWithStatus,
+          requiresCheckout: true,
+          checkoutData: {
+            orderId: paymentRes.orderId || '',
+            amount: paymentRes.amount || finalAmount,
+            currency: paymentRes.currency || 'INR',
+            keyId: paymentRes.keyId || '',
+          },
+        };
       }
 
       set({
@@ -459,6 +482,13 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   fetchUserBookings: async (customerId) => {
     set({ isLoadingBookings: true });
     try {
+      // 15-minute expiration invariant: release any tanker locked in pending_payment > 15m
+      try {
+        await supabase.rpc('cancel_stale_pending_payment_bookings');
+      } catch {
+        // Fallback handled gracefully
+      }
+
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -466,7 +496,23 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const list = data as BookingRecord[];
+        const now = Date.now();
+        const list = (data as BookingRecord[]).map((b) => {
+          if (b.status === 'pending' && b.payment_status === 'pending_payment') {
+            const ageMs = now - new Date(b.created_at).getTime();
+            if (ageMs > 15 * 60 * 1000) {
+              Promise.resolve(
+                supabase.rpc('cancel_booking_atomic', {
+                  p_booking_id: b.id,
+                  p_reason: 'Checkout abandoned by customer',
+                })
+              ).catch(() => {});
+              return { ...b, status: 'cancelled' as const };
+            }
+          }
+          return b;
+        });
+
         const activeTrip = list.find(
           (b) => b.status !== 'delivered' && b.status !== 'cancelled'
         );

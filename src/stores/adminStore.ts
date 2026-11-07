@@ -848,9 +848,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         .update({
           value: {
             surge_multiplier: multiplier,
+            peak_surge_multiplier: multiplier,
           },
         })
-        .eq('key', 'pricing_defaults');
+        .in('key', ['pricing_defaults', 'pricing_config']);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -858,7 +859,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
           admin_id: user.id,
           action: 'update_surge_multiplier',
           target_type: 'platform_settings',
-          target_id: 'pricing_defaults',
+          target_id: 'pricing_config',
           notes: `Surge multiplier dynamically updated to ${multiplier}x.`,
         });
       }

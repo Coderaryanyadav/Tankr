@@ -313,6 +313,7 @@ CREATE TABLE IF NOT EXISTS public.emergency_dispatches (
     driver_name TEXT,
     driver_phone TEXT,
     dispatched_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -845,11 +846,16 @@ BEGIN
         v_fee := 0.00;
     END IF;
 
-    -- Persist the fee on the booking
+    -- Persist the cancellation fee on the booking first before status transition
+    UPDATE public.bookings
+    SET cancellation_fee = v_fee,
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    -- Update booking status to cancelled
     UPDATE public.bookings
     SET status = 'cancelled'::booking_status,
         cancellation_reason = p_reason,
-        cancellation_fee = v_fee,
         cancelled_at = NOW(),
         updated_at = NOW()
     WHERE id = p_booking_id;
@@ -893,7 +899,8 @@ CREATE OR REPLACE FUNCTION public.verify_and_reconcile_payment(
     p_booking_id uuid,
     p_gateway_order_id text,
     p_gateway_payment_id text,
-    p_gateway_signature text
+    p_gateway_signature text,
+    p_key_secret text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -941,26 +948,29 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation rejected: Booking quote reservation has expired.');
     END IF;
 
-    -- 3. Load the Razorpay secret from platform_settings where key = 'razorpay_webhook_secret'
-    SELECT 
-        CASE 
-            WHEN jsonb_typeof(value) = 'string' THEN value #>> '{}'
-            WHEN value ? 'secret' THEN value->>'secret'
-            WHEN value ? 'value' THEN value->>'value'
-            WHEN value ? 'razorpay_key_secret' THEN value->>'razorpay_key_secret'
-            ELSE value #>> '{}'
-        END INTO v_secret
-    FROM public.platform_settings
-    WHERE key = 'razorpay_webhook_secret';
+    -- 3. The Key Secret is read from the server environment. It is not stored in platform_settings, and it is not an EXPO_PUBLIC_ variable.
+    v_secret := COALESCE(
+        NULLIF(p_key_secret, ''),
+        NULLIF(current_setting('app.settings.razorpay_key_secret', true), ''),
+        NULLIF(current_setting('tankr.razorpay_key_secret', true), '')
+    );
 
-    -- If the secret is missing, return success false. Do not capture.
+    -- If the secret is absent, verify_and_reconcile_payment returns success false and does not capture.
     IF v_secret IS NULL OR length(trim(v_secret)) = 0 THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation refused: Gateway secret is not configured in platform settings.');
+        RETURN jsonb_build_object('success', false, 'error', 'Payment reconciliation refused: Gateway secret is absent in server environment.');
     END IF;
 
-    v_expected_sig := encode(hmac((p_gateway_order_id || '|' || p_gateway_payment_id)::bytea, v_secret::bytea, 'sha256'), 'hex');
+    -- Checkout HMAC is encode(hmac(convert_to(order_id || '|' || payment_id, 'UTF8'), convert_to(key_secret, 'UTF8'), 'sha256'), 'hex')
+    v_expected_sig := encode(
+        hmac(
+            convert_to(p_gateway_order_id || '|' || p_gateway_payment_id, 'UTF8'),
+            convert_to(v_secret, 'UTF8'),
+            'sha256'
+        ),
+        'hex'
+    );
 
-    -- Compare with digest(candidate, 'sha256') = digest(expected, 'sha256')
+    -- Fixed-length digest equality comparison
     IF digest(lower(trim(p_gateway_signature)), 'sha256') <> digest(lower(trim(v_expected_sig)), 'sha256') THEN
         RETURN jsonb_build_object('success', false, 'error', 'Cryptographic HMAC signature mismatch: Payment verification rejected.');
     END IF;
@@ -1950,13 +1960,16 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 INSERT INTO public.profiles (id, phone_number, full_name, role, is_onboarding_completed)
-VALUES 
+SELECT v.id::uuid, v.phone_number, v.full_name, v.role::user_role, v.is_onboarding_completed
+FROM (VALUES 
     ('2644c504-f611-40d3-a1c1-0d97214bf6f9', '+919876543210', 'Vikram Malhotra', 'customer', TRUE),
     ('65cee903-3554-49b1-9729-55552d400087', '+919876572207', 'Demo Customer', 'customer', TRUE),
     ('bca75357-3da7-4106-b7e8-bd275857efbc', '+919845012345', 'Anand Swamy', 'customer', TRUE),
     ('d64671d9-665d-4a90-9a45-52be0313978d', '+919000000001', 'Rajesh Sharma', 'driver', TRUE),
     ('b70a66f3-f265-45af-8bb8-ed463ed6e000', '+919000000002', 'Suresh Shinde', 'driver', TRUE),
     ('b9a4be98-b394-4c00-b5d8-7b2d6bb7c8de', '+919000000003', 'Sunil Pawar', 'driver', TRUE)
+) AS v(id, phone_number, full_name, role, is_onboarding_completed)
+WHERE EXISTS (SELECT 1 FROM auth.users u WHERE u.id = v.id::uuid)
 ON CONFLICT (id) DO UPDATE SET
     phone_number = EXCLUDED.phone_number,
     full_name = EXCLUDED.full_name,
@@ -2120,14 +2133,14 @@ INSERT INTO public.bookings (
     supplier_name, quote_expires_at
 ) VALUES 
     ('b1111111-1111-1111-1111-111111111111', 'TKR-2026-88101', '65cee903-3554-49b1-9729-55552d400087', 'ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Marol Military Road, Andheri East', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '4821', 1.8, 12, 750, 45, 0, 39.75, 834.75, 'upi', 'paid', 'Dhananjay Patil', '+919820011005', 'MH-02-HV-2002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
-    ('b2222222-2222-2222-2222-222222222222', 'TKR-2026-88102', '65cee903-3554-49b1-9729-55552d400087', 'ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'driver_assigned', 5000, 'Potable (Drinking)', 'MIDC Central Road, Marol, Andheri East', 19.1185, 72.8795, ST_SetSRID(ST_MakePoint(72.8795, 19.1185), 4326)::geography, '7392', 2.1, 15, 750, 52, 0, 40.10, 842.10, 'upi', 'paid', 'Dhananjay Patil', '+919820011005', 'MH-02-HV-2002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
-    ('b3333333-3333-3333-3333-333333333333', 'TKR-2026-88103', 'bca75357-3da7-4106-b7e8-bd275857efbc', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Marol Maroshi Rd, Near SevenHills', 19.1210, 72.8820, ST_SetSRID(ST_MakePoint(72.8820, 19.1210), 4326)::geography, '5129', 2.4, 18, 750, 60, 0, 40.50, 850.50, 'upi', 'authorized', 'Suresh Shinde', '+919820011002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
-    ('b4444444-4444-4444-4444-444444444444', 'TKR-2026-88104', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 10000, 'Potable (Drinking)', 'Sakinaka Metro Station, Andheri-Kurla Rd', 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, '8410', 3.2, 22, 1200, 96, 0, 64.80, 1360.80, 'upi', 'paid', 'Sunil Pawar', '+919820011003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
+    ('b2222222-2222-2222-2222-222222222222', 'TKR-2026-88102', '65cee903-3554-49b1-9729-55552d400087', 'ad09d4fe-4860-4965-a8ea-c764a0f4a86a', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'delivered', 5000, 'Potable (Drinking)', 'MIDC Central Road, Marol, Andheri East', 19.1185, 72.8795, ST_SetSRID(ST_MakePoint(72.8795, 19.1185), 4326)::geography, '7392', 2.1, 0, 750, 52, 0, 40.10, 842.10, 'upi', 'paid', 'Dhananjay Patil', '+919820011005', 'MH-02-HV-2002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() - INTERVAL '1 day'),
+    ('b3333333-3333-3333-3333-333333333333', 'TKR-2026-88103', 'bca75357-3da7-4106-b7e8-bd275857efbc', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Marol Maroshi Rd, Near SevenHills', 19.1210, 72.8820, ST_SetSRID(ST_MakePoint(72.8820, 19.1210), 4326)::geography, '5129', 2.4, 18, 750, 60, 0, 40.50, 850.50, 'upi', 'authorized', 'Suresh Shinde', '+919000000002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour'),
+    ('b4444444-4444-4444-4444-444444444444', 'TKR-2026-88104', 'd64671d9-665d-4a90-9a45-52be0313978d', '1caae87d-ea3a-4ef8-831d-b8d4bb1ee05f', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 10000, 'Potable (Drinking)', 'Sakinaka Metro Station, Andheri-Kurla Rd', 19.1068, 72.8877, ST_SetSRID(ST_MakePoint(72.8877, 19.1068), 4326)::geography, '8410', 3.2, 22, 1200, 96, 0, 64.80, 1360.80, 'upi', 'paid', 'Sunil Pawar', '+919000000003', 'MH-02-TN-1001', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
     ('b5555555-5555-5555-5555-555555555555', 'TKR-2026-88105', 'd64671d9-665d-4a90-9a45-52be0313978d', '3dfcbb4f-77ae-4f6c-94e8-8b9393ebc5e9', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'pending', 10000, 'Potable (Drinking)', 'Asalpha Village, Sakinaka, Mumbai', 19.1040, 72.8910, ST_SetSRID(ST_MakePoint(72.8910, 19.1040), 4326)::geography, '2941', 3.5, 25, 1200, 105, 0, 65.25, 1370.25, 'upi', 'authorized', 'Venkatesh Parab', '+919820011006', 'MH-02-MN-1002', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
-    ('b6666666-6666-6666-6666-666666666666', 'TKR-2026-88106', '65cee903-3554-49b1-9729-55552d400087', 'f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 12000, 'Potable (Drinking)', 'SEEPZ Gate 2, Mahakali Caves Rd', 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, '3321', 2.8, 19, 1450, 98, 0, 77.40, 1625.40, 'upi', 'paid', 'Anand Kadam', '+919820011004', 'MH-02-EQ-1201', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
+    ('b6666666-6666-6666-6666-666666666666', 'TKR-2026-88106', '65cee903-3554-49b1-9729-55552d400087', 'f95b5c92-eb26-47b2-bdcf-88aa8d998782', 'beee79a1-bdf1-459d-a1cc-046a424b19b0', 'en_route', 12000, 'Potable (Drinking)', 'SEEPZ Gate 2, Mahakali Caves Rd', 19.1280, 72.8790, ST_SetSRID(ST_MakePoint(72.8790, 19.1280), 4326)::geography, '3321', 2.8, 19, 1450, 98, 0, 77.40, 1625.40, 'upi', 'paid', 'Anand Kadam', '+919000000004', 'MH-02-EQ-1201', 'Marol Express Water Logistics', NOW() + INTERVAL '1 hour'),
     ('b7777777-7777-7777-7777-777777777777', 'TKR-2026-90401', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'en_route', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '9412', 2.3, 14, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '2 hours'),
     ('b8888888-8888-8888-8888-888888888888', 'TKR-2026-89100', '2644c504-f611-40d3-a1c1-0d97214bf6f9', '415b741d-9372-46be-9e7f-fcad2a8449c2', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'delivered', 5000, 'Potable (Drinking)', 'Flat 402, Marol Hill View CHS, Military Road, Andheri East, Mumbai', 19.1171, 72.8809, ST_SetSRID(ST_MakePoint(72.8809, 19.1171), 4326)::geography, '3128', 2.3, 0, 750, 50, 0, 40.00, 840.00, 'upi', 'paid', 'Rajesh Sharma', '+919000000001', 'MH-02-TC-5001', 'Marol Potable Water Hub (MIDC Andheri)', NOW() - INTERVAL '1 day'),
-    ('b9999999-9999-9999-9999-999999999999', 'TKR-2026-95001', '2644c504-f611-40d3-a1c1-0d97214bf6f9', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'pending', 5000, 'Potable (Drinking)', 'Raheja Vihar Wing C, Chandivali, Andheri East, Mumbai', 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, '6219', 2.8, 18, 750, 55, 0, 40.25, 845.25, 'upi', 'authorized', 'Suresh Shinde', '+919000000002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() + INTERVAL '1 hour')
+    ('b9999999-9999-9999-9999-999999999999', 'TKR-2026-95001', '2644c504-f611-40d3-a1c1-0d97214bf6f9', 'd7211bf7-d64e-4f01-9f93-54877e8172ea', 'addd79a1-bdf1-459d-a1cc-046a424b19b9', 'delivered', 5000, 'Potable (Drinking)', 'Raheja Vihar Wing C, Chandivali, Andheri East, Mumbai', 19.1128, 72.8988, ST_SetSRID(ST_MakePoint(72.8988, 19.1128), 4326)::geography, '6219', 2.8, 0, 750, 55, 0, 40.25, 845.25, 'upi', 'paid', 'Suresh Shinde', '+919000000002', 'MH-02-TC-5002', 'Marol Potable Water Hub (MIDC Andheri)', NOW() - INTERVAL '2 days')
 ON CONFLICT (id) DO UPDATE SET 
     status = EXCLUDED.status,
     delivery_address = EXCLUDED.delivery_address,
@@ -2166,9 +2179,9 @@ ON CONFLICT (invoice_number) DO NOTHING;
 INSERT INTO public.platform_settings (key, value)
 VALUES 
     ('pricing_config', '{"base_rate_5kl": 750, "price_per_km": 25, "gst_rate": 0.05, "platform_commission": 0.10, "peak_surge_multiplier": 1.25}'::jsonb),
+    ('pricing_defaults', '{"base_rate_5kl": 750, "price_per_km": 25, "gst_rate": 0.05, "platform_commission": 0.10, "peak_surge_multiplier": 1.25, "surge_multiplier": 1.25}'::jsonb),
     ('compliance_rules', '{"max_tds_potable": 250, "min_ph": 6.5, "max_ph": 8.5, "cert_validity_days": 90}'::jsonb),
-    ('payment_gateway', '{"provider": "razorpay", "razorpay_key_id": "rzp_test_TuCCnOeHyd9KdO", "razorpay_key_secret": "tankr_sec_webhook_server_2026"}'::jsonb),
-    ('razorpay_webhook_secret', '{"secret": "tankr_sec_webhook_server_2026"}'::jsonb)
+    ('payment_gateway', '{"provider": "razorpay", "razorpay_key_id": "rzp_test_TuCCnOeHyd9KdO"}'::jsonb)
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 23k. Admin Audit Logs
@@ -2179,68 +2192,12 @@ VALUES
 -- ADMIN ENTERPRISE OPERATIONS RPC & TABLE EXTENSIONS
 -- ==============================================================================
 
--- 1. Ensure driver_payout_ledger exists
-CREATE TABLE IF NOT EXISTS public.driver_payout_ledger (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    driver_phone TEXT NOT NULL,
-    booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
-    entry_type TEXT NOT NULL CHECK (entry_type IN ('delivery_earnings', 'tip_credit', 'batch_payout_settlement', 'dispute_deduction')),
-    amount NUMERIC(10, 2) NOT NULL,
-    notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 2. Ensure corporate_subscriptions exists
-CREATE TABLE IF NOT EXISTS public.corporate_subscriptions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    client_name TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('tech_park', 'society', 'hospital', 'commercial')),
-    contact_person TEXT NOT NULL,
-    contact_phone TEXT NOT NULL,
-    delivery_address TEXT NOT NULL,
-    latitude DOUBLE PRECISION NOT NULL,
-    longitude DOUBLE PRECISION NOT NULL,
-    daily_liters INTEGER NOT NULL,
-    frequency_per_day INTEGER DEFAULT 1,
-    preferred_time_slot TEXT NOT NULL,
-    monthly_rate NUMERIC(10, 2) NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'expired')),
-    assigned_supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
-    assigned_supplier_name TEXT,
-    start_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    end_date DATE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 3. Ensure emergency_dispatches exists
-CREATE TABLE IF NOT EXISTS public.emergency_dispatches (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    institution_name TEXT NOT NULL,
-    institution_type TEXT NOT NULL CHECK (institution_type IN ('hospital_dialysis', 'icu_facility', 'critical_sump', 'elderly_care')),
-    contact_person TEXT NOT NULL,
-    contact_phone TEXT NOT NULL,
-    delivery_address TEXT NOT NULL,
-    latitude DOUBLE PRECISION NOT NULL,
-    longitude DOUBLE PRECISION NOT NULL,
-    required_liters INTEGER NOT NULL,
-    water_type TEXT NOT NULL DEFAULT 'Potable (Drinking)',
-    sla_minutes INTEGER NOT NULL DEFAULT 20,
-    status TEXT NOT NULL DEFAULT 'en_route' CHECK (status IN ('en_route', 'delivered', 'diverted')),
-    assigned_tanker_id UUID REFERENCES public.tankers(id) ON DELETE SET NULL,
-    vehicle_number TEXT,
-    driver_name TEXT,
-    driver_phone TEXT,
-    dispatched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    delivered_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 4. Ensure disputes table columns match UI expectations
+-- Ensure disputes and emergency dispatch tables match enterprise operations expectations
 ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS customer_name TEXT;
 ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS supplier_name TEXT;
 ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);
 ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'volume_shortage';
+ALTER TABLE public.emergency_dispatches ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
 
 -- 5. Table Grants & Least-Privilege RLS (SEC-001 & SEC-002 Remediation)
 -- Service role retains full administrative grants
@@ -2811,6 +2768,7 @@ BEGIN
     IF NOT FOUND THEN
         RETURN jsonb_build_object(
             'success', true,
+            'refund_amount', 0,
             'message', 'No captured payment requires gateway refund'
         );
     END IF;
@@ -2973,6 +2931,32 @@ BEGIN
 END;
 $$;
 
+-- 20i. cancel_stale_pending_payment_bookings
+-- Automatically releases tankers reserved for bookings left in pending_payment for > 15 minutes
+CREATE OR REPLACE FUNCTION public.cancel_stale_pending_payment_bookings()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_rec RECORD;
+    v_count INT := 0;
+BEGIN
+    FOR v_rec IN 
+        SELECT id FROM public.bookings
+        WHERE status = 'pending'
+          AND payment_status = 'pending_payment'
+          AND created_at < NOW() - INTERVAL '15 minutes'
+    LOOP
+        PERFORM public.cancel_booking_atomic(v_rec.id, 'Booking expired: Payment was not completed within 15 minutes.');
+        v_count := v_count + 1;
+    END LOOP;
+
+    RETURN jsonb_build_object('success', true, 'cancelled_count', v_count);
+END;
+$$;
+
 -- Explicit Routine Permissions: Restrict privileged operational and administrative routines from anon/PUBLIC (TNK-C04)
 REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM PUBLIC, anon;
 
@@ -2982,8 +2966,9 @@ GRANT EXECUTE ON FUNCTION public.calculate_booking_quote(UUID, DOUBLE PRECISION,
 GRANT EXECUTE ON FUNCTION public.create_booking_atomic(UUID, UUID, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.cancel_booking_atomic(UUID, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.customer_cancel_booking_with_policy(UUID, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.verify_and_reconcile_payment(UUID, TEXT, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.verify_and_reconcile_payment(UUID, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.request_booking_refund(UUID, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.cancel_stale_pending_payment_bookings() TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.driver_complete_delivery_with_meter(UUID, TEXT, NUMERIC, NUMERIC, INTEGER, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.record_driver_location_ping(UUID, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.supplier_onboard_tanker(UUID, TEXT, INTEGER, TEXT, TEXT, TEXT, NUMERIC, NUMERIC) TO authenticated, service_role;

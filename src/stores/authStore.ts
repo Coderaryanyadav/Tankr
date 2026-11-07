@@ -364,8 +364,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       pincode: data.pincode !== undefined ? data.pincode : (profile?.pincode || null),
     };
 
-    set({ profile: updatedProfile });
-
     if (user?.id) {
       try {
         const { error } = await supabase
@@ -390,6 +388,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
+    set({ profile: updatedProfile });
     return { success: true };
   },
 

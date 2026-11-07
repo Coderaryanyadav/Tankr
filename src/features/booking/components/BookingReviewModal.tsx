@@ -15,6 +15,8 @@ import { StatusBadge } from '../../../components/common/Card/StatusBadge';
 import { useAuthStore } from '../../../stores/authStore';
 import { useBookingStore } from '../../../stores/bookingStore';
 import { useLocationStore } from '../../../stores/locationStore';
+import { paymentService } from '../../../services/payment/paymentService';
+import { supabase } from '../../../services/supabase/client';
 import { borderRadius, colors, fontSizes, fontWeights, shadows, spacing } from '../../../theme';
 import { BookingRecord, PaymentPreference } from '../../../types/booking';
 import { NearbyTanker } from '../../../types/discovery';
@@ -34,13 +36,14 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
   onBookingConfirmed,
   onChangeAddress,
 }) => {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const { activeAddressText, activeCoordinates } = useLocationStore();
   const {
     activeQuote,
     isLoadingQuote,
     requestPriceQuote,
     createBooking,
+    completeCheckout,
     isCreatingBooking,
     bookingError,
   } = useBookingStore();
@@ -52,6 +55,7 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
   const [deliveryInstructions, setDeliveryInstructions] = useState<string>('');
   const [showInstructionsInput, setShowInstructionsInput] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
   // Request backend quote whenever modal opens or delivery address changes
   useEffect(() => {
@@ -90,6 +94,65 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
     );
 
     if (res.success && res.booking) {
+      if (res.requiresCheckout && res.checkoutData) {
+        const { orderId, amount, keyId, currency } = res.checkoutData;
+        setIsProcessingPayment(true);
+        try {
+          const checkoutRes = await paymentService.openRazorpayCheckout({
+            key: keyId,
+            amount: amount,
+            currency: currency || 'INR',
+            name: 'TANKR Water Delivery',
+            description: `Order ${res.booking.booking_reference}`,
+            order_id: orderId,
+            prefill: {
+              contact: user?.phone || profile?.phone_number || undefined,
+              name: profile?.full_name || (user?.user_metadata?.full_name as string) || undefined,
+            },
+          });
+
+          if (checkoutRes.success && checkoutRes.data) {
+            const verifyRes = await completeCheckout(
+              res.booking.id,
+              checkoutRes.data.razorpay_order_id,
+              checkoutRes.data.razorpay_payment_id,
+              checkoutRes.data.razorpay_signature
+            );
+
+            if (verifyRes.success) {
+              onBookingConfirmed({ ...res.booking, payment_status: 'paid' });
+              onClose();
+              return;
+            } else {
+              // Reconcile failed: release tanker immediately
+              await supabase.rpc('cancel_booking_atomic', {
+                p_booking_id: res.booking.id,
+                p_reason: 'Checkout abandoned by customer',
+              });
+              setErrorMessage(verifyRes.error || 'Payment signature verification failed. Tanker reservation released.');
+              return;
+            }
+          } else {
+            // Customer abandoned or gateway error: release tanker immediately
+            await supabase.rpc('cancel_booking_atomic', {
+              p_booking_id: res.booking.id,
+              p_reason: 'Checkout abandoned by customer',
+            });
+            setErrorMessage(checkoutRes.error || 'Checkout abandoned by customer. Tanker reservation released.');
+            return;
+          }
+        } catch (err: any) {
+          await supabase.rpc('cancel_booking_atomic', {
+            p_booking_id: res.booking.id,
+            p_reason: 'Checkout abandoned by customer',
+          });
+          setErrorMessage(err?.message || 'Payment checkout error. Tanker reservation released.');
+          return;
+        } finally {
+          setIsProcessingPayment(false);
+        }
+      }
+
       onBookingConfirmed(res.booking);
       onClose();
     } else {
@@ -442,15 +505,17 @@ export const BookingReviewModal: React.FC<BookingReviewModalProps> = ({
               title={
                 isCreatingBooking
                   ? 'Reserving Tanker...'
+                  : isProcessingPayment
+                  ? 'Completing Payment...'
                   : `Book Tanker • ₹${finalAmount.toLocaleString('en-IN')}`
               }
               variant="primary"
               size="lg"
-              loading={isCreatingBooking}
-              disabled={isLoadingQuote || isCreatingBooking}
+              loading={isCreatingBooking || isProcessingPayment}
+              disabled={isLoadingQuote || isCreatingBooking || isProcessingPayment}
               onPress={handleConfirm}
               rightIcon={
-                !isCreatingBooking ? (
+                !isCreatingBooking && !isProcessingPayment ? (
                   <Ionicons name="checkmark-done" size={20} color={colors.white} />
                 ) : undefined
               }

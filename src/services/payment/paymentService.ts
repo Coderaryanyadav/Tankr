@@ -213,6 +213,125 @@ class PaymentService {
   }
 
   /**
+   * Opens Razorpay checkout modal or web checkout handler.
+   * On native, attempts react-native-razorpay.
+   * On web, uses window.Razorpay.
+   * In testing/mock environments, delegates to __TANKR_RAZORPAY_CHECKOUT_HANDLER__.
+   */
+  async openRazorpayCheckout(options: {
+    key: string;
+    amount: number;
+    currency: string;
+    name?: string;
+    description?: string;
+    order_id: string;
+    prefill?: {
+      contact?: string;
+      email?: string;
+      name?: string;
+    };
+    theme?: {
+      color?: string;
+    };
+  }): Promise<{
+    success: boolean;
+    data?: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+    };
+    error?: string;
+    cancelled?: boolean;
+  }> {
+    // 1. Check if custom test handler is configured
+    if (typeof (globalThis as any).__TANKR_RAZORPAY_CHECKOUT_HANDLER__ === 'function') {
+      return (globalThis as any).__TANKR_RAZORPAY_CHECKOUT_HANDLER__(options);
+    }
+
+    // 2. Check if react-native-razorpay native module is available
+    try {
+      const RazorpayCheckout =
+        (require('react-native-razorpay') as any)?.default ||
+        require('react-native-razorpay');
+      if (RazorpayCheckout && typeof RazorpayCheckout.open === 'function') {
+        const response = await RazorpayCheckout.open({
+          key: options.key,
+          amount: options.amount,
+          currency: options.currency || 'INR',
+          name: options.name || 'TANKR Water Delivery',
+          description: options.description || `Order ${options.order_id}`,
+          order_id: options.order_id,
+          prefill: options.prefill,
+          theme: options.theme || { color: '#0052FF' },
+        });
+        return {
+          success: true,
+          data: {
+            razorpay_order_id: response.razorpay_order_id || options.order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
+          },
+        };
+      }
+    } catch (err: any) {
+      if (
+        err?.code === 0 ||
+        err?.description === 'Payment Cancelled' ||
+        err?.message?.includes?.('cancelled') ||
+        err?.message?.includes?.('dismissed')
+      ) {
+        return {
+          success: false,
+          cancelled: true,
+          error: 'Checkout cancelled by customer.',
+        };
+      }
+    }
+
+    // 3. Web window.Razorpay support
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      return new Promise((resolve) => {
+        const rzp = new (window as any).Razorpay({
+          key: options.key,
+          amount: options.amount,
+          currency: options.currency || 'INR',
+          name: options.name || 'TANKR Water Delivery',
+          description: options.description || `Order ${options.order_id}`,
+          order_id: options.order_id,
+          prefill: options.prefill,
+          theme: options.theme || { color: '#0052FF' },
+          handler: (response: any) => {
+            resolve({
+              success: true,
+              data: {
+                razorpay_order_id: response.razorpay_order_id || options.order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+            });
+          },
+          modal: {
+            ondismiss: () => {
+              resolve({
+                success: false,
+                cancelled: true,
+                error: 'Checkout abandoned by customer.',
+              });
+            },
+          },
+        });
+        rzp.open();
+      });
+    }
+
+    return {
+      success: false,
+      cancelled: true,
+      error: 'Checkout dismissed or gateway unavailable.',
+    };
+  }
+
+  /**
    * Completes checkout by reconciling gateway tokens with authoritative backend RPC.
    */
   async completeCheckout(

@@ -16,6 +16,7 @@ NC='\033[0m'
 ENV_FILE=".env"
 MIGRATION_FILE_1="supabase/migrations/20261031000001_master_database_schema.sql"
 MIGRATION_FILE_2="supabase/migrations/20261031000002_core_operational_rpcs.sql"
+MIGRATION_FILE_3="supabase/migrations/20261107000003_payment_delivery_invariants.sql"
 
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo -e "${BLUE}${BOLD}            TANKR — Database Migration Forward Runner           ${NC}"
@@ -29,6 +30,11 @@ fi
 
 if [ ! -f "$MIGRATION_FILE_2" ]; then
     echo -e "${RED}[ERROR] Migration file 2 not found: ${MIGRATION_FILE_2}${NC}"
+    exit 1
+fi
+
+if [ ! -f "$MIGRATION_FILE_3" ]; then
+    echo -e "${RED}[ERROR] Migration file 3 not found: ${MIGRATION_FILE_3}${NC}"
     exit 1
 fi
 
