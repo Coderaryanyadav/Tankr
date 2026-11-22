@@ -1,0 +1,29 @@
+{
+  "name": "tankr-desktop",
+  "productName": "TANKR",
+  "version": "1.0.0",
+  "description": "TANKR - Urban Water Deficit Logistics, Emergency Dispatch & Fair Metering Platform",
+  "main": "main.js",
+  "scripts": {
+    "build:mac": "electron-builder --mac dmg zip",
+    "build:win": "electron-builder --win portable nsis"
+  },
+  "build": {
+    "appId": "com.tankr.desktop",
+    "productName": "TANKR",
+    "files": [
+      "main.js",
+      "dist-web/**/*"
+    ],
+    "directories": {
+      "output": "dist-desktop"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["portable", "nsis"]
+    }
+  }
+}
