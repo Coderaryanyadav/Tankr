@@ -4,6 +4,7 @@
 
 ### _Technical Architecture, API Reference, Deployment & Operational Specifications_
 
+[![Release](https://img.shields.io/github/v/release/Coderaryanyadav/Tankr?style=for-the-badge&logo=github&label=Release&color=blue)](https://github.com/Coderaryanyadav/Tankr/releases/latest)
 [![Expo](https://img.shields.io/badge/Expo-SDK_58.0.21-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
 [![React Native](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -14,6 +15,7 @@
 <br/>
 
 **[🏠 Root README](../README.md)** &nbsp;•&nbsp;
+**[📦 Releases](https://github.com/Coderaryanyadav/Tankr/releases)** &nbsp;•&nbsp;
 **[📐 Architecture](#1-architecture-reference)** &nbsp;•&nbsp;
 **[⚙️ Setup Guides](#2-setup--configuration-guides)** &nbsp;•&nbsp;
 **[💻 Development](#3-development-standards)** &nbsp;•&nbsp;

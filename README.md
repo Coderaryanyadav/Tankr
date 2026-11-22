@@ -12,6 +12,7 @@
 
 <br/>
 
+[![Release](https://img.shields.io/github/v/release/Coderaryanyadav/Tankr?style=for-the-badge&logo=github&label=Release&color=blue)](https://github.com/Coderaryanyadav/Tankr/releases/latest)
 [![Expo](https://img.shields.io/badge/Expo-SDK_58.0.21-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
 [![React Native](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -23,11 +24,12 @@
 
 <br/>
 
+**[📦 Multi-Platform Releases (APK / iOS / DMG / EXE)](https://github.com/Coderaryanyadav/Tankr/releases)** &nbsp;•&nbsp;
 **[📱 Visual Showcase](#-executive-visual-showcase)** &nbsp;•&nbsp;
-**[📐 Architecture](#2-system-architecture--documented-technical-diagrams)**
-&nbsp;•&nbsp; **[🚀 Quick Start](#8-automated-quick-start-one-command-setup)**
-&nbsp;•&nbsp; **[🔑 Demo Credentials](#9-genuine-local-demo-credentials)**
-&nbsp;•&nbsp; **[🧪 Test Gates](#11-testing--verification-gates)** &nbsp;•&nbsp;
+**[📐 Architecture](#2-system-architecture--operational-flow-patterns)** &nbsp;•&nbsp;
+**[🚀 Quick Start](#8-automated-quick-start-one-command-setup)** &nbsp;•&nbsp;
+**[🔑 Demo Credentials](#9-genuine-local-demo-credentials)** &nbsp;•&nbsp;
+**[🧪 Test Gates](#11-testing--verification-gates)** &nbsp;•&nbsp;
 **[🤝 Contributing](./CONTRIBUTING.md)**
 
 </div>
@@ -36,27 +38,52 @@
 
 ## 📱 Executive Visual Showcase
 
-<table align="center">
+<div align="center">
+  <h3>End-to-End Operational Dispatch Lifecycle</h3>
+  <p><i>From consumer sump discovery to atomic fleet matching, real-time telemetry, and secure 4-digit PIN handover.</i></p>
+</div>
+
+<table align="center" width="100%">
   <tr>
     <td align="center" width="25%">
-      <b>1. Consumer Discovery</b><br/>
-      <img src="docs/screenshots/customer/04_customer_home_discovery.png" width="200" style="border-radius: 12px; margin-top: 6px;" /><br/>
-      <i>Radar & Sump Pinpointing</i>
+      <b>1. Sump Discovery</b><br/>
+      <img src="docs/screenshots/customer/04_customer_home_discovery.png" width="190" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" /><br/>
+      <sub>Radar & Sump Pinpointing</sub>
     </td>
     <td align="center" width="25%">
-      <b>2. Live Telemetry</b><br/>
-      <img src="docs/screenshots/customer/09_customer_live_tracking.png" width="200" style="border-radius: 12px; margin-top: 6px;" /><br/>
-      <i>Real-Time GPS Tracking</i>
+      <b>2. Atomic Lock</b><br/>
+      <img src="docs/screenshots/customer/06_customer_booking_searching.png" width="190" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" /><br/>
+      <sub>PostgreSQL Concurrency Guard</sub>
     </td>
     <td align="center" width="25%">
-      <b>3. Driver Console</b><br/>
-      <img src="docs/screenshots/driver/18_driver_dashboard_active.png" width="200" style="border-radius: 12px; margin-top: 6px;" /><br/>
-      <i>Turn-by-Turn & 4-Digit PIN</i>
+      <b>3. Live Telemetry</b><br/>
+      <img src="docs/screenshots/customer/09_customer_live_tracking.png" width="190" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" /><br/>
+      <sub>GPS Breadcrumbs & Dynamic ETA</sub>
     </td>
     <td align="center" width="25%">
-      <b>4. Admin Operations</b><br/>
-      <img src="docs/screenshots/admin/23_admin_overview_radar.png" width="200" style="border-radius: 12px; margin-top: 6px;" /><br/>
-      <i>10 Live Desks & Fleet Heatmap</i>
+      <b>4. Driver Handover</b><br/>
+      <img src="docs/screenshots/driver/18_driver_dashboard_active.png" width="190" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" /><br/>
+      <sub>Turn-by-Turn & 4-Digit PIN</sub>
+    </td>
+  </tr>
+</table>
+
+<div align="center" style="margin-top: 14px;">
+  <h3>Operations Command Center (Super Admin Portal)</h3>
+  <p><i>Metropolitan fleet surveillance, dynamic surge control, and hospital emergency dispatch override.</i></p>
+</div>
+
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="50%">
+      <b>Overview Radar & Surge Control (Desk 1)</b><br/>
+      <img src="docs/screenshots/admin/23_admin_overview_radar.png" width="370" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" /><br/>
+      <sub>Real-time GMV, active deliveries, and dynamic surge multiplier slider (1.0x - 2.5x)</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Fleet Map & Anti-Collision Heatmap (Desk 2)</b><br/>
+      <img src="docs/screenshots/admin/24_admin_fleet_map.png" width="370" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" /><br/>
+      <sub>Fermat spiral anti-collision positioning across Mumbai Metro service zones</sub>
     </td>
   </tr>
 </table>
@@ -393,66 +420,6 @@ flowchart LR
 
 ### 2.4 Booking & Dispatch State Machine
 
-TANKR connects decoupled client view layers with reactive Zustand domain stores,
-synchronizing seamlessly with Supabase Realtime WebSocket CDC (Change Data
-Capture) feeds and PostgreSQL stored procedures:
-
-```mermaid
-flowchart LR
-    subgraph UI["React Native Mobile & Web UI"]
-        DiscoveryUI["Discovery & Radar Map"]
-        BookingUI["Booking & Checkout Sheet"]
-        TrackingUI["Live Tracking Screen"]
-        DriverUI["Driver Console & PIN Handover"]
-        AdminUI["10-Desk Operations Command"]
-    end
-
-    subgraph Stores["Zustand Client Stores"]
-        DiscStore["useDiscoveryStore<br>(Selected Sump, Quote, Radius)"]
-        BookStore["useBookingStore<br>(Active Order, PIN, Status)"]
-        LocStore["useLocationStore<br>(GPS Coordinates, Addresses)"]
-        SupStore["useSupplyStore<br>(Fleet Vehicles, Shifts, Flow Meter)"]
-        AdmStore["useAdminStore<br>(10 Desks, SOS Overrides, Fleet Heatmap)"]
-    end
-
-    subgraph Adapters["Domain Services & Adapters"]
-        PriceSvc["pricingService.ts<br>(Surge Multiplier & Quotes)"]
-        TrackSvc["trackingService.ts<br>(Background Location Queue)"]
-        PaySvc["paymentService.ts<br>(Razorpay Webhooks & Verification)"]
-        StateSvc["stateMachineService.ts<br>(Lifecycle Transitions)"]
-    end
-
-    subgraph Supa["Supabase Cloud Platform"]
-        RealtimeEngine["Supabase Realtime WebSocket Pub/Sub<br>(Channels: tankers, bookings, breadcrumbs, dispatches)"]
-        RPCs["PostgreSQL 19 Security Definer RPCs<br>(create_booking_atomic, record_driver_location_ping)"]
-        Postgres[("PostgreSQL 15 + PostGIS Engine<br>21 Tables • Strict RLS Policies")]
-    end
-
-    DiscoveryUI <--> DiscStore
-    BookingUI <--> BookStore
-    TrackingUI <--> LocStore
-    DriverUI <--> SupStore
-    AdminUI <--> AdmStore
-
-    DiscStore --> PriceSvc
-    BookStore --> StateSvc
-    LocStore --> TrackSvc
-    BookStore --> PaySvc
-
-    PriceSvc --> RPCs
-    StateSvc --> RPCs
-    TrackSvc --> RPCs
-    PaySvc --> RPCs
-
-    RPCs --> Postgres
-    Postgres --> RealtimeEngine
-    RealtimeEngine -.->|live CDC stream| Stores
-```
-
----
-
-### 2.4 Booking & Dispatch State Machine
-
 TANKR enforces strict atomic lifecycle state transitions. A booking cannot skip
 intermediate milestones, nor can a vehicle be assigned concurrently to multiple
 requests:
@@ -601,209 +568,254 @@ graph TD
 
 ## 3. Comprehensive Screenshot Gallery (33 Production Screens)
 
-Every screen across all four stakeholder roles is fully implemented, verified,
-and captured in high-resolution:
+Every screen across all four stakeholder roles is fully implemented, verified, and captured in high-resolution:
 
-### 3.1 Consumer Mobile Application Experience
+### 3.1 Consumer Mobile Application Experience (Screens 01 – 17)
 
-<table align="center">
+#### 🔐 Stage 1: Identity Verification & Sump Onboarding
+<table align="center" width="100%">
   <tr>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <b>01. Mobile Login</b><br/>
-      <img src="docs/screenshots/customer/01_auth_login.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Phone SMS OTP Gateway</i>
+      <img src="docs/screenshots/customer/01_auth_login.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Phone SMS OTP Gateway & Role Select</sub>
     </td>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <b>02. OTP Verification</b><br/>
-      <img src="docs/screenshots/customer/02_auth_otp_verify.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>6-Digit Numeric Pin</i>
+      <img src="docs/screenshots/customer/02_auth_otp_verify.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>6-Digit Numeric Pin & Instant Auth</sub>
     </td>
-    <td align="center" width="20%">
-      <b>03. Onboarding</b><br/>
-      <img src="docs/screenshots/customer/03_auth_onboarding.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Profile & Sump Location</i>
+    <td align="center" width="33%">
+      <b>03. Sump Onboarding</b><br/>
+      <img src="docs/screenshots/customer/03_auth_onboarding.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Society Name & Sump Inlet Location</sub>
     </td>
-    <td align="center" width="20%">
+  </tr>
+</table>
+
+#### 📍 Stage 2: Sump Radar Discovery, Quoting & Concurrency Lock
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="33%">
       <b>04. Tanker Radar</b><br/>
-      <img src="docs/screenshots/customer/04_customer_home_discovery.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Capacity & Grade Selector</i>
+      <img src="docs/screenshots/customer/04_customer_home_discovery.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Capacity (2k–20k L) & BIS 10500 Selector</sub>
     </td>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <b>05. Booking Review</b><br/>
-      <img src="docs/screenshots/customer/05_customer_booking_review.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Surge Quote & GST Breakdown</i>
+      <img src="docs/screenshots/customer/05_customer_booking_review.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>15-Min Guaranteed Quote & GST Breakdown</sub>
     </td>
-  </tr>
-  <tr>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
       <b>06. Radar Matching</b><br/>
-      <img src="docs/screenshots/customer/06_customer_booking_searching.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Nearest Fleet Lock</i>
+      <img src="docs/screenshots/customer/06_customer_booking_searching.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>PostgreSQL Row-Lock & Fleet Assignment</sub>
     </td>
-    <td align="center" width="20%">
-      <b>07. Bookings Ledger</b><br/>
-      <img src="docs/screenshots/customer/07_customer_bookings_list.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Historical & Active Orders</i>
-    </td>
-    <td align="center" width="20%">
-      <b>08. Tax Invoice</b><br/>
-      <img src="docs/screenshots/customer/08_customer_tax_invoice.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>GST Compliant Receipt</i>
-    </td>
-    <td align="center" width="20%">
+  </tr>
+</table>
+
+#### 📡 Stage 3: Real-Time Transit, Invoicing & Order History
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="33%">
       <b>09. Live GPS Telemetry</b><br/>
-      <img src="docs/screenshots/customer/09_customer_live_tracking.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Real-Time Breadcrumbs & PIN</i>
+      <img src="docs/screenshots/customer/09_customer_live_tracking.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Real-Time Breadcrumbs & 4-Digit Handover PIN</sub>
     </td>
-    <td align="center" width="20%">
+    <td align="center" width="33%">
+      <b>08. GST Tax Invoice</b><br/>
+      <img src="docs/screenshots/customer/08_customer_tax_invoice.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Compliant PDF Tax Receipt & Split Ledger</sub>
+    </td>
+    <td align="center" width="33%">
+      <b>07. Bookings Ledger</b><br/>
+      <img src="docs/screenshots/customer/07_customer_bookings_list.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Historical Orders, Live Status & Re-order</sub>
+    </td>
+  </tr>
+</table>
+
+#### 🔬 Stage 4: Water Purity, Fair Metering & Dispute Resolution
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="33%">
+      <b>12. Water Quality Monitor</b><br/>
+      <img src="docs/screenshots/customer/12_customer_water_quality.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>BIS 10500 Sensor Data (TDS, pH, Turbidity)</sub>
+    </td>
+    <td align="center" width="33%">
+      <b>13. Fair Metering Audit</b><br/>
+      <img src="docs/screenshots/customer/13_customer_fair_metering.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Calibrated Digital Flow Meter Attestation</sub>
+    </td>
+    <td align="center" width="33%">
+      <b>14. Dispute & Escrow Modal</b><br/>
+      <img src="docs/screenshots/customer/14_customer_dispute_modal.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Discrepancy Reporting & Instant Arbitration</sub>
+    </td>
+  </tr>
+</table>
+
+#### 🏘️ Stage 5: Multi-Sump Assets, Community Pool & Support
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="33%">
       <b>10. Account Profile</b><br/>
-      <img src="docs/screenshots/customer/10_customer_account_profile.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Role & Settings</i>
+      <img src="docs/screenshots/customer/10_customer_account_profile.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Role Switch, Security & Preferences</sub>
+    </td>
+    <td align="center" width="33%">
+      <b>11. Saved Sump Addresses</b><br/>
+      <img src="docs/screenshots/customer/11_customer_saved_addresses.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Multiple Sump Inlet GPS Coordinates</sub>
+    </td>
+    <td align="center" width="33%">
+      <b>15. Community Pool</b><br/>
+      <img src="docs/screenshots/customer/15_customer_community_pool.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Shared Society Tanker Cost Splitting</sub>
     </td>
   </tr>
   <tr>
-    <td align="center" width="20%">
-      <b>11. Saved Addresses</b><br/>
-      <img src="docs/screenshots/customer/11_customer_saved_addresses.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Sump Inlet Coordinates</i>
+    <td align="center" width="33%">
+      <b>16. Push Notifications</b><br/>
+      <img src="docs/screenshots/customer/16_customer_notifications.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Arrival Alerts, Sump Fill & Dispatches</sub>
     </td>
-    <td align="center" width="20%">
-      <b>12. Water Quality</b><br/>
-      <img src="docs/screenshots/customer/12_customer_water_quality.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>BIS 10500 Lab Sensor Data</i>
+    <td align="center" width="33%">
+      <b>17. Support Helpdesk</b><br/>
+      <img src="docs/screenshots/customer/17_customer_support_desk.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>24/7 Operations Desk & Escalations</sub>
     </td>
-    <td align="center" width="20%">
-      <b>13. Fair Metering</b><br/>
-      <img src="docs/screenshots/customer/13_customer_fair_metering.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Digital Flow Meter Audit</i>
-    </td>
-    <td align="center" width="20%">
-      <b>14. Dispute Modal</b><br/>
-      <img src="docs/screenshots/customer/14_customer_dispute_modal.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Evidence & Arbitration</i>
-    </td>
-    <td align="center" width="20%">
-      <b>15. Community Pool</b><br/>
-      <img src="docs/screenshots/customer/15_customer_community_pool.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Shared Society Tanker</i>
+    <td align="center" width="33%">
+      <div style="padding: 20px 10px; background: #F0F9FF; border-radius: 12px; border: 1px dashed #0284C7; margin-top: 6px;">
+        <b>Interactive Gallery</b><br/><br/>
+        <sub>Explore all 33 production screen captures cross-referenced by role:</sub><br/><br/>
+        <a href="docs/screenshots/index.html">👉 <b>Open HTML Gallery</b></a>
+      </div>
     </td>
   </tr>
 </table>
 
 ---
 
-### 3.2 Fleet Driver Navigation & Delivery Handover
+### 3.2 Fleet Driver Navigation & Delivery Handover (Screens 18 – 19)
 
-<table align="center">
+<table align="center" width="100%">
   <tr>
     <td align="center" width="50%">
       <b>18. Driver Active Delivery Dashboard</b><br/>
-      <img src="docs/screenshots/driver/18_driver_dashboard_active.png" width="220" style="border-radius: 10px; margin-top: 6px;"/><br/>
-      <i>Turn-by-turn routing, customer sump contact, and live telemetry ping transmission</i>
+      <img src="docs/screenshots/driver/18_driver_dashboard_active.png" width="240" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Turn-by-turn routing, customer sump contact, and live telemetry ping transmission</sub>
     </td>
     <td align="center" width="50%">
       <b>19. Calibrated Meter & PIN Handover</b><br/>
-      <img src="docs/screenshots/driver/19_driver_meter_verification.png" width="220" style="border-radius: 10px; margin-top: 6px;"/><br/>
-      <i>4-digit customer PIN entry and digital flow meter volume calibration reading</i>
+      <img src="docs/screenshots/driver/19_driver_meter_verification.png" width="240" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>4-digit customer PIN entry and digital flow meter volume calibration reading</sub>
     </td>
   </tr>
 </table>
 
 ---
 
-### 3.3 Water Supplier Management Portal
+### 3.3 Water Supplier Management Portal (Screens 20 – 22)
 
-<table align="center">
+<table align="center" width="100%">
   <tr>
     <td align="center" width="33%">
       <b>20. Supplier Fleet Dashboard</b><br/>
-      <img src="docs/screenshots/supplier/20_supplier_dashboard_fleet.png" width="200" style="border-radius: 10px; margin-top: 6px;"/><br/>
-      <i>Active tankers, assigned drivers, and daily revenue ledger</i>
+      <img src="docs/screenshots/supplier/20_supplier_dashboard_fleet.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Active tankers, assigned drivers, and daily revenue ledger</sub>
     </td>
     <td align="center" width="33%">
       <b>21. Vehicle Onboarding Modal</b><br/>
-      <img src="docs/screenshots/supplier/21_supplier_add_vehicle.png" width="200" style="border-radius: 10px; margin-top: 6px;"/><br/>
-      <i>License plate, capacity selection (2k-20k L), and water source grade</i>
+      <img src="docs/screenshots/supplier/21_supplier_add_vehicle.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>License plate, capacity selection (2k–20k L), and water source grade</sub>
     </td>
     <td align="center" width="33%">
       <b>22. Supplier Registration</b><br/>
-      <img src="docs/screenshots/supplier/22_supplier_registration.png" width="200" style="border-radius: 10px; margin-top: 6px;"/><br/>
-      <i>Business entity verification, GSTIN, and municipal extraction permits</i>
+      <img src="docs/screenshots/supplier/22_supplier_registration.png" width="220" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Business entity verification, GSTIN, and municipal extraction permits</sub>
     </td>
   </tr>
 </table>
 
 ---
 
-### 3.4 Operations Super Admin Portal (10 Live Desks)
+### 3.4 Operations Super Admin Portal (10 Live Desks, Screens 23 – 32)
 
-<table align="center">
+<table align="center" width="100%">
   <tr>
-    <td align="center" width="20%">
-      <b>23. Overview Radar</b><br/>
-      <img src="docs/screenshots/admin/23_admin_overview_radar.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Live GMV & Dynamic Surge Multiplier</i>
+    <td align="center" width="50%">
+      <b>23. Overview Radar & Dynamic Surge (Desk 1)</b><br/>
+      <img src="docs/screenshots/admin/23_admin_overview_radar.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Live GMV, active deliveries, and dynamic surge multiplier slider (1.0x - 2.5x)</sub>
     </td>
-    <td align="center" width="20%">
-      <b>24. Fleet Map Heatmap</b><br/>
-      <img src="docs/screenshots/admin/24_admin_fleet_map.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Fermat Spiral Anti-Collision Radar</i>
-    </td>
-    <td align="center" width="20%">
-      <b>25. Hospital SLA Dispatch</b><br/>
-      <img src="docs/screenshots/admin/25_admin_priority_dispatch.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>20-Min ICU Emergency Override</i>
-    </td>
-    <td align="center" width="20%">
-      <b>26. Payouts Ledger</b><br/>
-      <img src="docs/screenshots/admin/26_admin_payouts_ledger.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>85/5/10 Automated Escrow Reconciliation</i>
-    </td>
-    <td align="center" width="20%">
-      <b>27. Water Safety Audit</b><br/>
-      <img src="docs/screenshots/admin/27_admin_water_safety.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>BIS 10500 Lab Sensor Monitoring</i>
+    <td align="center" width="50%">
+      <b>24. Fleet Map Heatmap (Desk 2)</b><br/>
+      <img src="docs/screenshots/admin/24_admin_fleet_map.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Fermat spiral anti-collision positioning across Mumbai Metro service zones</sub>
     </td>
   </tr>
   <tr>
-    <td align="center" width="20%">
-      <b>28. Corporate Contracts</b><br/>
-      <img src="docs/screenshots/admin/28_admin_corporate_subscriptions.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Commercial B2B Agreements & SLAs</i>
+    <td align="center" width="50%">
+      <b>25. Hospital Priority Dispatch (Desk 3)</b><br/>
+      <img src="docs/screenshots/admin/25_admin_priority_dispatch.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>20-minute emergency SLA override for critical dialysis and ICU facilities</sub>
     </td>
-    <td align="center" width="20%">
-      <b>29. KYC Approvals</b><br/>
-      <img src="docs/screenshots/admin/29_admin_kyc_approvals.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Supplier Extraction License Review</i>
+    <td align="center" width="50%">
+      <b>26. Payouts Ledger & Escrow Splits (Desk 4)</b><br/>
+      <img src="docs/screenshots/admin/26_admin_payouts_ledger.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>85% driver, 5% fleet maintenance, and 10% platform automated reconciliation</sub>
     </td>
-    <td align="center" width="20%">
-      <b>30. Disputes & Escrow</b><br/>
-      <img src="docs/screenshots/admin/30_admin_disputes_escrow.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Arbitration & Instant Atomic Refunds</i>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>27. Water Safety & Sensor Surveillance (Desk 5)</b><br/>
+      <img src="docs/screenshots/admin/27_admin_water_safety.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Real-time BIS 10500 laboratory sensor monitoring (TDS, pH, turbidity)</sub>
     </td>
-    <td align="center" width="20%">
-      <b>31. PostGIS Service Zones</b><br/>
-      <img src="docs/screenshots/admin/31_admin_service_zones.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Zone Boundaries & Fleet Liquidity</i>
+    <td align="center" width="50%">
+      <b>28. Corporate B2B Contracts (Desk 6)</b><br/>
+      <img src="docs/screenshots/admin/28_admin_corporate_subscriptions.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Recurring commercial sump subscription contracts and SLA management</sub>
     </td>
-    <td align="center" width="20%">
-      <b>32. System Audit Log</b><br/>
-      <img src="docs/screenshots/admin/32_admin_system_audit_log.png" width="160" style="border-radius: 8px; margin-top: 4px;"/><br/>
-      <i>Immutable Administrative Trail</i>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>29. Supplier KYC Approvals (Desk 7)</b><br/>
+      <img src="docs/screenshots/admin/29_admin_kyc_approvals.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Municipal water extraction license review, GSTIN and RTO fitness verification</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>30. Disputes & Escrow Desk (Desk 8)</b><br/>
+      <img src="docs/screenshots/admin/30_admin_disputes_escrow.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Customer dispute arbitration, flow meter evidence, and instant atomic refunds</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>31. PostGIS Service Zones (Desk 9)</b><br/>
+      <img src="docs/screenshots/admin/31_admin_service_zones.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Geospatial polygon boundaries, minimum fleet density, and surge threshold configuration</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>32. System Audit Log (Desk 10)</b><br/>
+      <img src="docs/screenshots/admin/32_admin_system_audit_log.png" width="360" style="border-radius: 10px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);"/><br/>
+      <sub>Immutable real-time audit trail of all security, dispatch, and financial actions</sub>
     </td>
   </tr>
 </table>
 
 ---
 
-### 3.5 Antigravity Design System Showcase
+### 3.5 Antigravity Design System Showcase (Screen 33)
 
-<table align="center">
+<table align="center" width="100%">
   <tr>
     <td align="center" width="100%">
       <b>33. Design Tokens & Component Hierarchy</b><br/>
-      <img src="docs/screenshots/showcase/33_showcase_design_system.png" width="400" style="border-radius: 12px; margin-top: 6px;"/><br/>
-      <i>Interactive showcase of water color schemes, typography scales, elevation shadows, buttons, and haptic motion curves</i>
+      <img src="docs/screenshots/showcase/33_showcase_design_system.png" width="540" style="border-radius: 12px; margin-top: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);"/><br/>
+      <sub>Interactive showcase of water color schemes, typography scales, elevation shadows, buttons, and haptic motion curves</sub>
     </td>
   </tr>
 </table>
