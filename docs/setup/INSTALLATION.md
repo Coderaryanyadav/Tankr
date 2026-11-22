@@ -4,28 +4,15 @@
 
 The fastest and most reliable way to prepare your machine for TANKR development is our platform-specific automated setup:
 
-### macOS / Linux
+### Quick Start
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Coderaryanyadav/Tankr.git
 cd Tankr
 
 # 2. Make scripts executable and run setup
-chmod +x scripts/*.sh scripts/mac/*.sh
-./scripts/mac/setup.sh
-# or simply: ./scripts/setup.sh
-```
-
-### Windows (CMD & PowerShell)
-```bat
-REM From Command Prompt:
-scripts\win\setup.bat
-REM or simply:
-scripts\setup.bat
-```
-```powershell
-# From PowerShell:
-powershell -ExecutionPolicy Bypass -File scripts\win\setup.ps1
+chmod +x scripts/*.sh
+./scripts/setup.sh
 ```
 
 The setup script automatically:

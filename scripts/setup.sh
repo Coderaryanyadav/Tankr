@@ -115,7 +115,6 @@ ensure_prerequisites() {
 echo ""
 echo -e "${BOLD}[2/7] Checking & Auto-Installing Prerequisites...${NC}"
 chmod +x scripts/*.sh 2>/dev/null || true
-chmod +x scripts/mac/*.sh 2>/dev/null || true
 
 ensure_prerequisites
 
@@ -188,9 +187,9 @@ echo -e "${GREEN}${BOLD}           ✨ TANKR LOCAL ENVIRONMENT SETUP COMPLETE! �
 echo -e "${BLUE}${BOLD}================================================================${NC}"
 echo ""
 echo -e "${BOLD}To start the local development server:${NC}"
-echo -e "  ${CYAN}./scripts/mac/start-dev.sh web${NC}       (Browser: http://localhost:8081)"
-echo -e "  ${CYAN}./scripts/mac/start-dev.sh android${NC}   (Android Emulator)"
-echo -e "  ${CYAN}./scripts/mac/start-dev.sh ios${NC}       (iOS Simulator)"
+echo -e "  ${CYAN}./scripts/start-dev.sh web${NC}       (Browser: http://localhost:8081)"
+echo -e "  ${CYAN}./scripts/start-dev.sh android${NC}   (Android Emulator)"
+echo -e "  ${CYAN}./scripts/start-dev.sh ios${NC}       (iOS Simulator)"
 echo ""
 echo -e "${BOLD}Local Demo Credentials (fixed OTP: 123456):${NC}"
 echo -e "  • Super Admin:     Phone: ${BOLD}8888888888${NC} (Access to all 10 Operations Desks)"
