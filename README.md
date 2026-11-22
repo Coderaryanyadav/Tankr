@@ -70,12 +70,14 @@
 ## 📖 Table of Contents
 
 - [1. Introduction & Mission](#1-introduction--mission)
-- [2. System Architecture & Documented Technical Diagrams](#2-system-architecture--documented-technical-diagrams)
-  - [2.1 End-to-End System Architecture & Data Plane](#21-end-to-end-system-architecture--data-plane)
-  - [2.2 Booking & Dispatch State Machine](#22-booking--dispatch-state-machine)
-  - [2.3 Real-Time GPS Telemetry & PostGIS Breadcrumb Ingestion](#23-real-time-gps-telemetry--postgis-breadcrumb-ingestion)
-  - [2.4 Razorpay Escrow, GST Invoicing & Automated Payout Splits (85/5/10)](#24-razorpay-escrow-gst-invoicing--automated-payout-splits-85510)
-  - [2.5 Operations Command 10-Desk Hierarchy & Emergency Override Dispatch Flow](#25-operations-command-10-desk-hierarchy--emergency-override-dispatch-flow)
+- [2. System Architecture & Operational Flow Patterns](#2-system-architecture--operational-flow-patterns)
+  - [2.1 Mission-Critical Dispatch & Delivery Flow Pattern](#21-mission-critical-dispatch--delivery-flow-pattern)
+  - [2.2 End-to-End System Architecture & Data Plane](#22-end-to-end-system-architecture--data-plane)
+  - [2.3 Real-Time State Management & WebSocket Sync Flow](#23-real-time-state-management--websocket-sync-flow)
+  - [2.4 Booking & Dispatch State Machine](#24-booking--dispatch-state-machine)
+  - [2.5 Real-Time GPS Telemetry & PostGIS Breadcrumb Ingestion](#25-real-time-gps-telemetry--postgis-breadcrumb-ingestion)
+  - [2.6 Razorpay Escrow, GST Invoicing & Automated Payout Splits (85/5/10)](#26-razorpay-escrow-gst-invoicing--automated-payout-splits-85510)
+  - [2.7 Operations Command 10-Desk Hierarchy & Emergency Override Dispatch Flow](#27-operations-command-10-desk-hierarchy--emergency-override-dispatch-flow)
 - [3. Comprehensive Screenshot Gallery (33 Production Screens)](#3-comprehensive-screenshot-gallery-33-production-screens)
   - [3.1 Consumer Mobile Application Experience](#31-consumer-mobile-application-experience)
   - [3.2 Fleet Driver Navigation & Delivery Handover](#32-fleet-driver-navigation--delivery-handover)
@@ -155,9 +157,64 @@ purity, and lack of accountability.
 
 ---
 
-## 2. System Architecture & Documented Technical Diagrams
+## 2. System Architecture & Operational Flow Patterns
 
-### 2.1 End-to-End System Architecture & Data Plane
+### 2.1 Mission-Critical Dispatch & Delivery Flow Pattern
+
+The following diagram illustrates the complete 5-stage lifecycle flow pattern
+governing every water dispatch in TANKR — from high-precision sump pin geocoding
+and atomic concurrency locking to real-time telemetry streaming, cryptographic
+PIN handover, calibrated flow metering, and automated escrow split settlement:
+
+```mermaid
+flowchart TD
+    subgraph Phase1["Phase 1: Consumer Discovery & Sump Pinpointing"]
+        A1["Consumer Drops Map Pin on Building Sump"] --> A2["Select Tanker Capacity (2,000L to 20,000L)"]
+        A2 --> A3["Select Purity Grade (Potable BIS 10500 / Borewell / Construction)"]
+        A3 --> A4["Atomic Quote Generator: 15-Minute Guaranteed Price Lock"]
+        A4 --> A5["Razorpay Escrow Authorization (Payment Secured)"]
+    end
+
+    subgraph Phase2["Phase 2: Atomic Dispatch & Anti-Double-Booking"]
+        B1["PostGIS Spatial Match (ST_DWithin 5km Radius)"] --> B2["SELECT ... FOR UPDATE (Row-Level Concurrency Lock)"]
+        B2 --> B3{"Tanker Available?"}
+        B3 -->|Yes| B4["Assign Nearest Tanker & Emit Dispatch Event"]
+        B3 -->|No| B5["Auto-Escalate to Emergency Regional Hub"]
+        B4 --> B6["Driver Console Accepts Assignment"]
+    end
+
+    subgraph Phase3["Phase 3: Real-Time Transit & Telemetry Stream"]
+        C1["Driver Initiates Trip (Status: En Route)"] --> C2["Background Location Task Streams GPS (10s Intervals)"]
+        C2 --> C3["PostGIS Ingestion: ST_SetSRID Point & Breadcrumb Record"]
+        C3 --> C4["Supabase Realtime WebSocket Broadcast"]
+        C4 --> C5["Customer Map: Real-Time Tanker Interpolation & Dynamic ETA"]
+    end
+
+    subgraph Phase4["Phase 4: Two-Party Handover & Fair Metering"]
+        D1["Driver Arrives at Customer Sump Perimeter (Geofence Check)"] --> D2["Customer Displays Secure 4-Digit Handover PIN"]
+        D2 --> D3["Driver Enters PIN in Driver Console (Cryptographic Verify)"]
+        D3 --> D4["Discharge Valve Unlocked & Water Pumped into Sump"]
+        D4 --> D5["Digital Flow Meter Records Actual Volume Dispensed"]
+        D5 --> D6["Driver Confirms Volume with Meter Attestation"]
+    end
+
+    subgraph Phase5["Phase 5: Automated Escrow Settlement & Audit"]
+        E1["Atomic Settlement Trigger (driver_complete_delivery_with_meter)"] --> E2["Escrow Release: 85% Driver Payout Ledger"]
+        E1 --> E3["Escrow Release: 5% Fleet Maintenance Reserve"]
+        E1 --> E4["Escrow Release: 10% Platform Protocol Fee"]
+        E1 --> E5["Generate GST-Compliant PDF Tax Invoice Receipt"]
+        E1 --> E6["Write Immutable Entry to Admin Security Audit Log"]
+    end
+
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+    Phase3 --> Phase4
+    Phase4 --> Phase5
+```
+
+---
+
+### 2.2 End-to-End System Architecture & Data Plane
 
 The following diagram illustrates the complete architectural boundary, from
 multi-role clients to the server-driven role routing layer, PostgreSQL stored
@@ -219,7 +276,67 @@ graph TB
 
 ---
 
-### 2.2 Booking & Dispatch State Machine
+### 2.3 Real-Time State Management & WebSocket Sync Flow
+
+TANKR connects decoupled client view layers with reactive Zustand domain stores,
+synchronizing seamlessly with Supabase Realtime WebSocket CDC (Change Data
+Capture) feeds and PostgreSQL stored procedures:
+
+```mermaid
+flowchart LR
+    subgraph UI["React Native Mobile & Web UI"]
+        DiscoveryUI["Discovery & Radar Map"]
+        BookingUI["Booking & Checkout Sheet"]
+        TrackingUI["Live Tracking Screen"]
+        DriverUI["Driver Console & PIN Handover"]
+        AdminUI["10-Desk Operations Command"]
+    end
+
+    subgraph Stores["Zustand Client Stores"]
+        DiscStore["useDiscoveryStore<br>(Selected Sump, Quote, Radius)"]
+        BookStore["useBookingStore<br>(Active Order, PIN, Status)"]
+        LocStore["useLocationStore<br>(GPS Coordinates, Addresses)"]
+        SupStore["useSupplyStore<br>(Fleet Vehicles, Shifts, Flow Meter)"]
+        AdmStore["useAdminStore<br>(10 Desks, SOS Overrides, Fleet Heatmap)"]
+    end
+
+    subgraph Adapters["Domain Services & Adapters"]
+        PriceSvc["pricingService.ts<br>(Surge Multiplier & Quotes)"]
+        TrackSvc["trackingService.ts<br>(Background Location Queue)"]
+        PaySvc["paymentService.ts<br>(Razorpay Webhooks & Verification)"]
+        StateSvc["stateMachineService.ts<br>(Lifecycle Transitions)"]
+    end
+
+    subgraph Supa["Supabase Cloud Platform"]
+        RealtimeEngine["Supabase Realtime WebSocket Pub/Sub<br>(Channels: tankers, bookings, breadcrumbs, dispatches)"]
+        RPCs["PostgreSQL 19 Security Definer RPCs<br>(create_booking_atomic, record_driver_location_ping)"]
+        Postgres[("PostgreSQL 15 + PostGIS Engine<br>21 Tables • Strict RLS Policies")]
+    end
+
+    DiscoveryUI <--> DiscStore
+    BookingUI <--> BookStore
+    TrackingUI <--> LocStore
+    DriverUI <--> SupStore
+    AdminUI <--> AdmStore
+
+    DiscStore --> PriceSvc
+    BookStore --> StateSvc
+    LocStore --> TrackSvc
+    BookStore --> PaySvc
+
+    PriceSvc --> RPCs
+    StateSvc --> RPCs
+    TrackSvc --> RPCs
+    PaySvc --> RPCs
+
+    RPCs --> Postgres
+    Postgres --> RealtimeEngine
+    RealtimeEngine -.->|live CDC stream| Stores
+```
+
+---
+
+### 2.4 Booking & Dispatch State Machine
 
 TANKR enforces strict atomic lifecycle state transitions. A booking cannot skip
 intermediate milestones, nor can a vehicle be assigned concurrently to multiple
@@ -262,7 +379,7 @@ stateDiagram-v2
 
 ---
 
-### 2.3 Real-Time GPS Telemetry & PostGIS Breadcrumb Ingestion
+### 2.5 Real-Time GPS Telemetry & PostGIS Breadcrumb Ingestion
 
 High-frequency location pings from the driver console stream through background
 tasks, PostGIS spatial coordinates, and Supabase WebSockets to render smooth
@@ -296,7 +413,7 @@ sequenceDiagram
 
 ---
 
-### 2.4 Razorpay Escrow, GST Invoicing & Automated Payout Splits (85/5/10)
+### 2.6 Razorpay Escrow, GST Invoicing & Automated Payout Splits (85/5/10)
 
 Payments are securely verified and split into transparent ledger entries upon
 atomic completion:
@@ -340,7 +457,7 @@ sequenceDiagram
 
 ---
 
-### 2.5 Operations Command 10-Desk Hierarchy & Emergency Override Dispatch Flow
+### 2.7 Operations Command 10-Desk Hierarchy & Emergency Override Dispatch Flow
 
 The Super Administrator Command Portal coordinates metropolitan water supplies,
 dynamic pricing multipliers, emergency hospital overrides, and regulatory
