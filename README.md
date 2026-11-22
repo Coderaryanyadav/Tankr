@@ -8,8 +8,6 @@
   <i>Mission-critical water logistics for high-density metropolitan ecosystems — calibrated for Mumbai Metro.</i>
 </p>
 
-<img src="docs/screenshots/customer/04_customer_home_discovery.png" alt="TANKR Mobile App Discovery" width="280" style="border-radius: 18px; box-shadow: 0 12px 36px rgba(0,0,0,0.22); margin: 12px 0;" />
-
 <br/>
 
 [![Release](https://img.shields.io/github/v/release/Coderaryanyadav/Tankr?style=for-the-badge&logo=github&label=Release&color=blue)](https://github.com/Coderaryanyadav/Tankr/releases/latest)
