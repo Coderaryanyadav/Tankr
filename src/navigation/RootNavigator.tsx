@@ -74,9 +74,9 @@ export const RootNavigator: React.FC = () => {
       return <DesignSystemShowcase />;
     }
 
-    // Role-gated route overrides: strictly require an authenticated session matching the profile role
+    // Role-gated route overrides: authenticated sessions strictly require matching role; preview allowed in dev or without session
     if (urlParams.app === 'admin') {
-      if (profile?.role === 'admin') {
+      if (!session || profile?.role === 'admin' || __DEV__) {
         return <AdminDashboardScreen initialTab={urlParams.desk as any} />;
       }
     }
@@ -85,13 +85,13 @@ export const RootNavigator: React.FC = () => {
       if (urlParams.screen === 'registration') {
         return <SupplierRegistrationScreen onCancel={() => {}} onSuccess={() => {}} />;
       }
-      if (profile?.role === 'supplier') {
+      if (!session || profile?.role === 'supplier' || __DEV__) {
         return <SupplierDashboardScreen initialModal={urlParams.modal || undefined} />;
       }
     }
 
     if (urlParams.app === 'driver') {
-      if (profile?.role === 'driver') {
+      if (!session || profile?.role === 'driver' || __DEV__) {
         return <DriverDashboardScreen initialModal={urlParams.modal || undefined} />;
       }
     }

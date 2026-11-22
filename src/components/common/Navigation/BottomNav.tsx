@@ -10,7 +10,16 @@ import { fontSizes, fontWeights } from '../../../theme/typography';
 import { animateTabPress, useReducedMotion } from '../../../theme/motion';
 import { haptics } from '../../../theme/haptics';
 
-export type TabId = 'discovery' | 'bookings' | 'activity' | 'profile';
+export type TabId =
+  | 'discovery'
+  | 'bookings'
+  | 'activity'
+  | 'profile'
+  | 'dispatch'
+  | 'fleet'
+  | 'settlements'
+  | 'pricing'
+  | (string & {});
 
 export interface TabItem {
   id: TabId;
