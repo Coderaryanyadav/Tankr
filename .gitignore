@@ -5,8 +5,18 @@ node_modules/
 
 # Expo
 .expo/
+# build and release artifacts
 dist/
+dist-*/
 web-build/
+desktop/dist-*/
+desktop/package-lock.json
+release-dist/
+release-assets/
+*.zip
+*.dmg
+*.apk
+*.exe
 expo-env.d.ts
 
 # Native

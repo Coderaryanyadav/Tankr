@@ -20,10 +20,20 @@
     },
     "mac": {
       "category": "public.app-category.utilities",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-      "target": ["portable", "nsis"]
+      "target": [
+        "portable",
+        "nsis"
+      ]
     }
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
   }
 }
