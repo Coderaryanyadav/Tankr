@@ -1,23 +1,35 @@
-# TANKR 💧
+<div align="center">
+
+# 💧 TANKR
+### *Urban Water Deficit Logistics, Emergency Dispatch & Fair Metering Platform*
 
 <p align="center">
-  <img src="docs/screenshots/customer/04_customer_home_discovery.png" alt="TANKR Mobile App Discovery" width="280" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);" />
+  <i>Mission-critical water logistics for high-density metropolitan ecosystems — calibrated for Mumbai Metro.</i>
 </p>
 
-<p align="center">
-  <b>Urban Water Deficit Logistics, Emergency Dispatch & Fair Metering Platform</b><br />
-  <i>Mission-critical water logistics for high-density metropolitan ecosystems. Calibrated for Mumbai Metro.</i>
-</p>
+<img src="docs/screenshots/customer/04_customer_home_discovery.png" alt="TANKR Mobile App Discovery" width="280" style="border-radius: 18px; box-shadow: 0 12px 36px rgba(0,0,0,0.22); margin: 12px 0;" />
 
-<p align="center">
-  <a href="https://expo.dev/"><img src="https://img.shields.io/badge/Expo-SDK_58.0.21-000020.svg?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK" /></a>
-  <a href="https://reactnative.dev/"><img src="https://img.shields.io/badge/React_Native-0.88.1-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black" alt="React Native" /></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript Strict" /></a>
-  <a href="https://supabase.com/"><img src="https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E.svg?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase Backend" /></a>
-  <a href="https://postgis.net/"><img src="https://img.shields.io/badge/PostGIS-3.3_Spatial-blue.svg?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostGIS Spatial Engine" /></a>
-  <a href="https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Coderaryanyadav/Tankr/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI%20Pipeline" alt="CI Pipeline" /></a>
-  <a href="#10-testing--verification-gates"><img src="https://img.shields.io/badge/Tests-240_Passed_•_0_Failed-success.svg?style=for-the-badge&logo=jest&logoColor=white" alt="Tests 240 Passed" /></a>
-</p>
+<br/>
+
+[![Expo](https://img.shields.io/badge/Expo-SDK_58.0.21-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict_6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+[![PostGIS](https://img.shields.io/badge/PostGIS-3.3_Spatial-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgis.net/)
+[![Razorpay](https://img.shields.io/badge/Razorpay-Escrow_&_Splits-02042B?style=for-the-badge&logo=razorpay&logoColor=3395FF)](https://razorpay.com/)
+[![CI Pipeline](https://img.shields.io/github/actions/workflow/status/Coderaryanyadav/Tankr/ci.yml?branch=main&style=for-the-badge&logo=github&label=CI%20Pipeline)](https://github.com/Coderaryanyadav/Tankr/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Jest_Tests-240%2F240_Passed-brightgreen?style=for-the-badge&logo=jest&logoColor=white)](#11-testing--verification-gates)
+
+<br/>
+
+**[📱 Visual Showcase](#-executive-visual-showcase)** &nbsp;•&nbsp;
+**[📐 Architecture](#2-system-architecture--documented-technical-diagrams)** &nbsp;•&nbsp;
+**[🚀 Quick Start](#8-automated-quick-start-one-command-setup)** &nbsp;•&nbsp;
+**[🔑 Demo Credentials](#9-genuine-local-demo-credentials)** &nbsp;•&nbsp;
+**[🧪 Test Gates](#11-testing--verification-gates)** &nbsp;•&nbsp;
+**[🤝 Contributing](./CONTRIBUTING.md)**
+
+</div>
 
 ---
 
@@ -96,6 +108,16 @@ In expanding metropolitan centers, municipal piped infrastructure frequently exp
 2. **Guaranteed Anti-Double-Booking**: PostgreSQL row-level locks (`SELECT ... FOR UPDATE`) prevent concurrent order placement on the same physical vehicle.
 3. **Live Telemetry & Handover Verification**: High-frequency GPS tracking streams vehicle progress. Upon arrival, the driver cannot open the valve or mark delivery complete without entering the customer's secure 4-digit PIN and verifying volume with a calibrated digital flow meter.
 4. **Automated Escrow & Regulatory Compliance**: Payments are held in escrow and disbursed automatically (85% driver, 5% vehicle maintenance, 10% platform fee), while water sources undergo automated BIS 10500 laboratory sensor surveillance.
+
+### ✨ Key Capabilities
+
+- 📍 **Consumer Sump Geocoding**: High-precision interactive map pinpointing residential building sumps, overhead tanks, and commercial reservoirs.
+- ⚡ **Atomic Anti-Double-Booking**: PostgreSQL concurrency engine with strict row-level locking (`SELECT ... FOR UPDATE`) eliminating race conditions across fleet assets.
+- 📡 **Live Telemetry & Geofencing**: Real-time GPS breadcrumb ingestion via Supabase WebSocket pub/sub with dynamic arrival ETA calculations.
+- 🔢 **Cryptographic 4-Digit PIN Handover**: Strict two-party delivery verification protocol preventing fraudulent discharges or delivery misreporting.
+- 💳 **Escrow Split Engine**: Automated Razorpay payment splitting (85% Driver, 5% Maintenance, 10% Platform) executing upon cryptographic handover.
+- 🏢 **Operations Command (10 Desks)**: Super admin portal with 10 real-time operations desks, SOS emergency override dispatch, fleet heatmaps, and BIS 10500 water quality auditing.
+- 🧪 **Enterprise Test Coverage**: 240 unit & integration tests passing (0 failures), strict TypeScript 6.0, and PostGIS geospatial validation.
 
 ---
 
