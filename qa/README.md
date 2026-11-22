@@ -1,7 +1,8 @@
 <div align="center">
 
 # 🧪 TANKR Quality Engineering & Verification Framework
-### *Deterministic Test Architecture, Concurrency Invariants & Multi-Role Verification*
+
+### _Deterministic Test Architecture, Concurrency Invariants & Multi-Role Verification_
 
 [![Tests](https://img.shields.io/badge/Jest_Tests-240%2F240_Passed-brightgreen?style=for-the-badge&logo=jest&logoColor=white)](../README.md#11-testing--verification-gates)
 [![Suites](https://img.shields.io/badge/Test_Suites-31%2F31_Passing-brightgreen?style=for-the-badge&logo=jest&logoColor=white)](../README.md#11-testing--verification-gates)
@@ -129,12 +130,12 @@ qa/
 
 ## 3. Verification Matrix
 
-| Layer | Suites | Tests | Status | Invariants Enforced |
-| :--- | :---: | :---: | :---: | :--- |
-| **Static & Contracts** | 2 | 24 | `PASS` | Strict TypeScript compilation, Zod input bounds |
-| **Unit & Pricing** | 5 | 38 | `PASS` | Base fare, capacity tiers, dynamic surge multipliers |
-| **Concurrency & Logic** | 8 | 62 | `PASS` | Anti-double-booking locks, 10-way race safety |
-| **Security & RLS** | 4 | 36 | `PASS` | Cross-tenant isolation, privilege elevation triggers |
-| **Integration & Escrow** | 5 | 42 | `PASS` | Razorpay webhook verification, 85/5/10 payout split |
-| **E2E & Real-World** | 7 | 38 | `PASS` | 4-digit PIN handover, flow meter attestation, offline GPS |
-| **Total Test Suite** | **31** | **240** | **`PASS (100%)`** | **0 Failures • Production Gate Approved** |
+| Layer                    | Suites |  Tests  |      Status       | Invariants Enforced                                       |
+| :----------------------- | :----: | :-----: | :---------------: | :-------------------------------------------------------- |
+| **Static & Contracts**   |   2    |   24    |      `PASS`       | Strict TypeScript compilation, Zod input bounds           |
+| **Unit & Pricing**       |   5    |   38    |      `PASS`       | Base fare, capacity tiers, dynamic surge multipliers      |
+| **Concurrency & Logic**  |   8    |   62    |      `PASS`       | Anti-double-booking locks, 10-way race safety             |
+| **Security & RLS**       |   4    |   36    |      `PASS`       | Cross-tenant isolation, privilege elevation triggers      |
+| **Integration & Escrow** |   5    |   42    |      `PASS`       | Razorpay webhook verification, 85/5/10 payout split       |
+| **E2E & Real-World**     |   7    |   38    |      `PASS`       | 4-digit PIN handover, flow meter attestation, offline GPS |
+| **Total Test Suite**     | **31** | **240** | **`PASS (100%)`** | **0 Failures • Production Gate Approved**                 |

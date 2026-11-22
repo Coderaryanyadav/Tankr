@@ -15,8 +15,8 @@
 <br/>
 
 **[🏠 Root README](../README.md)** &nbsp;•&nbsp;
-**[📦 Releases](https://github.com/Coderaryanyadav/Tankr/releases)** &nbsp;•&nbsp;
-**[📐 Architecture](#1-architecture-reference)** &nbsp;•&nbsp;
+**[📦 Releases](https://github.com/Coderaryanyadav/Tankr/releases)**
+&nbsp;•&nbsp; **[📐 Architecture](#1-architecture-reference)** &nbsp;•&nbsp;
 **[⚙️ Setup Guides](#2-setup--configuration-guides)** &nbsp;•&nbsp;
 **[💻 Development](#3-development-standards)** &nbsp;•&nbsp;
 **[📡 API Reference](#4-api--reference)** &nbsp;•&nbsp;
