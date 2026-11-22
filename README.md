@@ -22,12 +22,13 @@
 
 <br/>
 
-**[📦 Multi-Platform Releases (APK / iOS / DMG / EXE)](https://github.com/Coderaryanyadav/Tankr/releases)** &nbsp;•&nbsp;
-**[📱 Visual Showcase](#-executive-visual-showcase)** &nbsp;•&nbsp;
-**[📐 Architecture](#2-system-architecture--operational-flow-patterns)** &nbsp;•&nbsp;
-**[🚀 Quick Start](#8-automated-quick-start-one-command-setup)** &nbsp;•&nbsp;
-**[🔑 Demo Credentials](#9-genuine-local-demo-credentials)** &nbsp;•&nbsp;
-**[🧪 Test Gates](#11-testing--verification-gates)** &nbsp;•&nbsp;
+**[📦 Multi-Platform Releases (APK / iOS / DMG / EXE)](https://github.com/Coderaryanyadav/Tankr/releases)**
+&nbsp;•&nbsp; **[📱 Visual Showcase](#-executive-visual-showcase)**
+&nbsp;•&nbsp;
+**[📐 Architecture](#2-system-architecture--operational-flow-patterns)**
+&nbsp;•&nbsp; **[🚀 Quick Start](#8-automated-quick-start-one-command-setup)**
+&nbsp;•&nbsp; **[🔑 Demo Credentials](#9-genuine-local-demo-credentials)**
+&nbsp;•&nbsp; **[🧪 Test Gates](#11-testing--verification-gates)** &nbsp;•&nbsp;
 **[🤝 Contributing](./CONTRIBUTING.md)**
 
 </div>
@@ -566,11 +567,13 @@ graph TD
 
 ## 3. Comprehensive Screenshot Gallery (33 Production Screens)
 
-Every screen across all four stakeholder roles is fully implemented, verified, and captured in high-resolution:
+Every screen across all four stakeholder roles is fully implemented, verified,
+and captured in high-resolution:
 
 ### 3.1 Consumer Mobile Application Experience (Screens 01 – 17)
 
 #### 🔐 Stage 1: Identity Verification & Sump Onboarding
+
 <table align="center" width="100%">
   <tr>
     <td align="center" width="33%">
@@ -592,6 +595,7 @@ Every screen across all four stakeholder roles is fully implemented, verified, a
 </table>
 
 #### 📍 Stage 2: Sump Radar Discovery, Quoting & Concurrency Lock
+
 <table align="center" width="100%">
   <tr>
     <td align="center" width="33%">
@@ -613,6 +617,7 @@ Every screen across all four stakeholder roles is fully implemented, verified, a
 </table>
 
 #### 📡 Stage 3: Real-Time Transit, Invoicing & Order History
+
 <table align="center" width="100%">
   <tr>
     <td align="center" width="33%">
@@ -634,6 +639,7 @@ Every screen across all four stakeholder roles is fully implemented, verified, a
 </table>
 
 #### 🔬 Stage 4: Water Purity, Fair Metering & Dispute Resolution
+
 <table align="center" width="100%">
   <tr>
     <td align="center" width="33%">
@@ -655,6 +661,7 @@ Every screen across all four stakeholder roles is fully implemented, verified, a
 </table>
 
 #### 🏘️ Stage 5: Multi-Sump Assets, Community Pool & Support
+
 <table align="center" width="100%">
   <tr>
     <td align="center" width="33%">
